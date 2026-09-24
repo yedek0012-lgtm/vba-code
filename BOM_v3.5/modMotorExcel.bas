@@ -57,6 +57,7 @@ Public Sub ProcessExcelFile()
         On Error GoTo 0
     End If
 
+    If Not wbIn Is Nothing And Not wbOpenAlready Then Set curInputWb = wbIn   ' hata olursa ana döngü kapatýr
     If wbIn Is Nothing Then
         AuditRecord fileName, "EXCEL", 0, "FILE", CStr(vItem), "FILE", "ERROR", 0, "", "Dosya açýlamadý (þifreli / bozuk / kilitli olabilir)."
     Else
@@ -392,6 +393,7 @@ Public Sub ProcessExcelFile()
                         mbIssue = ""
                         If mbLrnKind <> "ANGLE" And Not ProfileKnown(rawNameUpper, dictProfileLib) Then
                             mbIssue = "Profil kütüphanede yok."
+                            pnlBad = pnlBad + 1
                             If Not dictFeedback.Exists(rawNameUpper) Then
                                 dictFeedback.Add rawNameUpper, fileName
                                 ' (kütüphaneye ekleme artýk OGRENME sayfasýndan yapýlýr)
@@ -487,6 +489,7 @@ NextSheetExcel:
         Set mbHwCust = Nothing
         Set mbBoltDia = Nothing
         If Not wbOpenAlready Then wbIn.Close SaveChanges:=False
+        Set curInputWb = Nothing
     End If
 End Sub
 

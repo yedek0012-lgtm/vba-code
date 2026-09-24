@@ -306,6 +306,7 @@ End If
                     If Not (rawTypeUpper Like "R*" Or rawTypeUpper Like "M*") Then
                         cleanNoSpace = Replace(rawTypeUpper, " ", "")
                         If Not ProfileKnown(rawTypeUpper, dictProfileLib) Then
+                            pnlBad = pnlBad + 1
                             If Not dictFeedback.Exists(rawTypeUpper) Then
                                 dictFeedback.Add rawTypeUpper, fileName
                                 ' (kütüphaneye ekleme artýk OGRENME sayfasýndan yapýlýr)

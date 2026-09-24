@@ -142,6 +142,7 @@ Private Sub FlushKeepFormula(ByVal ws As Worksheet, ByVal rStart As Long, ByVal 
                 If CellNumber(cel) = 0 And BufNum(bv) > 0 Then useMacro = True
             End If
             If useMacro Then
+                If col = 5 Then pnlBoltFallback = pnlBoltFallback + 1
                 cel.Value = bv
                 cel.Font.Color = RGB(192, 0, 0)
                 cel.Font.Bold = True
@@ -489,8 +490,10 @@ Public Function CollectReconciliation(ByVal ws As Worksheet, ByVal lastRow As Lo
             cd = CellNumber(ws.Cells(r, 3)) + CellNumber(ws.Cells(r, 4))
             If h <= 0 Then
                 nNoRef = nNoRef + 1
+                Call PanelSetWeight(ws.Name, r, False, 0)
             Else
                 diff = (cd - h) / h
+                Call PanelSetWeight(ws.Name, r, True, diff)
                 If Abs(diff) > tol Then
                     nOut = nOut + 1
                     If firstBadRow = 0 Then firstBadRow = r
@@ -599,6 +602,7 @@ Public Sub CheckLibraryHealth(ByVal wsA As Worksheet, ByVal lastRow As Long)
                 If CDbl(gv) = 0 Then issue = "Kütüphanede kg/m (D sütunu) boþ."
             End If
             If issue <> "" Then
+                pnlAngleZero = pnlAngleZero + 1
                 AuditRecord "", "LIBRARY", r, wsA.Name, "Poz " & wsA.Cells(r, 2).Text & " | Kod " & wsA.Cells(r, 3).Text, _
                             "ANGLE", "WARNING", 50, "", issue & " Aðýrlýk 0 hesaplanýyor."
             End If
@@ -698,6 +702,7 @@ Public Sub CheckPosConflict(ByVal kind As String, ByVal existRow As Long, ByVal 
     If diff = "" Then Exit Sub
 
     conflictCount = conflictCount + 1
+    If pnlActive Then pnlConf = pnlConf + 1
     If kind = "ANGLE" Then
         curNote = CStr(bufAngle(existRow, 57))
         If InStr(curNote, "ÇAKIÞMA") = 0 Then bufAngle(existRow, 57) = Trim$(curNote & " ÇAKIÞMA!")

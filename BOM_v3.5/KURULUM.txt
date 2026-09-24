@@ -13,7 +13,7 @@ GEREKENLER
  b) Alt+F11 > Ekle > Modül. Kurulum_ModulleriYukle.txt dosyasının tamamını yapıştırın, modülün adını
     "Kurulum" yapın, imleç kodun içindeyken F5 (ModulleriYukle).
  c) BOM_v3.5 klasörünü seçin. Aynı adlı eski modüller ve eski "Module1, Module6..." modülleri onayınızla
-    kaldırılır, 15 modül yüklenir. ThisWorkbook ve UserForm1'e dokunulmaz.
+    kaldırılır, 16 modül yüklenir. ThisWorkbook ve UserForm1'e dokunulmaz.
  d) Hata Ayıkla > VBAProject'i Derle (hata vermemeli).
  e) Kurulum modülünü silin (sağ tık > Kaldır > Hayır), güven ayarını tekrar KAPATIN.
  f) İlk kurulumsa ThisWorkbook'a ThisWorkbook_kodu.txt içeriğini yapıştırın (düğmeler açılışta düzelir).
@@ -62,6 +62,16 @@ KÜTÜPHANE TEMİZLİĞİ (bir kez)
 
 SÜRÜM NOTLARI
 =============
+ - (v3.5) SONUÇ PANELİ (yeni modül modPanel, toplam 16 modül): işlem sonunda SONUC sayfası (SUM'un
+          önünde) her dosya için GÜVENLİ / KONTROL ET / EKSİK ve nedenini gösterir; son mesajın ilk satırı
+          özet. Sinyaller: tanınmayan / çözülemeyen satır, adet farkı (SUM L), adedi okunamayan satır,
+          ağırlık farkı (SUM J), poz çakışması, dosyanın hiç okunamaması; genel notlar: OGRENME, BOLT-LIBRARY'de
+          olmayan cıvata, ANGLE'da 0 ağırlık, kapasite. Bir dosyada beklenmeyen hata artık bütün işlemi
+          durdurmaz: dosya EKSİK işaretlenir, sıradakine geçilir (ESC yine durdurur).
+          Değişen modüller: modMain, modAudit, modOutput, modMotorExcel, modMotorXSR, modState.
+ - (v3.5) ADET MUTABAKATI (Excel / CSV / PDF): kaynak adet = şablona yazılan + cıvata + somun/pul seti
+          + çift sayım + tanınmayan. Fark ya da adedi okunamayan satır -> SUM L kırmızı, mesaj, AUDIT.
+ - (v3.5) BOLTS&WASHER C / E formülleri korunur; makro değeri yalnızca formül boş dönerse (kırmızı kalın).
  - (v3.5) SAYI OKUMA TEK YERDE: metinden sayı okuyan tüm yerler ParseBOMNumber / CellNumber / IsNumToken
           (modText) kullanır; sonuç Windows bölge ayarından (Türkçe / İngilizce) bağımsızdır.
           Düzeltilen: XSR boy ve plaka ölçüleri CDbl ile okunuyordu (Türkçe ayarda "4000.5" -> 40005),

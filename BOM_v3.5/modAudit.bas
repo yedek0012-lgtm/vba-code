@@ -60,6 +60,11 @@ Public Sub AuditRecord(ByVal fileName As String, ByVal sourceType As String, ByV
         Case "ERROR": auditError = auditError + 1
         Case "UNMATCHED": auditUnmatched = auditUnmatched + 1
     End Select
+    ' Sonuç paneli: iþlenen dosyanýn çözülemeyen / tanýnmayan satýrlarý (dosya düzeyi hatalar hariç:
+    ' onlar "parça okunamadý" olarak ayrýca görünür)
+    If pnlActive And UCase$(itemType) <> "FILE" Then
+        If UCase$(status) = "ERROR" Or UCase$(status) = "UNMATCHED" Then pnlBad = pnlBad + 1
+    End If
 
     If auditWs Is Nothing Then Exit Sub
     auditWs.Cells(auditNextRow, 1).Value = Now
@@ -469,6 +474,12 @@ Public Sub ClearReportSheets()
     If Not ws Is Nothing Then
         ws.Buttons.Delete
         ws.Cells.Validation.Delete
+        ws.Cells.Clear
+    End If
+    Set ws = Nothing
+    Set ws = ThisWorkbook.Sheets("SONUC")
+    If Not ws Is Nothing Then
+        ws.Hyperlinks.Delete
         ws.Cells.Clear
     End If
     ' Önceki çalýþtýrmadan kalan SUM mutabakat sütunlarý

@@ -16,6 +16,14 @@ sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro for
  - İşlem öncesi şablonun tarihli yedeği otomatik alınır (YEDEK klasörü).
 
 2) SONUÇLAR
+ - SONUC sayfası (ilk sekme, işlem bitince sorun varsa kendiliğinden açılır): her dosya için tek satır.
+     ✔ GÜVENLİ    : adet ve/veya ağırlık tuttu, tanınmayan parça yok.
+     ⚠ KONTROL ET : ağırlık farkı tolerans dışında, bazı satırlarda adet okunamadı, poz çakışması
+                    ya da hiçbir doğrulama yapılamadı (listede ağırlık yok, adet sayılamadı).
+     ✖ EKSİK      : dosyadan parça okunamadı, işlenirken hata, tanınmayan parça (OGRENME) ya da adet farkı.
+   NEDEN sütunu ne yapılacağını söyler; dosya adına tıklayınca SUM'daki satırına gider.
+   Liste ancak bütün dosyalar GÜVENLİ olunca teslim edilmeli. Bir dosyada hata çıkarsa işlem durmaz:
+   o dosya EKSİK işaretlenir, diğerleri işlenir.
  - ANGLE / PLATE: TYPE (A) = kaynak dosya adı. Aynı poz no farklı kesit / ölçü / boyla gelirse ayrı satırdır.
    Boylar mm yazılır; listede metre ise (başlıkta [m] ya da değerler metre gibiyse) otomatik x1000 yapılır.
  - BOLTS&WASHER: cıvatalar çapa göre dizilir, her çap için somun / pul / yaylı rondela (yeşil) otomatik eklenir.

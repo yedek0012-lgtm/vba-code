@@ -135,7 +135,7 @@ Sub Evrensel_BOM_Cevirici_Core()
     Dim partParsed As String
     Dim rawQty As Long, fireliQty As Long
     Dim reconTxt As String, reconOut As Long, reconNoRef As Long, reconRow As Long, reconSheet As String, reconPrev As Long
-    Dim qtyTxt As String, qtyBadN As Long
+    Dim qtyTxt As String, qtyBadN As Long, pnlOkN As Long, pnlChkN As Long, pnlBadN As Long
     Dim capTxt As String
 
     Application.ScreenUpdating = False
@@ -233,6 +233,7 @@ End If
     dictFeedback.CompareMode = 1
     Call LoadLearnedItems
     Set dictQtyCheck = Nothing
+    Call PanelReset
     
     If Not wsBoltLib Is Nothing Then
         For rLib = 3 To wsBoltLib.Cells(wsBoltLib.Rows.Count, 1).End(xlUp).Row
@@ -471,9 +472,11 @@ End If
             sumRow = sumRow + 1
             
             qtySrc = 0: qtyBolt = 0: qtySkip = 0: qtyUnk = 0: qtyNoRows = 0
+            Call PanelBeginFile
 
             ' --- Dosya tipine göre motor (modMotorXSR / modMotorExcel) ---
-            On Error GoTo ErrorHandler
+            ' Bir dosyadaki beklenmeyen hata bütün iþlemi durdurmaz: dosya EKSÝK iþaretlenir, sýradakine geçilir
+            On Error GoTo FileErr
             If ext = "xsr" Or ext = "txt" Then
                 Call ProcessXsrFile
             ElseIf ext = "xls" Or ext = "xlsx" Or ext = "xlsm" Or ext = "xlsb" Or ext = "csv" Then
@@ -481,11 +484,25 @@ End If
             ElseIf ext = "pdf" Then
                 Call ProcessPdfFile
             End If
+            GoTo FileDone
+FileRecover:
+            On Error Resume Next
+            pnlActive = False
+            AuditRecord fileName, "SYSTEM", 0, "FILE", CStr(vItem), "FILE", "ERROR", 0, "", _
+                        "Dosya iþlenirken beklenmeyen hata: " & pnlFileErr & " (dosya yarým kalmýþ olabilir; sýradaki dosyaya geçildi)"
+            If Not curInputWb Is Nothing Then curInputWb.Close SaveChanges:=False
+            Set curInputWb = Nothing
+            If Not pdfTempWb Is Nothing Then pdfTempWb.Close SaveChanges:=False
+            Set pdfTempWb = Nothing
+FileDone:
+            On Error GoTo ErrorHandler
+            pnlActive = False
             
             If Not isDryRun Then
                 Call SafeWrite(curWsSum, currentSumRow, 8, fileWeight)
                 Call SafeWrite(curWsSum, currentSumRow, 9, totalProcessed - fileStartCount)
                 Call RecordQtyCheck(currentSumRow, currentColAngle, currentColPlate)
+                Call PanelRecordFile(curWsSum.Name, currentSumRow, totalProcessed - fileStartCount)
                                                                 currentColAngle = currentColAngle + 1
                 currentColPlate = currentColPlate + 1
                 currentColBolt = currentColBolt + 1
@@ -733,6 +750,12 @@ End If
         finalMsg = finalMsg & vbCrLf & vbCrLf & reconNoRef & " dosyanýn listesinde toplam aðýrlýk yok; aðýrlýk mutabakatý yapýlamadý."
     End If
 
+    ' SONUÇ PANELÝ: her dosya için GÜVENLÝ / KONTROL ET / EKSÝK (SONUC sayfasý); özet mesajýn en üstünde
+    If Not isDryRun Then
+        Call WritePanel(ogrenilenSayi, capTxt, pnlOkN, pnlChkN, pnlBadN)
+        If pnlOkN + pnlChkN + pnlBadN > 0 Then finalMsg = PanelSummaryLine(pnlOkN, pnlChkN, pnlBadN) & vbCrLf & vbCrLf & finalMsg
+    End If
+
     If Not isDryRun And Not runQuiet Then
         runRev = UpdateRevDate(appendMode)
         Call AppendRunHistory(validFiles, vfCount, totalProcessed)
@@ -772,8 +795,14 @@ End If
     ThisWorkbook.Sheets("SUM").Range("A5").Select
     On Error GoTo 0
     
-    If Not runQuiet Then MsgBox finalMsg, IIf(ogrenilenSayi > 0 Or reconOut > 0 Or conflictCount > 0 Or bufOverflowMsg <> "" Or capTxt <> "", vbExclamation, vbInformation), "MTL Evrensel Motor"
-    If ogrenilenSayi > 0 And Not runQuiet Then
+    If Not runQuiet Then MsgBox finalMsg, IIf(pnlChkN + pnlBadN > 0 Or ogrenilenSayi > 0 Or reconOut > 0 Or conflictCount > 0 Or bufOverflowMsg <> "" Or capTxt <> "", vbExclamation, vbInformation), "MTL Evrensel Motor"
+    If pnlChkN + pnlBadN > 0 And Not runQuiet Then
+        ' sorunlu dosya var: SONUÇ paneli açýlýr (neden ve ne yapýlacaðý orada; OGRENME baðlantýsý da)
+        On Error Resume Next
+        ThisWorkbook.Sheets(PANEL_SHEET).Activate
+        ThisWorkbook.Sheets(PANEL_SHEET).Range("A1").Select
+        On Error GoTo 0
+    ElseIf ogrenilenSayi > 0 And Not runQuiet Then
         On Error Resume Next
         ThisWorkbook.Sheets("OGRENME").Activate
         ThisWorkbook.Sheets("OGRENME").Range("D2").Select
@@ -789,6 +818,16 @@ End If
     Exit Sub
 
 Cikis:
+    GoTo SafeExit
+
+FileErr:
+    ' ESC: iþlem durur; diðer hatalar: dosya EKSÝK iþaretlenir, sýradaki dosyaya geçilir
+    If Err.Number = 18 Then Resume UserStop
+    pnlFileErr = Err.Description
+    Resume FileRecover
+
+UserStop:
+    MsgBox "Sistem kullanýcý tarafýndan güvenli bir þekilde DURDURULDU!", vbExclamation, "Güvenli Çýkýþ"
     GoTo SafeExit
 
 ErrorHandler:
@@ -860,7 +899,7 @@ Sub Can_Temizleyici()
     
     If wsAngle Is Nothing Or wsPlate Is Nothing Or wsBolt Is Nothing Or wsSum Is Nothing Then Exit Sub
     If MsgBox("Gömülü formülleriniz ve AZ sütunu korunarak veriler temizlenecek." & vbCrLf & _
-              "AUDIT, FEEDBACK ve OGRENME sayfalarý da temizlenecek. Onaylýyor musunuz?", vbYesNo + vbQuestion, "Can Temizleyici") = vbNo Then Exit Sub
+              "AUDIT, FEEDBACK, OGRENME ve SONUC sayfalarý da temizlenecek. Onaylýyor musunuz?", vbYesNo + vbQuestion, "Can Temizleyici") = vbNo Then Exit Sub
     
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
