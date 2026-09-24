@@ -239,8 +239,13 @@ End If
                 pName = Trim(wsBoltLib.Cells(rLib, 2).Text)
                 bWt = CellNumber(wsBoltLib.Cells(rLib, 3))
                 If bWt <= 0 Then bWt = CellNumber(wsBoltLib.Cells(rLib, 4)) / 1000#
-                If pCode <> "" And bWt > 0 Then dictBoltWeights(pCode) = bWt
-                If pName <> "" And bWt > 0 Then dictBoltWeights(pName) = bWt
+                ' ayný kod birden çok satýrdaysa DÜÞEYARA gibi ÝLK satýr geçerli
+                If pCode <> "" And bWt > 0 Then
+                    If Not dictBoltWeights.Exists(pCode) Then dictBoltWeights(pCode) = bWt
+                End If
+                If pName <> "" And bWt > 0 Then
+                    If Not dictBoltWeights.Exists(pName) Then dictBoltWeights(pName) = bWt
+                End If
             End If
         Next rLib
     End If

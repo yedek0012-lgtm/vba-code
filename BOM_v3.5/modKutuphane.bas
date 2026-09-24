@@ -218,7 +218,7 @@ Public Sub RunLibraryCheck()
                 w1000 = CellNumber(wsB.Cells(r, 4))
                 If code = "" Then Call Report(wsB.Name, r, code, nm, True, "Kod boþ", "")
                 If w1 <= 0 And w1000 <= 0 Then
-                    Call Report(wsB.Name, r, code, nm, True, "Aðýrlýk boþ", "Makro aðýrlýðý tahmin eder (turuncu).")
+                    Call Report(wsB.Name, r, code, nm, True, "Aðýrlýk boþ", "Formül 0 verir; makro aðýrlýðý tahmin edip kýrmýzý yazar.")
                 ElseIf w1 > 0 And w1000 > 0 Then
                     If Abs(w1 * 1000 - w1000) > 0.02 * w1000 Then
                         Call Report(wsB.Name, r, code, nm, False, "Birim / 1000 adet uyumsuz", _
