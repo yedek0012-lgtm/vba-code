@@ -155,9 +155,10 @@ AuditFail:
 End Sub
 
 ' =========================================================================
-' ÖÐRENEN KÜTÜPHANE - TOPLU LÝSTE (v3.5: 4 veri giriþi)
-' Tanýnmayan parçalar tek bir sayfada gösterilir. Her parça için kütüphanenin
-' 4 sütunu girilir: MALZEME KODU, MALZEME CÝNSÝ, kg/m (birim aðýrlýk), yüzey alan (1000 adet aðýrlýðý).
+' ÖÐRENEN KÜTÜPHANE - TOPLU LÝSTE (v3.5)
+' Tanýnmayan parçalar tek sayfada. Her parça için TÜR seçilir (ANGLE / PLATE / BOLTS&WASHER) ve
+' türe göre 4 veri girilir. KÜTÜPHANEYE AKTAR: kütüphaneye yazar + türü OGRENILEN sayfasýna kaydeder
+' (bir sonraki iþlemde parça adýndan tanýnýr, doðru sayfaya gider) + son iþlemi yeniden yapar.
 ' =========================================================================
 Public Sub WriteUnknownsSheet(ByVal dictUnk As Object)
     Dim ws As Worksheet, k As Variant, r As Long, out() As Variant, btn As Object
@@ -171,14 +172,15 @@ Public Sub WriteUnknownsSheet(ByVal dictUnk As Object)
 
     On Error Resume Next
     ws.Buttons.Delete
+    ws.Cells.Validation.Delete
     On Error GoTo 0
     ws.Cells.Clear
-    ws.Cells.Validation.Delete
 
-    ws.Range("A1:H1").Value = Array("TANINMAYAN PARÇA", "KAYNAK (Dosya / Poz)", "KÜTÜPHANE", _
+    ws.Range("A1:H1").Value = Array("TANINMAYAN PARÇA", "KAYNAK (Dosya / Poz)", "TÜR", _
                                     "MALZEME KODU", "MALZEME CÝNSÝ", _
-                                    "kg/m" & vbLf & "(cývata: BÝRÝM AÐIRLIK)", _
-                                    "YÜZEY ALAN" & vbLf & "(cývata: 1000 ADET AÐIRLIÐI)", "DURUM")
+                                    "DEÐER 1" & vbLf & "ANGLE: kg/m" & vbLf & "PLATE: KALINLIK mm" & vbLf & "BOLT: BÝRÝM AÐIRLIK kg", _
+                                    "DEÐER 2" & vbLf & "ANGLE: YÜZEY ALAN" & vbLf & "PLATE: GENÝÞLÝK mm" & vbLf & "BOLT: 1000 ADET kg", _
+                                    "DURUM")
     With ws.Range("A1:H1")
         .Font.Bold = True
         .Font.Color = RGB(255, 255, 255)
@@ -187,7 +189,7 @@ Public Sub WriteUnknownsSheet(ByVal dictUnk As Object)
         .VerticalAlignment = xlCenter
         .HorizontalAlignment = xlCenter
     End With
-    ws.Rows(1).RowHeight = 32
+    ws.Rows(1).RowHeight = 62
 
     ReDim out(1 To dictUnk.Count, 1 To 5)
     r = 0
@@ -205,33 +207,39 @@ Public Sub WriteUnknownsSheet(ByVal dictUnk As Object)
     ws.Range("C2").Resize(r, 5).Interior.Color = RGB(255, 242, 204)
     ws.Range("A1").Resize(r + 1, 8).Borders.LineStyle = 1
 
+    ' Açýlýr liste seçenekleri gizli Z sütununda (virgül / noktalý virgül bölge ayarýndan baðýmsýz)
+    ws.Range("Z1").Value = "ANGLE"
+    ws.Range("Z2").Value = "PLATE"
+    ws.Range("Z3").Value = "BOLTS&WASHER"
+    ws.Columns("Z").Hidden = True
     On Error Resume Next
     With ws.Range("C2").Resize(r, 1).Validation
         .Delete
-        .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:="PROFÝL,CIVATA"
+        .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:="=$Z$1:$Z$3"
         .IgnoreBlank = True
+        .InCellDropdown = True
     End With
     On Error GoTo 0
 
     ws.Columns("A").ColumnWidth = 30
-    ws.Columns("B").ColumnWidth = 45
-    ws.Columns("C").ColumnWidth = 12
+    ws.Columns("B").ColumnWidth = 40
+    ws.Columns("C").ColumnWidth = 15
     ws.Columns("D").ColumnWidth = 16
     ws.Columns("E").ColumnWidth = 24
-    ws.Columns("F").ColumnWidth = 14
-    ws.Columns("G").ColumnWidth = 16
+    ws.Columns("F").ColumnWidth = 18
+    ws.Columns("G").ColumnWidth = 18
     ws.Columns("H").ColumnWidth = 34
 
     ws.Range("J1").Value = "NASIL KULLANILIR"
     ws.Range("J1").Font.Bold = True
-    ws.Range("J2").Value = "1) Sarý alandaki 4 veriyi girin: MALZEME KODU, MALZEME CÝNSÝ, kg/m, YÜZEY ALAN."
-    ws.Range("J3").Value = "   PROFÝL -> L-U-I-O-Y-LIBRARY (A kod, B cins, D kg/m, E yüzey alan)."
-    ws.Range("J4").Value = "   CIVATA -> BOLT-LIBRARY (A kod, B cins, C birim aðýrlýk, D 1000 adet aðýrlýðý;"
-    ws.Range("J5").Value = "   ikisinden biri yeterli, diðeri hesaplanýr)."
-    ws.Range("J6").Value = "2) KÜTÜPHANE sütununu kontrol edin (PROFÝL / CIVATA)."
-    ws.Range("J7").Value = "3) Tanýmlamak istemediklerinizi boþ býrakýn (kütüphaneye eklenmez)."
-    ws.Range("J8").Value = "4) Eksik verili satýrlar aktarýlmaz, DURUM sütununda eksik alan yazar."
-    ws.Range("J9").Value = "5) 'KÜTÜPHANEYE AKTAR' düðmesine basýn, sonra listeyi yeniden iþleyin."
+    ws.Range("J2").Value = "1) TÜR seçin: ANGLE (profil/köþebent), PLATE (plaka, ýzgara...), BOLTS&WASHER (cývata, pul, baðlantý seti)."
+    ws.Range("J3").Value = "2) Sarý alanlarý doldurun:"
+    ws.Range("J4").Value = "   ANGLE        -> KOD, CÝNS, kg/m, YÜZEY ALAN      (L-U-I-O-Y-LIBRARY'ye yazýlýr)"
+    ws.Range("J5").Value = "   PLATE        -> KALINLIK mm, GENÝÞLÝK mm (kod/cins isteðe baðlý; boy listeden okunur)"
+    ws.Range("J6").Value = "   BOLTS&WASHER -> KOD, CÝNS, BÝRÝM AÐIRLIK veya 1000 ADET AÐIRLIÐI  (BOLT-LIBRARY'ye yazýlýr)"
+    ws.Range("J7").Value = "3) Tanýmlamak istemediklerinizi boþ býrakýn. Eksik verili satýrlar aktarýlmaz (DURUM'a bakýn)."
+    ws.Range("J8").Value = "4) 'KÜTÜPHANEYE AKTAR': parçalarýn türü OGRENILEN sayfasýna kaydedilir ve son iþlem"
+    ws.Range("J9").Value = "   ayný dosyalarla otomatik yeniden yapýlýr (dosyalarý tekrar seçmeniz gerekmez)."
 
     On Error Resume Next
     Set btn = ws.Buttons.Add(ws.Range("J11").Left, ws.Range("J11").Top, 180, 30)
@@ -240,14 +248,166 @@ Public Sub WriteUnknownsSheet(ByVal dictUnk As Object)
     On Error GoTo 0
 End Sub
 
-' Tanýnmayan parçanýn hangi kütüphaneye gideceðini tahmin eder (kullanýcý deðiþtirebilir)
+' Tanýnmayan parçanýn türünü tahmin eder (kullanýcý deðiþtirebilir)
 Private Function GuessUnknownLibrary(ByVal nm As String) As String
     nm = UCase$(nm)
-    If RxTest(nm, "^M\d|BOLT|SCHRAUB|CIVATA|CÝVATA|SCREW|\bNUT\b|MUTTER|SOMUN|WASH|SCHEIBE|RONDELA|\bPUL\b|\bSCH\b|\bMU\b|\bFDRG\b") Then
-        GuessUnknownLibrary = "CIVATA"
+    If RxTest(nm, "^M\d|BOLT|SCHRAUB|CIVATA|CÝVATA|SCREW|\bNUT\b|MUTTER|SOMUN|WASH|SCHEIBE|RONDELA|\bPUL\b|\bSCH\b|\bMU\b|\bFDRG\b|FURG|FUTTER|BEFESTIG|STEIGB|ANKER") Then
+        GuessUnknownLibrary = "BOLTS&WASHER"
+    ElseIf RxTest(nm, "GITTER|BLECH|PLATTE|GRATING|^XP\s?\d|^PL\s?\d|^FL\s?\d") Then
+        GuessUnknownLibrary = "PLATE"
     Else
-        GuessUnknownLibrary = "PROFÝL"
+        GuessUnknownLibrary = "ANGLE"
     End If
+End Function
+
+' OGRENME'deki TÜR metni -> "ANGLE" / "PLATE" / "BOLT" ("" = seçilmemiþ). Eski PROFÝL / CIVATA da kabul edilir.
+Public Function OgrenmeTypeCode(ByVal txt As String) As String
+    txt = FoldText(txt)
+    If Left$(txt, 3) = "ANG" Or Left$(txt, 4) = "PROF" Then
+        OgrenmeTypeCode = "ANGLE"
+    ElseIf Left$(txt, 3) = "PLA" Then
+        OgrenmeTypeCode = "PLATE"
+    ElseIf Left$(txt, 3) = "BOL" Or Left$(txt, 3) = "CIV" Then
+        OgrenmeTypeCode = "BOLT"
+    End If
+End Function
+
+' =========================================================================
+' ÖÐRENÝLEN PARÇALAR (OGRENILEN sayfasý): parça adý -> tür + kod + deðerler
+' Motor her satýrda önce buraya bakar; varsa sýnýflandýrýcýnýn sonucunu ezer.
+' =========================================================================
+Public Function LearnedKey(ByVal nm As String) As String
+    LearnedKey = Replace(FoldText(nm), " ", "")
+End Function
+
+Private Function CellNumAny(ByVal c As Range) As Double
+    On Error GoTo Fail
+    If IsEmpty(c.Value) Then Exit Function
+    Select Case VarType(c.Value)
+        Case vbDouble, vbCurrency, vbLong, vbInteger, vbSingle
+            CellNumAny = CDbl(c.Value)
+        Case Else
+            CellNumAny = ParseBOMNumber(CStr(c.Value))
+    End Select
+    Exit Function
+Fail:
+    CellNumAny = 0
+End Function
+
+Public Sub LoadLearnedItems()
+    Dim ws As Worksheet, r As Long, k As String, tp As String
+    Set dictLearned = CreateObject("Scripting.Dictionary")
+    dictLearned.CompareMode = 1
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("OGRENILEN")
+    On Error GoTo 0
+    If ws Is Nothing Then Exit Sub
+    For r = 2 To ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+        k = LearnedKey(ws.Cells(r, 1).Text)
+        tp = UCase$(Trim$(ws.Cells(r, 2).Text))
+        If k <> "" And (tp = "ANGLE" Or tp = "PLATE" Or tp = "BOLT") Then
+            dictLearned(k) = Array(tp, Trim$(ws.Cells(r, 3).Text), Trim$(ws.Cells(r, 4).Text), _
+                                   CellNumAny(ws.Cells(r, 5)), CellNumAny(ws.Cells(r, 6)))
+        End If
+    Next r
+End Sub
+
+' Parça türünü kaydeder (varsa günceller). Çalýþma kitabý yapýsý korumasýz olmalý (sayfa eklenebilir).
+Public Sub SaveLearnedItem(ByVal nm As String, ByVal tp As String, ByVal code As String, ByVal cins As String, _
+                           ByVal v1 As Double, ByVal v2 As Double)
+    Dim ws As Worksheet, r As Long, lastR As Long, k As String, hit As Long
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("OGRENILEN")
+    On Error GoTo 0
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        ws.Name = "OGRENILEN"
+        ws.Range("A1:G1").Value = Array("PARÇA ADI (listedeki gibi)", "TÜR", "MALZEME KODU", "MALZEME CÝNSÝ", "DEÐER 1", "DEÐER 2", "TARÝH")
+        With ws.Range("A1:G1")
+            .Font.Bold = True
+            .Font.Color = RGB(255, 255, 255)
+            .Interior.Color = RGB(0, 51, 102)
+        End With
+        ws.Columns("A").ColumnWidth = 40
+        ws.Columns("B:C").ColumnWidth = 14
+        ws.Columns("D").ColumnWidth = 30
+        ws.Columns("E:F").ColumnWidth = 12
+        ws.Columns("G").ColumnWidth = 16
+        ws.Columns("C").NumberFormat = "@"
+        ws.Range("I1").Value = "Bu sayfadaki parçalar her iþlemde adýndan tanýnýr ve TÜR'üne göre yazýlýr."
+        ws.Range("I2").Value = "DEÐER 1 / 2: ANGLE kg/m / yüzey alan, PLATE kalýnlýk / geniþlik (mm), BOLT birim / 1000 adet aðýrlýk."
+        ws.Range("I3").Value = "Yanlýþ kaydý silmek için satýrý silin."
+    End If
+    k = LearnedKey(nm)
+    lastR = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    For r = 2 To lastR
+        If LearnedKey(ws.Cells(r, 1).Text) = k Then hit = r: Exit For
+    Next r
+    If hit = 0 Then hit = lastR + 1
+    If hit < 2 Then hit = 2
+    ws.Cells(hit, 1).Value = nm
+    ws.Cells(hit, 2).Value = tp
+    ws.Cells(hit, 3).Value = code
+    ws.Cells(hit, 4).Value = cins
+    ws.Cells(hit, 5).Value = v1
+    ws.Cells(hit, 6).Value = v2
+    ws.Cells(hit, 7).Value = Now
+    ws.Cells(hit, 7).NumberFormat = "dd.mm.yyyy hh:mm"
+End Sub
+
+' =========================================================================
+' SON ÝÞLEM: dosya listesi ve ayarlar gizli SON_CALISMA sayfasýnda saklanýr;
+' OGRENME aktarýmýndan sonra ayný dosyalarla otomatik yeniden iþlemek için.
+' =========================================================================
+Public Sub SaveLastRun(ByRef files() As String, ByVal fileCount As Long, ByVal isAppend As Boolean, _
+                       ByVal pct As Double, ByVal merge As Boolean, ByVal backupPath As String)
+    Dim ws As Worksheet, i As Long
+    On Error GoTo Done
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("SON_CALISMA")
+    On Error GoTo Done
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        ws.Name = "SON_CALISMA"
+    End If
+    ws.Cells.Clear
+    ws.Range("A1:A5").Value = Application.WorksheetFunction.Transpose(Array("MOD", "EK YUZDE", "BIRLESTIR", "YEDEK", "TARIH"))
+    ws.Range("B1").Value = IIf(isAppend, "USTUNE", "SIFIRDAN")
+    ws.Range("B2").Value = pct
+    ws.Range("B3").Value = IIf(merge, 1, 0)
+    ws.Range("B4").Value = backupPath
+    ws.Range("B5").Value = Now
+    For i = 1 To fileCount
+        ws.Cells(6 + i, 1).Value = files(i)
+    Next i
+    ws.Visible = xlSheetVeryHidden
+Done:
+End Sub
+
+' Üstüne ekle modunda yeniden iþlemeden önce çýktý sayfalarýný son iþlemden önceki yedekten geri yükler
+Public Function RestoreOutputsFromBackup(ByVal backupPath As String) As Boolean
+    Dim wbB As Workbook, nm As Variant, wsS As Worksheet, wsD As Worksheet, lastR As Long, lastC As Long
+    On Error GoTo Fail
+    Set wbB = Application.Workbooks.Open(backupPath, UpdateLinks:=0, ReadOnly:=True)
+    wbB.Windows(1).Visible = False
+    ThisWorkbook.Activate
+    For Each nm In Array("ANGLE", "PLATE", "BOLTS&WASHER", "SUM")
+        Set wsS = wbB.Sheets(CStr(nm))
+        Set wsD = ThisWorkbook.Sheets(CStr(nm))
+        lastR = wsS.UsedRange.Row + wsS.UsedRange.Rows.Count - 1
+        If wsD.UsedRange.Row + wsD.UsedRange.Rows.Count - 1 > lastR Then lastR = wsD.UsedRange.Row + wsD.UsedRange.Rows.Count - 1
+        lastC = wsS.UsedRange.Column + wsS.UsedRange.Columns.Count - 1
+        If wsD.UsedRange.Column + wsD.UsedRange.Columns.Count - 1 > lastC Then lastC = wsD.UsedRange.Column + wsD.UsedRange.Columns.Count - 1
+        ' formül metinleri birebir (kopyala-yapýþtýr dýþ baðlantý oluþtururdu)
+        wsD.Range(wsD.Cells(1, 1), wsD.Cells(lastR, lastC)).Formula = wsS.Range(wsS.Cells(1, 1), wsS.Cells(lastR, lastC)).Formula
+    Next nm
+    wbB.Close SaveChanges:=False
+    RestoreOutputsFromBackup = True
+    Exit Function
+Fail:
+    On Error Resume Next
+    If Not wbB Is Nothing Then wbB.Close SaveChanges:=False
+    RestoreOutputsFromBackup = False
 End Function
 
 ' =========================================================================

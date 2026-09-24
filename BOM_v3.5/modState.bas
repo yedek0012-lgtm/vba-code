@@ -85,5 +85,13 @@ Public conflictCount As Long
 ' --- PDF motoru: geçici çalýþma kitabý (Power Query ile PDF'ten okunan tablolar) ---
 Public pdfTempWb As Workbook
 
+' --- Dosya seçme penceresi olmadan çalýþtýrma (son iþlemi yenile / test) ---
+Public runPresetFiles As Variant
+' --- Sessiz çalýþtýrma (test): son mesaj, yedek, geçmiþ ve REV yok ---
+Public runQuiet As Boolean
+
+' --- Öðrenilen parçalar (OGRENILEN sayfasý): ad -> Array(tür, kod, cins, deðer1, deðer2) ---
+Public dictLearned As Object
+
 ' --- Bu çalýþtýrmada / SUM'da bulunan dosya iþaretleri (montaj çift sayým korumasý) ---
 Public dictFileMarks As Object

@@ -2,6 +2,19 @@
 ==============================
 
 Değişenler:
+ - (v3.5) OGRENME: TÜR seçimi ANGLE / PLATE / BOLTS&WASHER (açılır liste Türkçe Excel'de de çalışır).
+          ANGLE        -> KOD, CİNS, kg/m, YÜZEY ALAN        (L-U-I-O-Y-LIBRARY)
+          PLATE        -> KALINLIK, GENİŞLİK (mm)            (kütüphane yok, OGRENILEN'de tutulur)
+          BOLTS&WASHER -> KOD, CİNS, BİRİM / 1000 ADET AĞIRLIK (BOLT-LIBRARY, özel bölüme yazılır)
+          Aktarılan her parçanın türü yeni OGRENILEN sayfasına kaydedilir; makro sonraki işlemlerde parçayı
+          adından tanır ve doğru sayfaya yazar (Gitterrost, Futterring, Befestigung gibi adı kalıba uymayanlar dahil).
+ - (v3.5) KÜTÜPHANEYE AKTAR'dan sonra SON İŞLEM aynı dosyalarla otomatik yenilenir (dosya seçmeden).
+          Sıfırdan modunda doğrudan; Liste Üstüne Ekle modunda önce işlem öncesi yedek geri yüklenir
+          (adetler iki kez eklenmesin diye). Elle çalıştırmak için: Alt+F8 > Son_Islemi_Yenile.
+ - (v3.5) KONTROL LİSTESİ (yeni modül modTest): Alt+F8 > Test_Beklenen_Kaydet / Test_Calistir.
+          Bir klasöre örnek listeleri koyun; doğru sonuçları bir kez kaydedin; her güncellemeden sonra
+          Test_Calistir farkları TEST_SONUC sayfasında gösterir. Testi şablonun KOPYASINDA çalıştırın.
+          Değişen modüller: modAudit, modMain, modMotorExcel, modState + yeni modTest (toplam 14 modül).
  - (v3.5) ANGLE / PLATE TYPE (A) sütunu = dosya adı (uzantısız). Birleştirilen satıra başka dosyadan
           adet gelirse o dosyanın adı " / " ile eklenir.
  - (v3.5) AYNI POZ, FARKLI KESİT: poz no aynı ama profil/kod veya boy (plakada kalınlık/genişlik/boy)
@@ -60,7 +73,7 @@ GÜNCELLEME (dosyanın kopyasını alın)
  1) Güven Merkezi > Makro Ayarları > "VBA proje nesne modeline erişime güven" -> AÇ
  2) Alt+F11 > Ekle > Modül, adını "Kurulum" yapın, ModulleriYukle kodunu yapıştırın
     (önceki mesajdaki kod), F5 ile çalıştırıp bu klasörü seçin.
-    Makro eski modülleri siler, 13 modülü yükler (yeni: modPdfText).
+    Makro eski modülleri siler, 14 modülü yükler (yeni: modPdfText, modTest).
  3) ThisWorkbook koduna dokunmayın, aynen kalabilir.
  4) Hata Ayıkla > VBAProject'i Derle.
  5) Kurulum modülünü silin, güven ayarını tekrar KAPATIN.
