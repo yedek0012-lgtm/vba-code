@@ -30,6 +30,7 @@ Public Sub ProcessExcelFile()
     Dim mbDia As Long, mbCustQty As Long, mbOurQty As Long
     Dim mbIssue As String, mbStatus As String, mbConf As Long
     Dim mbSheetsUsed As Long
+    Dim mbLenMul As Double
 
     Set wbIn = Nothing
     wbOpenAlready = False
@@ -100,6 +101,9 @@ Public Sub ProcessExcelFile()
             End If
 
             Call MapBOMHeader(srcData, hRow, maxR, maxC, mbCols)
+            mbLenMul = LengthUnitFactor(srcData, hRow, mbCols(4), maxR, maxC)
+            If mbLenMul <> 1 Then AuditRecord fileName, "EXCEL", hRow, "HEADER", "Sayfa: " & wsIn.Name, "SHEET", "WARNING", 90, _
+                        "Boy birimi mm deðil", "Boylar x" & mbLenMul & " ile mm'ye çevrildi (þablon F sütunu mm)."
             mbSheetsUsed = mbSheetsUsed + 1
             AuditRecord fileName, "EXCEL", hRow, "HEADER", "Sayfa: " & wsIn.Name, "SHEET", "EXACT", 100, _
                         DescribeBOMColumns(mbCols), ""
@@ -112,6 +116,7 @@ Public Sub ProcessExcelFile()
                    HeaderRoleOf(BomCellText(srcData, r, mbCols(3), maxC)) = 3 Then
                     If IsBOMHeaderRow(srcData, r, maxC) Then
                         Call MapBOMHeader(srcData, r, maxR, maxC, mbCols)
+                        mbLenMul = LengthUnitFactor(srcData, r, mbCols(4), maxR, maxC)
                         GoTo NextRowExcel
                     End If
                 End If
@@ -138,7 +143,7 @@ Public Sub ProcessExcelFile()
 
                 posNo = BomCellText(srcData, r, mbCols(1), maxC)
                 quality = BomCellText(srcData, r, mbCols(5), maxC)
-                lengthVal = BomCellNum(srcData, r, mbCols(4), maxC)
+                lengthVal = BomCellNum(srcData, r, mbCols(4), maxC) * mbLenMul
                 mbRowWt = BomCellNum(srcData, r, mbCols(8), maxC)
                 mbDinRaw = BomCellText(srcData, r, mbCols(7), maxC)
                 remVal = BomCellText(srcData, r, mbCols(6), maxC)
@@ -444,6 +449,36 @@ Public Function BomCellText(ByRef data As Variant, ByVal r As Long, ByVal c As L
     Exit Function
 Fail:
     BomCellText = ""
+End Function
+
+' Boy sütununun birimi: þablon F sütunu mm bekler.
+' Baþlýkta birim yazýyorsa ona göre ("Länge [m]", "L (m)", "Length in m", "cm"); yazmýyorsa
+' boylar metre gibi görünüyorsa (en büyük boy <= 30 ve ondalýklý deðer var) x1000.
+Public Function LengthUnitFactor(ByRef data As Variant, ByVal hRow As Long, ByVal c As Long, _
+                                 ByVal maxR As Long, ByVal maxC As Long) As Double
+    Dim t As String, k As Long, r As Long, v As Double, n As Long, mx As Double, hasFrac As Boolean
+    LengthUnitFactor = 1
+    If c <= 0 Or c > maxC Then Exit Function
+    ' baþlýk ve (sayý deðilse) altýndaki birim satýrý
+    t = FoldText(BomCellText(data, hRow, c, maxC))
+    If hRow + 1 <= maxR Then
+        If BomCellNum(data, hRow + 1, c, maxC) = 0 Then t = t & " " & FoldText(BomCellText(data, hRow + 1, c, maxC))
+    End If
+    t = Trim$(t)
+    If RxTest(t, "\bMM\b|MILLI") Then Exit Function
+    If RxTest(t, "\bCM\b") Then LengthUnitFactor = 10: Exit Function
+    If RxTest(t, "[\(\[]\s*M\s*[\)\]]|\bIN\s+M\b|\bM$|METER|METRE") Then LengthUnitFactor = 1000: Exit Function
+    ' baþlýkta birim yok: deðerlere bak
+    For r = hRow + 1 To maxR
+        If r > hRow + 3000 Then Exit For
+        v = BomCellNum(data, r, c, maxC)
+        If v > 0 Then
+            n = n + 1
+            If v > mx Then mx = v
+            If v <> Int(v) Then hasFrac = True
+        End If
+    Next r
+    If n >= 3 And mx <= 30 And hasFrac Then LengthUnitFactor = 1000
 End Function
 
 Public Function BomCellNum(ByRef data As Variant, ByVal r As Long, ByVal c As Long, ByVal maxC As Long) As Double
