@@ -96,7 +96,8 @@ Public Sub FlushAllBuffers(wsA As Worksheet, wsP As Worksheet, wsB As Worksheet,
 
     ' 3. BOLT Sheet Dump
     If Not wsB Is Nothing And lastRowB >= 5 Then
-        Call FlushBufferBlock(wsB, bufBolt, 5, lastRowB - 1, 2, 5)
+        ' C (MATERIAL) ve E (UNIT WEIGHT) turuncu formüllü sütunlar: formüller korunur
+        Call FlushBoltBlock(wsB, 5, lastRowB - 1)
         If colB > 6 Then Call FlushBufferBlock(wsB, bufBolt, 5, lastRowB - 1, 6, colB - 1)
         Call FlushBufferBlock(wsB, bufBolt, 5, lastRowB - 1, 54, 54)
     End If
@@ -109,9 +110,72 @@ Public Sub FlushAllBuffers(wsA As Worksheet, wsP As Worksheet, wsB As Worksheet,
     On Error GoTo 0
 End Sub
 
+' BOLTS: B (kod) ve D (kalite) deðer olarak yazýlýr. C ve E'de þablon formülü varsa
+' dokunulmaz (BOLT-LIBRARY'den kendisi çeker); formül boþ/0 dönerse (kod kütüphanede yok
+' ya da formülün aralýðý dýþýnda) makronun deðeri yazýlýr ve kýrmýzý kalýn yazýyla iþaretlenir.
+' Formül, bir sonraki SIFIRDAN temizliðinde (CleanTemplateRanges) geri konur.
+Private Sub FlushBoltBlock(ByVal ws As Worksheet, ByVal rStart As Long, ByVal rEnd As Long)
+    If ws Is Nothing Or rEnd < rStart Then Exit Sub
+    Call FlushBufferBlock(ws, bufBolt, rStart, rEnd, 2, 2)
+    Call FlushBufferBlock(ws, bufBolt, rStart, rEnd, 4, 4)
+    Call FlushKeepFormula(ws, rStart, rEnd, 3)
+    Call FlushKeepFormula(ws, rStart, rEnd, 5)
+End Sub
+
+Private Sub FlushKeepFormula(ByVal ws As Worksheet, ByVal rStart As Long, ByVal rEnd As Long, ByVal col As Long)
+    Dim r As Long, bv As Variant, cel As Range, cv As Variant, useMacro As Boolean
+    On Error Resume Next
+    ws.Range(ws.Cells(rStart, col), ws.Cells(rEnd, col)).Calculate
+    For r = rStart To rEnd
+        bv = bufBolt(r, col)
+        Set cel = ws.Cells(r, col)
+        If Not cel.HasFormula Then
+            If Not IsEmpty(bv) Then cel.Value = bv
+        ElseIf Not IsEmpty(bv) And Not IsEmpty(bufBolt(r, 2)) Then
+            cv = cel.Value
+            useMacro = False
+            If IsError(cv) Then
+                useMacro = True
+            ElseIf Trim$(CStr(cv)) = "" Then
+                useMacro = True
+            ElseIf col = 5 Then
+                If CellNumber(cel) = 0 And BufNum(bv) > 0 Then useMacro = True
+            End If
+            If useMacro Then
+                cel.Value = bv
+                cel.Font.Color = RGB(192, 0, 0)
+                cel.Font.Bold = True
+                AuditRecord "", "LIBRARY", r, ws.Name, CStr(bufBolt(r, 2)) & " | " & CStr(bufBolt(r, 3)), "BOLT", "WARNING", 70, _
+                            IIf(col = 5, "Aðýrlýk", "Malzeme adý") & " = " & CStr(bv), _
+                            "Þablon formülü boþ döndü (kod BOLT-LIBRARY'de yok ya da formülün aralýðý dýþýnda); makro deðeri yazýldý (kýrmýzý)."
+            End If
+        End If
+    Next r
+    On Error GoTo 0
+End Sub
+
+' Temizlikte, makronun deðer yazdýðý (formülü silinmiþ) C/E hücrelerine þablon formülünü geri koy
+Private Sub RestoreColumnFormula(ByVal ws As Worksheet, ByVal col As Long, ByVal lastRow As Long)
+    Dim r As Long, firstF As Long, lastF As Long, fR1C1 As String
+    On Error Resume Next
+    For r = 5 To lastRow
+        If ws.Cells(r, col).HasFormula Then
+            If firstF = 0 Then firstF = r: fR1C1 = ws.Cells(r, col).FormulaR1C1
+            lastF = r
+        End If
+    Next r
+    If firstF = 0 Or fR1C1 = "" Then Exit Sub
+    For r = firstF To lastF
+        If Not ws.Cells(r, col).HasFormula Then
+            If IsEmpty(ws.Cells(r, col).Value) Then ws.Cells(r, col).FormulaR1C1 = fR1C1
+        End If
+    Next r
+End Sub
+
 Public Sub FormatGreenRow(ws As Worksheet, rw As Long)
     On Error Resume Next
-    With ws.Range(ws.Cells(rw, 2), ws.Cells(rw, 4))
+    ' Sadece B (kod) ve D (kalite); turuncu formüllü C ve E'nin rengine dokunulmaz
+    With ws.Range(ws.Cells(rw, 2).Address & "," & ws.Cells(rw, 4).Address)
         .Interior.Color = RGB(0, 153, 76)
         .Font.Color = RGB(255, 255, 255)
         .Font.Bold = False
@@ -144,14 +208,19 @@ End If
     
     If Not wsB Is Nothing Then
         lastRow = wsB.Cells(wsB.Rows.Count, "F").End(xlUp).Row
+        If wsB.Cells(wsB.Rows.Count, "B").End(xlUp).Row > lastRow Then lastRow = wsB.Cells(wsB.Rows.Count, "B").End(xlUp).Row
         If lastRow < 502 Then lastRow = 502
         wsB.Range("B5:E" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        ' makronun deðer yazdýðý C/E hücrelerine þablon formülünü geri koy
+        Call RestoreColumnFormula(wsB, 3, lastRow)
+        Call RestoreColumnFormula(wsB, 5, lastRow)
         wsB.Range("F4:AY" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
         wsB.Range("BB5:BG" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
         
-        ' Sadece makronun boyadýðý B:E (yeþil somun/pul satýrý, turuncu tahmini aðýrlýk) sýfýrlanýr;
-        ' þablonun kendi renkli (formüllü) sütunlarýna dokunulmaz
-        wsB.Range("B5:E" & lastRow).Interior.ColorIndex = xlNone
+        ' Sadece makronun boyadýðý B ve D (yeþil somun/pul satýrý) sýfýrlanýr;
+        ' turuncu formüllü C ve E'nin dolgu rengine dokunulmaz (yazý rengi/kalýnlýk sýfýrlanýr)
+        wsB.Range("B5:B" & lastRow).Interior.ColorIndex = xlNone
+        wsB.Range("D5:D" & lastRow).Interior.ColorIndex = xlNone
         wsB.Range("B5:E" & lastRow).Font.ColorIndex = xlAutomatic
         wsB.Range("B5:E" & lastRow).Font.Bold = False
 End If
@@ -479,10 +548,10 @@ Public Sub CheckLibraryHealth(ByVal wsA As Worksheet, ByVal lastRow As Long)
     Next r
 End Sub
 
-' Kütüphanede olmayan cývata/somun/pul: aðýrlýk hücresi turuncu + AUDIT
+' Kütüphanede olmayan cývata/somun/pul: AUDIT kaydý (aðýrlýk hücresi yazýlýrken kýrmýzý iþaretlenir;
+' turuncu formüllü E sütununun dolgusu deðiþtirilmez)
 Public Sub FlagEstimatedWeight(ByVal ws As Worksheet, ByVal rw As Long, ByVal code As String, ByVal nm As String, ByVal wt As Double)
     On Error Resume Next
-    ws.Cells(rw, 5).Interior.Color = RGB(255, 204, 153)
     AuditRecord "", "LIBRARY", rw, ws.Name, code & " | " & nm, "BOLT", "WARNING", 70, _
                 "Tahmini aðýrlýk = " & NumToText(wt) & " kg", "BOLT-LIBRARY'de yok; aðýrlýk tahmin edildi. Kütüphaneye ekleyin."
 End Sub

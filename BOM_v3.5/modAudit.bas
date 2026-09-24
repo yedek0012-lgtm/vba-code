@@ -397,11 +397,12 @@ Public Function RestoreOutputsFromBackup(ByVal backupPath As String) As Boolean
     ' SUM: REV / DATE
     ThisWorkbook.Sheets("SUM").Range("G1").Value = wbB.Sheets("SUM").Range("G1").Value
     ThisWorkbook.Sheets("SUM").Range("G2").Value = wbB.Sheets("SUM").Range("G2").Value
-    ' BOLTS: geri alýnan iþlemin eklediði satýrlardaki makro boyalarý (yeþil set / turuncu tahmin) temizlenir
+    ' BOLTS: geri alýnan iþlemin eklediði satýrlardaki makro boyalarý (yeþil set, kýrmýzý yazý) temizlenir
     bLast = wbB.Sheets("BOLTS&WASHER").Cells(wbB.Sheets("BOLTS&WASHER").Rows.Count, 2).End(xlUp).Row
     If bLast < 4 Then bLast = 4
     With ThisWorkbook.Sheets("BOLTS&WASHER")
-        .Range(.Cells(bLast + 1, 2), .Cells(bLast + 2000, 5)).Interior.ColorIndex = xlColorIndexNone
+        .Range(.Cells(bLast + 1, 2), .Cells(bLast + 2000, 2)).Interior.ColorIndex = xlColorIndexNone
+        .Range(.Cells(bLast + 1, 4), .Cells(bLast + 2000, 4)).Interior.ColorIndex = xlColorIndexNone   ' C, E turuncu: dokunulmaz
         .Range(.Cells(bLast + 1, 2), .Cells(bLast + 2000, 5)).Font.ColorIndex = xlAutomatic
     End With
     wbB.Close SaveChanges:=False

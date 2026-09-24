@@ -520,9 +520,8 @@ Else
                                 bWt = GetBoltWeight(dCurr, CLng(val(bParts(1))))
                                 Call FlagEstimatedWeight(curWsBolt, targetRowBolt, bParts(2), bParts(3), bWt)
 End If
-                            If curWsBolt.Cells(targetRowBolt, 5).HasFormula = False Then
-                                Call SafeWrite(curWsBolt, targetRowBolt, 5, bWt)
-End If
+                            ' E formülü korunur; bu deðer yalnýzca formül boþ dönerse yazýlýr (FlushBoltBlock)
+                            Call SafeWrite(curWsBolt, targetRowBolt, 5, bWt)
                             
                             If UBound(bParts) >= 6 Then
                                 bNote = bParts(6)
