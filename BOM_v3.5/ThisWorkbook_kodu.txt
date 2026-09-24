@@ -1,0 +1,8 @@
+﻿' =========================================================================
+' Bu kodu VBA penceresinde "ThisWorkbook" nesnesine yapıştırın
+' (içe aktarılmaz, kopyala-yapıştır yapılır).
+' =========================================================================
+Private Sub Workbook_Open()
+    On Error Resume Next
+    Application.Run "BOM_OnOpen"
+End Sub

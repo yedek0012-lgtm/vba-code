@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PDF Malzeme Listesi Okuyucu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{
+  --zinc:#E6EAED; --paper:#F7F9FA; --ink:#1E2A33; --ink2:#51606B; --line:#B9C3CA;
+  --blue:#2F5E8C; --yellow:#F5C518; --ok:#2E7D4F; --warn:#B8471F;
+  --cond:"Barlow Condensed","Arial Narrow",Arial,sans-serif; --body:"Barlow","Segoe UI",Arial,sans-serif;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --zinc:#1B2328; --paper:#232D33; --ink:#E4EAEE; --ink2:#A3B0B9; --line:#3E4B54; --blue:#6FA3D6; --yellow:#E8BA14; --ok:#5DB883; --warn:#E07A55; } }
+:root[data-theme="dark"]{ --zinc:#1B2328; --paper:#232D33; --ink:#E4EAEE; --ink2:#A3B0B9; --line:#3E4B54; --blue:#6FA3D6; --yellow:#E8BA14; --ok:#5DB883; --warn:#E07A55; }
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--zinc);color:var(--ink);font:16px/1.5 var(--body);}
+main{max-width:1100px;margin:0 auto;padding:40px 24px 64px}
+h1{font:700 2.4rem/1.05 var(--cond);letter-spacing:.01em;margin:0 0 8px}
+.lede{color:var(--ink2);max-width:62ch;margin:0 0 28px}
+
+/* drop zone = drawing title block */
+.titleblock{display:grid;grid-template-columns:1fr 150px 150px;grid-template-rows:auto auto;border:2px solid var(--ink);background:var(--paper);cursor:pointer;outline-offset:4px}
+.titleblock>div{border-right:1px solid var(--ink);border-bottom:1px solid var(--ink);padding:10px 14px}
+.titleblock>div:nth-child(3n){border-right:0}
+.titleblock>div:nth-child(n+4){border-bottom:0}
+.titleblock .main{grid-row:1/3;border-bottom:0;display:flex;flex-direction:column;justify-content:center;gap:6px;padding:26px 22px}
+.titleblock .main strong{font:600 1.5rem/1.1 var(--cond)}
+.titleblock .main span{color:var(--ink2);font-size:.95rem}
+.titleblock .f small{display:block;color:var(--ink2);font-size:.72rem}
+.titleblock .f b{font:600 1.6rem/1.1 var(--cond);font-variant-numeric:tabular-nums}
+.titleblock.drag{background:color-mix(in srgb,var(--yellow) 22%,var(--paper))}
+.titleblock:focus-visible{outline:3px solid var(--blue)}
+@media (max-width:640px){.titleblock{grid-template-columns:1fr 1fr}.titleblock .main{grid-column:1/3;grid-row:auto;border-right:0;border-bottom:1px solid var(--ink)}
+ .titleblock>div:nth-child(n){border-right:1px solid var(--ink);border-bottom:0}.titleblock>div:nth-child(2n+1):not(.main){border-right:0}}
+
+.bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:22px 0 8px}
+button{font:600 1rem var(--cond);letter-spacing:.02em;padding:10px 18px;border:2px solid var(--ink);background:var(--paper);color:var(--ink);cursor:pointer}
+button.primary{background:var(--yellow);color:#1E2A33;border-color:#1E2A33}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.hint{color:var(--ink2);font-size:.9rem}
+
+.file{border-top:2px solid var(--ink);margin-top:26px;padding-top:14px}
+.file header{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:baseline;justify-content:space-between}
+.file h2{font:600 1.3rem/1.2 var(--cond);margin:0;word-break:break-all}
+.stat{font-size:.92rem;color:var(--ink2)}
+.stat b{color:var(--ink);font-variant-numeric:tabular-nums}
+.ok{color:var(--ok)} .bad{color:var(--warn)}
+details{margin-top:10px}
+summary{cursor:pointer;color:var(--blue);font-weight:500}
+.tw{overflow-x:auto;margin-top:8px;border:1px solid var(--line);background:var(--paper)}
+table{border-collapse:collapse;font-size:.85rem;font-variant-numeric:tabular-nums;min-width:100%}
+th,td{padding:4px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font:600 .85rem var(--cond);background:color-mix(in srgb,var(--blue) 12%,var(--paper))}
+tr.sep td{border:0;height:10px;background:var(--zinc)}
+@media (prefers-reduced-motion:no-preference){.file{animation:in .25s ease-out}@keyframes in{from{opacity:0;transform:translateY(4px)}}}
+</style>
+</head>
+<body>
+<main>
+  <h1>PDF malzeme listesi okuyucu</h1>
+  <p class="lede">Tekla çizimlerindeki parça ve cıvata listelerini okuyup BOM makrosunun işleyeceği Excel dosyasına çevirir. Tablolar yazıların sayfadaki konumuna göre yeniden kurulur; dosyalar bilgisayarınızdan çıkmaz.</p>
+
+  <div id="drop" class="titleblock" tabindex="0" role="button" aria-label="PDF dosyalarını seçin veya buraya bırakın">
+    <div class="main"><strong>PDF dosyalarını buraya bırakın</strong><span>ya da tıklayıp seçin. Birden fazla çizim aynı anda okunabilir.</span></div>
+    <div class="f"><small>Dosya</small><b id="nFiles">0</b></div>
+    <div class="f"><small>Tablo</small><b id="nTables">0</b></div>
+    <div class="f"><small>Satır</small><b id="nRows">0</b></div>
+    <div class="f"><small>Sorunlu</small><b id="nBad">0</b></div>
+  </div>
+  <input id="pick" type="file" accept="application/pdf,.pdf" multiple hidden>
+
+  <div class="bar">
+    <button id="zipAll" class="primary" disabled>Tümünü Excel olarak indir (ZIP)</button>
+    <button id="clear" disabled>Listeyi temizle</button>
+    <span class="hint">İndirdiğiniz Excel dosyalarını makroda "Eklemeye Başla" ile seçin.</span>
+  </div>
+
+  <div id="out"></div>
+</main>
+
+<script>
+// PDF BOM table extractor: rebuilds parts-list tables from text positions.
+// Shared by the HTML tool (browser) and the Node test harness.
+(function (root) {
+  "use strict";
+
+  function fold(s) {
+    return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/ı/g, "i").replace(/ß/g, "ss").replace(/ø/gi, "o").toUpperCase();
+  }
+  function compact(s) { return fold(s).replace(/[\s.\-_:]/g, ""); }
+
+  // Header roles: 1 pos, 2 qty, 3 name/description, 4 length, 5 material, 6 weight, 7 profile, 16 "No." (ambiguous)
+  function roleOf(txt) {
+    const t = fold(txt).trim();
+    if (!t || t.endsWith(":") || t.length > 30) return 0;
+    const c = compact(t);
+    if (/^(ITEMNO|ITEM|POS|POSNR|POSNO|POSITION|MARK|MARKNO|PARTNO|PARTMARK|POZ|POZNO|TEILENR)$/.test(c)) return 1;
+    if (/^(QTY|QUANTITY|STCK|STK|STUCK|ANZ|ANZAHL|MENGE|ADET|MIKTAR|PCS|ANTALL|ANT)/.test(c)) return 2;
+    if (/^(NO|NR|NOS|NUMBER)$/.test(c)) return 16;
+    if (/(LENGTH|LANGE|LAENGE|LENGDE|UZUNLUK)/.test(c) || c === "BOY") return 4;
+    if (/(PROFIL|SECTION|KESIT)/.test(c)) return 7;
+    if (/(DESCRIPTION|BENENNUNG|BEZEICHNUNG|BESKRIVELSE|TANIM)/.test(c)) return 3;
+    if (/(WEIGHT|GEWICHT|VEKT|AGIRLIK)/.test(c)) return 6;
+    if (/(MATERIAL|WERKSTOFF|GUTE|GRADE|QUALITY|KALITE|MALZEME)/.test(c) && !/AUSZUG/.test(c)) return 5;
+    return 0;
+  }
+
+  function isHeaderRoles(roles) {
+    const s = new Set(roles.filter(r => r > 0));
+    let pos = s.has(1), qty = s.has(2);
+    if (s.has(16)) { if (pos) qty = true; else pos = true; }
+    const name = s.has(3) || s.has(7);
+    const core = [pos, qty, name].filter(Boolean).length;
+    return core >= 2 && s.size >= 3;
+  }
+
+  // ---- text items -> positioned tokens ----
+  function toTokens(items, pageH) {
+    const out = [];
+    for (const it of items) {
+      const str = (it.str || "").replace(/\u00a0/g, " ");
+      if (!str.trim()) continue;
+      const [a, b, c, d, e, f] = it.transform;
+      if (Math.abs(b) > 0.01 || Math.abs(c) > 0.01) continue;          // rotated text: not table text
+      const h = Math.abs(d) || it.height || 5;
+      const w = it.width || h * 0.5 * str.length;
+      // split long runs on 2+ spaces (some producers put a whole row in one item)
+      const parts = str.split(/( {2,})/);
+      const cw = w / Math.max(1, str.length);
+      let off = 0;
+      for (const p of parts) {
+        if (p.trim() && !/^ +$/.test(p)) {
+          const lead = p.length - p.trimStart().length;
+          out.push({ s: p.trim(), x0: e + (off + lead) * cw, x1: e + (off + lead + p.trim().length) * cw, y: pageH - f, h });
+        }
+        off += p.length;
+      }
+    }
+    return out;
+  }
+
+  function toLines(tokens) {
+    const t = tokens.slice().sort((p, q) => p.y - q.y || p.x0 - q.x0);
+    const lines = [];
+    for (const k of t) {
+      const L = lines.length ? lines[lines.length - 1] : null;
+      if (L && Math.abs(k.y - L.y) <= Math.max(0.45 * Math.min(k.h, L.h), 0.8)) { L.items.push(k); L.y = (L.y * (L.items.length - 1) + k.y) / L.items.length; L.h = Math.max(L.h, k.h); }
+      else lines.push({ y: k.y, h: k.h, items: [k] });
+    }
+    for (const L of lines) L.items.sort((p, q) => p.x0 - q.x0);
+    return lines;
+  }
+
+  // Join words of one cell: "M16x50-NS-ISO" + "4014", "Item" + "No."
+  function phrases(items, gapK) {
+    const out = [];
+    for (const k of items) {
+      const p = out[out.length - 1];
+      if (p && k.x0 - p.x1 < gapK * Math.min(k.h, p.h) && Math.abs(k.h - p.h) < 0.3 * p.h) {
+        p.s = p.s + " " + k.s; p.x1 = Math.max(p.x1, k.x1);
+      } else out.push({ s: k.s, x0: k.x0, x1: k.x1, y: k.y, h: k.h });
+    }
+    return out;
+  }
+
+  // Header cells: the contiguous group of items on the line around the role-bearing items
+  // Header words: "Item"+"No." -> "Item No."; role-less prefix + role word ("NET"+"WEIGHT/PCS", "TOT."+"NET"+"WEIGHT")
+  function mergeHeaderTokens(items) {
+    const out = [];
+    for (const k of items) {
+      const p = out[out.length - 1];
+      const gap = p ? k.x0 - p.x1 : 1e9;
+      const near = p && gap < 1.6 * Math.min(k.h, p.h) && Math.abs(k.h - p.h) < 0.3 * p.h;
+      // "No." right after "Item" (an overlapping side-table word may sit between them)
+      if (/^(NO|NR|NO\.|NR\.)$/i.test(k.s.trim())) {
+        let q = null;
+        for (let m = out.length - 1; m >= 0 && m >= out.length - 3; m--) if (/(ITEM|POS|PART|MARK|TEILE)\.?$/i.test(out[m].s.trim())) { q = out[m]; break; }
+        if (q && !/NO\.?$/i.test(q.s) && k.x0 - q.x1 < 3 * Math.min(k.h, q.h)) { q.s = q.s + " " + k.s; q.x1 = Math.max(q.x1, k.x1); continue; }
+      }
+      const joinNo = false;
+      const joinPrefix = near && roleOf(p.s) === 0 && roleOf(k.s) !== 0 && /^(NET|GROSS|TOT\.?|TOTAL|UNIT|EINZEL|GESAMT|BRUTTO|NETTO)$/i.test(p.s.split(" ").pop());
+      if (joinNo || joinPrefix) { p.s = p.s + " " + k.s; p.x1 = Math.max(p.x1, k.x1); }
+      else out.push({ s: k.s, x0: k.x0, x1: k.x1, y: k.y, h: k.h });
+    }
+    return out;
+  }
+
+  function headerCells(line) {
+    const it = mergeHeaderTokens(line.items);
+    const withRole = it.map(k => roleOf(k.s));
+    const idx = withRole.map((r, i) => (r ? i : -1)).filter(i => i >= 0);
+    if (!idx.length) return null;
+    const hs = idx.map(i => it[i].h).sort((a, b) => a - b);
+    const h = hs[Math.floor(hs.length / 2)], maxGap = 30 * h;
+    let lo = idx[0], hi = idx[idx.length - 1];
+    // only keep the role cluster itself contiguous (split if big gaps inside)
+    const groups = [];
+    let g = [it[lo]];
+    for (let i = lo + 1; i <= hi; i++) {
+      if (it[i].x0 - it[i - 1].x1 > maxGap) { groups.push(g); g = []; }
+      g.push(it[i]);
+    }
+    groups.push(g);
+    let best = null;
+    for (const gr of groups) {
+      const roles = gr.map(k => roleOf(k.s));
+      if (isHeaderRoles(roles) && (!best || gr.length > best.length)) best = gr;
+    }
+    if (!best) return null;
+    // interior cells without a role belong to an overlapping side table ("Bolts", "Size", "Doc.no.") -> drop
+    let cells = best.filter((k, n) => roleOf(k.s) || n === 0);
+    // extend right with same-size neighbours (e.g. "Bundle")
+    let last = it.indexOf(best[best.length - 1]);
+    while (last + 1 < it.length && it[last + 1].x0 - it[last].x1 < 7 * h && Math.abs(it[last + 1].h - h) < 0.25 * h && !roleOf(it[last + 1].s)) { cells.push(it[last + 1]); last++; }
+    const out = cells.map(k => ({ s: k.s, x0: k.x0, x1: k.x1, role: roleOf(k.s) }));
+    out.h = h;
+    out.sort((p, q) => p.x0 - q.x0);
+    return out;
+  }
+
+  // Column of a data word: overlap with a header word wins (right-aligned numbers);
+  // otherwise the column whose left edge is the last one at or before the word (left-aligned text).
+  function colFor(cells, k) {
+    let bi = -1, bo = 0;
+    cells.forEach((c, i) => { const ov = Math.min(k.x1, c.x1) - Math.max(k.x0, c.x0); if (ov > bo) { bo = ov; bi = i; } });
+    if (bi >= 0) return bi;
+    const tol = 0.6 * (cells.h || k.h);
+    for (let i = cells.length - 1; i >= 0; i--) if (k.x0 >= cells[i].x0 - tol) return i;
+    return 0;
+  }
+
+  function stripRevTokens(txt) {
+    // "PL40*518 02 03" -> "PL40*518"; "01 S355J2H" -> "S355J2H"
+    const p = txt.split(/\s+/).filter(Boolean);
+    if (p.length < 2) return txt;
+    const isRev = s => /^\d{2}$/.test(s);
+    while (p.length > 1 && isRev(p[p.length - 1])) p.pop();
+    while (p.length > 1 && isRev(p[0])) p.shift();
+    return p.join(" ");
+  }
+
+  function extractPage(items, pageH) {
+    const lines = toLines(toTokens(items, pageH));
+    const tables = [];
+    let i = 0;
+    while (i < lines.length) {
+      const cells = headerCells(lines[i]);
+      if (!cells) { i++; continue; }
+      const H = cells.h;
+      const left = cells[0].x0 - 3 * H, right = cells[cells.length - 1].x1 + 1.5 * H;
+      const rows = [];
+      let lastY = lines[i].y, pitch = 1.9 * H, j = i + 1, misses = 0;
+      for (; j < lines.length; j++) {
+        const L = lines[j];
+        if (headerCells(L)) break;                           // next table starts
+        const inr = L.items.filter(k => k.x1 > left && k.x0 < right && k.h > 0.55 * H && k.h < 1.7 * H);
+        if (!inr.length) { if (L.y - lastY > 3 * pitch) break; continue; }
+        if (L.y - lastY > 3.2 * pitch && rows.length) break;  // table ended
+        const row = new Array(cells.length).fill("");
+        for (const k of inr) { const c = colFor(cells, k); if (c >= 0) row[c] = row[c] ? row[c] + " " + k.s : k.s; }
+        if (rows.length) pitch = Math.max(0.9 * H, Math.min(3 * H, (L.y - lastY) * 0.5 + pitch * 0.5));
+        rows.push({ y: L.y, cells: row });
+        lastY = L.y;
+      }
+      // merge orphan fragments into the nearest row that has those columns empty
+      const merged = [];
+      for (const r of rows) {
+        const filled = r.cells.map((v, c) => (v ? c : -1)).filter(c => c >= 0);
+        const cand = [merged[merged.length - 1]].filter(Boolean);
+        if (filled.length <= 2 && filled.length < cells.length / 2 && cand.length) {
+          const prev = cand[0];
+          if (filled.every(c => !prev.cells[c]) && Math.abs(r.y - prev.y) < 1.2 * pitch) { filled.forEach(c => (prev.cells[c] = r.cells[c])); continue; }
+        }
+        merged.push(r);
+      }
+      // a fragment row BEFORE its real row (value printed slightly higher): pull down
+      for (let m = 0; m < merged.length - 1; m++) {
+        const a = merged[m], b = merged[m + 1];
+        const fa = a.cells.filter(Boolean).length;
+        if (fa <= 2 && a.cells.every((v, c) => !v || !b.cells[c]) && Math.abs(b.y - a.y) < 1.2 * pitch) {
+          a.cells.forEach((v, c) => { if (v) b.cells[c] = v; }); merged.splice(m, 1); m--;
+        }
+      }
+      const header = cells.map(c => c.s);
+      const out = merged.map(r => r.cells.map((v, c) => ([3, 5, 7].includes(cells[c].role) ? stripRevTokens(v) : v)));
+      // total line (e.g. "TOTAL 1032.4")
+      let total = null;
+      for (const r of out) { const k = r.findIndex(v => /^TOTAL$/i.test(v.trim())); if (k >= 0) { const n = r.slice(k + 1).join(" ").match(/\d+(?:[.,]\d+)?/); if (n) total = parseFloat(n[0].replace(",", ".")); } }
+      tables.push({ header, roles: cells.map(c => c.role), rows: out, total });
+      i = j;
+    }
+    return tables;
+  }
+
+  async function extractPdf(pdf) {
+    const all = [];
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const vp = page.getViewport({ scale: 1 });
+      const tc = await page.getTextContent();
+      for (const t of extractPage(tc.items, vp.height)) { t.page = p; all.push(t); }
+    }
+    return all;
+  }
+
+  // Rows for the macro: header + data per table, blank row between tables
+  function toSheetRows(tables) {
+    const aoa = [];
+    tables.forEach((t, i) => {
+      if (i) aoa.push([]);
+      aoa.push(t.header);
+      for (const r of t.rows) aoa.push(r.map(v => { const s = v.trim(); return /^-?\d+(\.\d+)?$/.test(s) ? Number(s) : s; }));
+    });
+    return aoa;
+  }
+
+  const api = { extractPdf, extractPage, toSheetRows, roleOf };
+  if (typeof module !== "undefined" && module.exports) module.exports = api; else root.PdfBom = api;
+})(typeof self !== "undefined" ? self : this);
+
+</script>
+<script>
+(function(){
+  "use strict";
+  if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  const drop = document.getElementById("drop"), pick = document.getElementById("pick"), out = document.getElementById("out");
+  const zipBtn = document.getElementById("zipAll"), clearBtn = document.getElementById("clear");
+  const results = [];   // {name, tables, aoa}
+
+  function baseName(n){ return n.replace(/\.pdf$/i, ""); }
+  function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+  function num(s){ const m = String(s).match(/-?\d+(?:[.,]\d+)?/); return m ? parseFloat(m[0].replace(",", ".")) : 0; }
+
+  function refreshCounts(){
+    document.getElementById("nFiles").textContent = results.length;
+    document.getElementById("nTables").textContent = results.reduce((a, r) => a + r.tables.length, 0);
+    document.getElementById("nRows").textContent = results.reduce((a, r) => a + r.tables.reduce((b, t) => b + t.rows.length, 0), 0);
+    document.getElementById("nBad").textContent = results.filter(r => !r.tables.length).length;
+    zipBtn.disabled = !results.some(r => r.tables.length);
+    clearBtn.disabled = !results.length;
+  }
+
+  function workbookFor(r){
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(r.aoa);
+    XLSX.utils.book_append_sheet(wb, ws, "PDF");
+    return XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  }
+  function download(blob, name){
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+
+  function render(r){
+    const sec = document.createElement("section"); sec.className = "file";
+    const rows = r.tables.reduce((b, t) => b + t.rows.length, 0);
+    let stat;
+    if (!r.tables.length) {
+      stat = `<span class="bad">${r.error ? esc(r.error) : "Malzeme listesi başlığı bulunamadı. Taranmış (resim) PDF olabilir ya da başlıklar tanınmıyor."}</span>`;
+    } else {
+      const parts = r.tables.map(t => {
+        const wi = t.roles.indexOf(6);
+        let s = `<b>${t.rows.length}</b> satır`;
+        if (t.total != null) s += `, PDF toplamı <b>${t.total.toLocaleString("tr-TR")}</b> kg`;
+        return s;
+      });
+      stat = `<span class="ok">${r.tables.length} tablo okundu:</span> ${parts.join("; ")}`;
+    }
+    sec.innerHTML = `<header><h2>${esc(r.name)}</h2>${r.tables.length ? '<button class="one">Excel indir</button>' : ""}</header>
+      <p class="stat">${stat}</p>
+      ${r.tables.length ? `<details><summary>Okunan tabloyu göster (${rows} satır)</summary><div class="tw"><table>${
+        r.tables.map((t, i) => (i ? '<tr class="sep"><td colspan="99"></td></tr>' : "") +
+          "<tr>" + t.header.map(h => `<th>${esc(h)}</th>`).join("") + "</tr>" +
+          t.rows.map(row => "<tr>" + row.map(v => `<td>${esc(v)}</td>`).join("") + "</tr>").join("")).join("")
+      }</table></div></details>` : ""}`;
+    const b = sec.querySelector("button.one");
+    if (b) b.addEventListener("click", () => download(new Blob([workbookFor(r)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), baseName(r.name) + ".xlsx"));
+    out.appendChild(sec);
+  }
+
+  async function handle(files){
+    if (!window.pdfjsLib || !window.XLSX) { alert("Kütüphaneler yüklenemedi. İnternet bağlantısını kontrol edip sayfayı yenileyin."); return; }
+    for (const f of files) {
+      if (!/\.pdf$/i.test(f.name)) continue;
+      const r = { name: f.name, tables: [], aoa: [] };
+      try {
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+        r.tables = await PdfBom.extractPdf(pdf);
+        r.aoa = PdfBom.toSheetRows(r.tables);
+      } catch (e) { r.error = "PDF açılamadı: " + (e && e.message ? e.message : e); }
+      results.push(r); render(r); refreshCounts();
+    }
+  }
+
+  drop.addEventListener("click", () => pick.click());
+  drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick.click(); } });
+  pick.addEventListener("change", () => { handle([...pick.files]); pick.value = ""; });
+  ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("drag"); }));
+  ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("drag"); }));
+  drop.addEventListener("drop", e => handle([...e.dataTransfer.files]));
+
+  zipBtn.addEventListener("click", async () => {
+    const zip = new JSZip();
+    for (const r of results) if (r.tables.length) zip.file(baseName(r.name) + ".xlsx", workbookFor(r));
+    download(await zip.generateAsync({ type: "blob" }), "PDF_listeleri.zip");
+  });
+  clearBtn.addEventListener("click", () => { results.length = 0; out.innerHTML = ""; refreshCounts(); });
+})();
+</script>
+</body>
+</html>
