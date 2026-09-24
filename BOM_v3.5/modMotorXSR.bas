@@ -293,14 +293,14 @@ End If
                 If quantIdx <= UBound(parts) Then
                     If UCase(parts(quantIdx)) = "Y" Then quantIdx = quantIdx + 1
                     If quantIdx <= UBound(parts) Then
-                        If Not IsNumeric(Replace(parts(quantIdx), ",", ".")) Then quantIdx = quantIdx + 1
+                        If Not IsNumToken(parts(quantIdx)) Then quantIdx = quantIdx + 1
 End If
                 End If
 
                 quantVal = 0
                 lengthVal = 0
-                If quantIdx <= UBound(parts) Then quantVal = CLng(val(parts(quantIdx)))
-                If (quantIdx + 1) <= UBound(parts) Then lengthVal = CDbl(Replace(parts(quantIdx + 1), ",", "."))
+                If quantIdx <= UBound(parts) Then quantVal = CLng(ParseBOMNumber(parts(quantIdx)))
+                If (quantIdx + 1) <= UBound(parts) Then lengthVal = ParseBOMNumber(parts(quantIdx + 1))
                 
                 If currentSection = "PROFILE" And Not rawTypeUpper Like "KF*" Then
                     If Not (rawTypeUpper Like "R*" Or rawTypeUpper Like "M*") Then
@@ -547,9 +547,9 @@ End If
     a = Trim$(Left$(body, sepPos - 1))
     b = Trim$(Mid$(body, sepPos + 1))
     
-    If IsNumeric(Replace(a, ",", ".")) And IsNumeric(Replace(b, ",", ".")) Then
-        thicknessMm = CDbl(Replace(a, ",", "."))
-        widthMm = CDbl(Replace(b, ",", "."))
+    If IsNumToken(a) And IsNumToken(b) Then
+        thicknessMm = ParseBOMNumber(a)
+        widthMm = ParseBOMNumber(b)
 Else
         issueText = AddIssue(issueText, "Metric PLATE ölçüsü çözülemedi.")
 End If
@@ -710,12 +710,12 @@ Public Function MixedFractionToInches(ByVal txt As String, ByRef ok As Boolean) 
     
     parts = Split(t, " ")
     If UBound(parts) >= 1 Then
-        If IsNumeric(parts(0)) Then wholeVal = CDbl(parts(0))
+        If IsNumToken(parts(0)) Then wholeVal = ParseBOMNumber(parts(0))
         fracParts = Split(parts(1), "/")
         If UBound(fracParts) = 1 Then
-            If IsNumeric(fracParts(0)) And IsNumeric(fracParts(1)) Then
-                n = CDbl(fracParts(0))
-                d = CDbl(fracParts(1))
+            If IsNumToken(fracParts(0)) And IsNumToken(fracParts(1)) Then
+                n = ParseBOMNumber(fracParts(0))
+                d = ParseBOMNumber(fracParts(1))
                 If d <> 0 Then
                     MixedFractionToInches = wholeVal + n / d
                     ok = True
@@ -728,10 +728,10 @@ End If
     If InStr(1, t, "/", vbTextCompare) > 0 Then
         fracParts = Split(t, "/")
         If UBound(fracParts) = 1 Then
-            If IsNumeric(fracParts(0)) And IsNumeric(fracParts(1)) Then
-                d = CDbl(fracParts(1))
+            If IsNumToken(fracParts(0)) And IsNumToken(fracParts(1)) Then
+                d = ParseBOMNumber(fracParts(1))
                 If d <> 0 Then
-                    MixedFractionToInches = CDbl(fracParts(0)) / d
+                    MixedFractionToInches = ParseBOMNumber(fracParts(0)) / d
                     ok = True
                     Exit Function
 End If
@@ -739,8 +739,8 @@ End If
 End If
     End If
     
-    If IsNumeric(t) Then
-        MixedFractionToInches = CDbl(t)
+    If IsNumToken(t) Then
+        MixedFractionToInches = ParseBOMNumber(t)
         ok = True
 End If
     Exit Function
@@ -864,8 +864,8 @@ End If
         t = Mid$(t, 5)
         t = Replace(t, "X", "*")
         If InStr(t, "*") > 0 Then
-            thicknessMm = val(Left$(t, InStr(t, "*") - 1))
-            widthMm = val(Mid$(t, InStr(t, "*") + 1))
+            thicknessMm = ParseBOMNumber(Left$(t, InStr(t, "*") - 1))
+            widthMm = ParseBOMNumber(Mid$(t, InStr(t, "*") + 1))
             If thicknessMm <= 0 Or widthMm <= 0 Then issueText = AddIssue(issueText, "FLAT ölçüsü çözülemedi.")
 End If
     End If
@@ -960,9 +960,9 @@ Public Function FindClosestProfileLibraryCode(ByRef dictLib As Object, ByVal d1 
         parts = Split(keyNorm, "*")
         n = 0
         For j = LBound(parts) To UBound(parts)
-            If IsNumeric(Trim$(parts(j))) Then
+            If IsNumToken(parts(j)) Then
                 If n <= 5 Then
-                    vals(n) = CDbl(Trim$(parts(j)))
+                    vals(n) = ParseBOMNumber(parts(j))
                     n = n + 1
 End If
             End If
@@ -1031,8 +1031,8 @@ End If
     ElseIf Left$(t, 4) = "FLAT" Then
         t = Mid$(t, 5)
         If InStr(t, "X") > 0 Then
-            aIn = val(Left$(t, InStr(t, "X") - 1))
-            wIn = val(Mid$(t, InStr(t, "X") + 1))
+            aIn = ParseBOMNumber(Left$(t, InStr(t, "X") - 1))
+            wIn = ParseBOMNumber(Mid$(t, InStr(t, "X") + 1))
             If aIn > 0 And wIn > 0 Then
                 areaMm2 = aIn * wIn
                 EstimateAssemblyLength = pieceWeight / (areaMm2 * STEEL_DENSITY_KG_MM3)

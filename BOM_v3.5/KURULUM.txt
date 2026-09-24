@@ -1,7 +1,98 @@
-﻿BOM ÇEVİRİCİ v3.5 - GÜNCELLEME
-==============================
+﻿BOM ÇEVİRİCİ v3.5 - KURULUM (YÖNETİCİ)
+=====================================
+Kullanıcılar için günlük kullanım: KULLANIM.txt
 
-Değişenler:
+GEREKENLER
+ - Windows Excel 2016 veya üstü (365 önerilir). Mac Excel desteklenmez.
+ - Modül dosyaları (.bas) Türkçe karakter kodlamasıyla (Windows-1254) kaydedilmiştir.
+   Türkçe olmayan Windows'ta içe aktarılırsa mesajlardaki ı/ş/ğ/İ harfleri bozuk görünebilir;
+   işleyişi etkilemez.
+
+1) İLK KURULUM / GÜNCELLEME  (her zaman dosyanın KOPYASINDA yapın)
+ a) Dosya > Seçenekler > Güven Merkezi > Makro Ayarları > "VBA proje nesne modeline erişime güven" -> AÇ
+ b) Alt+F11 > Ekle > Modül. Kurulum_ModulleriYukle.txt dosyasının tamamını yapıştırın, modülün adını
+    "Kurulum" yapın, imleç kodun içindeyken F5 (ModulleriYukle).
+ c) BOM_v3.5 klasörünü seçin. Aynı adlı eski modüller ve eski "Module1, Module6..." modülleri onayınızla
+    kaldırılır, 15 modül yüklenir. ThisWorkbook ve UserForm1'e dokunulmaz.
+ d) Hata Ayıkla > VBAProject'i Derle (hata vermemeli).
+ e) Kurulum modülünü silin (sağ tık > Kaldır > Hayır), güven ayarını tekrar KAPATIN.
+ f) İlk kurulumsa ThisWorkbook'a ThisWorkbook_kodu.txt içeriğini yapıştırın (düğmeler açılışta düzelir).
+
+2) KORUMA VE PAROLA  (genel kullanıma açmadan önce MUTLAKA)
+ - Formül hücreleri, GECMIS sayfası ve sayfa yapısı parolayla korunur; makrolar korumayı kendisi açar/kapatır.
+ - Parola KODDA DEĞİLDİR, dosyanın içinde gizli bir isimde saklanır. Eski sürümlerin parolası kaynak
+   kodda açıkta olduğu için ilk kurulumda değiştirin:
+     Alt+F11 > modProtect > Yonetici_ParolaDegistir içine tıklayın > F5
+     (mevcut parola sorulur: eski sürümün parolası; sonra yeni parola iki kez)
+ - VBA projesini kilitleyin: Alt+F11 > Araçlar > VBAProject Özellikleri > Koruma >
+   "Projeyi görüntüleme için kilitle" + parola. (Kod ve parola böylece kullanıcıya görünmez.)
+ - Bakım için korumayı kaldırmak: modProtect > Yonetici_KorumayiKaldir (F5).
+
+3) AYARLAR
+ AYARLAR sayfasındaki parametreler kod açmadan değiştirilir: ağırlık farkı toleransı (%), otomatik yedek
+ ve yedek klasörü, REV artışı vb. Yedekler varsayılan olarak dosyanın yanındaki YEDEK klasörüne,
+ OneDrive/SharePoint'te Belgeler\BOM_YEDEK'e yazılır.
+
+4) BAKIM ARAÇLARI  (Alt+F8)
+ - Kutuphane_Kontrol   : iki kütüphaneyi tarar, sorunları KUTUPHANE_KONTROL sayfasına yazar (değiştirmez).
+ - Kutuphane_Temizle   : eski YENI_EKLE / TANIMSIZ satırlarını siler (önce SILINEN_KAYITLAR'a yedekler).
+ - Son_Islemi_Yenile   : son işlemi aynı dosyalarla, dosya seçmeden yeniden yapar.
+ - Test_Beklenen_Kaydet / Test_Calistir : kontrol listesi (aşağıda).
+ - OGRENILEN sayfası   : OGRENME'den aktarılan parça türleri. Yanlış kaydı satırını silerek kaldırın.
+
+5) KONTROL LİSTESİ  (her güncellemeden sonra önerilir)
+ - Bir klasöre örnek listeler koyun (xlsx / pdf / xsr; sorun çıkarmış listeler en değerlisidir).
+ - Şablonun KOPYASINDA: Alt+F8 > Test_Beklenen_Kaydet > klasörü seçin. Sonuçları kontrol edip doğruysa
+   bu artık "beklenen" sonuçtur (klasör\_beklenen\*.txt).
+ - Her güncellemeden sonra kopyada: Alt+F8 > Test_Calistir. GEÇTİ / FARK sonuçları TEST_SONUC sayfasında.
+   Test, kopyadaki ANGLE / PLATE / BOLTS&WASHER / SUM içeriğini siler.
+
+6) PDF
+ PDF'ler makroda doğrudan seçilir (modPdfText, Power Query gerekmez). Metin tabanlı (Tekla/CAD çıktısı)
+ PDF'ler okunur; taranmış (resim) PDF'ler okunamaz ve AUDIT'e yazılır. PDF_BOM_Okuyucu.html isteğe
+ bağlı yedek araçtır (tarayıcıda açılır, PDF'i Excel'e çevirir).
+
+7) KAPASİTE
+ Bir SUM sayfasında en fazla 45 dosya. Daha fazlası seçilirse _P2, _P3 sayfaları açılır.
+ Şablondaki formüllü satır sayısı aşılırsa son mesaj ve AUDIT uyarır: listeyi bölerek işleyin.
+
+KÜTÜPHANE TEMİZLİĞİ (bir kez)
+ Eski sürümlerden kalan YENI_EKLE / TANIMSIZ satırları varsa: Alt+F8 > Kutuphane_Temizle.
+ Silinenler SILINEN_KAYITLAR sayfasında durur.
+
+SÜRÜM NOTLARI
+=============
+ - (v3.5) SAYI OKUMA TEK YERDE: metinden sayı okuyan tüm yerler ParseBOMNumber / CellNumber / IsNumToken
+          (modText) kullanır; sonuç Windows bölge ayarından (Türkçe / İngilizce) bağımsızdır.
+          Düzeltilen: XSR boy ve plaka ölçüleri CDbl ile okunuyordu (Türkçe ayarda "4000.5" -> 40005),
+          BOLT-LIBRARY'de metin olarak yazılmış ağırlıklar ("0.0116" -> 116). Aynı işi yapan 4 ayrı
+          hücre okuyucu tek CellNumber'da birleşti. Değişen modüller: modText, modMotorXSR, modProfiles,
+          modMain, modAudit, modOutput, modKutuphane.
+ - (v3.5) AĞIRLIK MUTABAKATI UYARISI: işlem sonunda şablon ağırlığı (SUM C+D) listedeki ağırlıktan (H)
+          tolerans (AYARLAR, SUM!J3) dışında farklı olan dosyalar son mesajda listelenir, AUDIT'e WARNING
+          yazılır ve imleç ilk sorunlu dosyanın J hücresine gider. Listesinde toplam ağırlık olmayan dosyalar
+          ayrıca belirtilir. Değişen modüller: modMain, modOutput.
+ - (v3.5) KÜTÜPHANE SAĞLIĞI (yeni modül modKutuphane): Alt+F8 > Kutuphane_Kontrol.
+          L-U-I-O-Y-LIBRARY ve BOLT-LIBRARY taranır, sorunlar KUTUPHANE_KONTROL sayfasına yazılır
+          (kütüphaneler değiştirilmez; SATIR'a tıklayınca ilgili satıra gider):
+          boş kod / cins / kg/m / yüzey alan / ağırlık, eski YENI_EKLE-TANIMSIZ satırları,
+          aynı cins farklı kod, aynı kod farklı kg/m / ağırlık, cıvatada birim x 1000 <> 1000 adet,
+          ölçüden hesaplanandan %15'ten fazla sapan kg/m (L, CHS, RHS/SHS, yuvarlak, lama; HEA/IPE/U hesaplanmaz).
+          OGRENME aktarımında da aynı kg/m kontrolü yapılır: parça aktarılır, DURUM sarı uyarı gösterir.
+          Toplam 15 modül.
+ - (v3.5) OGRENME: TÜR seçimi ANGLE / PLATE / BOLTS&WASHER (açılır liste Türkçe Excel'de de çalışır).
+          ANGLE        -> KOD, CİNS, kg/m, YÜZEY ALAN        (L-U-I-O-Y-LIBRARY)
+          PLATE        -> KALINLIK, GENİŞLİK (mm)            (kütüphane yok, OGRENILEN'de tutulur)
+          BOLTS&WASHER -> KOD, CİNS, BİRİM / 1000 ADET AĞIRLIK (BOLT-LIBRARY, özel bölüme yazılır)
+          Aktarılan her parçanın türü yeni OGRENILEN sayfasına kaydedilir; makro sonraki işlemlerde parçayı
+          adından tanır ve doğru sayfaya yazar (Gitterrost, Futterring, Befestigung gibi adı kalıba uymayanlar dahil).
+ - (v3.5) KÜTÜPHANEYE AKTAR'dan sonra SON İŞLEM aynı dosyalarla otomatik yenilenir (dosya seçmeden).
+          Sıfırdan modunda doğrudan; Liste Üstüne Ekle modunda önce işlem öncesi yedek geri yüklenir
+          (adetler iki kez eklenmesin diye). Elle çalıştırmak için: Alt+F8 > Son_Islemi_Yenile.
+ - (v3.5) KONTROL LİSTESİ (yeni modül modTest): Alt+F8 > Test_Beklenen_Kaydet / Test_Calistir.
+          Bir klasöre örnek listeleri koyun; doğru sonuçları bir kez kaydedin; her güncellemeden sonra
+          Test_Calistir farkları TEST_SONUC sayfasında gösterir. Testi şablonun KOPYASINDA çalıştırın.
+          Değişen modüller: modAudit, modMain, modMotorExcel, modState + yeni modTest (toplam 14 modül).
  - (v3.5) ANGLE / PLATE TYPE (A) sütunu = dosya adı (uzantısız). Birleştirilen satıra başka dosyadan
           adet gelirse o dosyanın adı " / " ile eklenir.
  - (v3.5) AYNI POZ, FARKLI KESİT: poz no aynı ama profil/kod veya boy (plakada kalınlık/genişlik/boy)
@@ -55,32 +146,3 @@ Değişenler:
  - Lisans sistemi tamamen kaldırıldı (modLicense modülü yok).
  - ANGLE / PLATE / BOLTS başlıklarında dosya adının sadece farklı kısmı görünür
    (ör: "Z175 ESH"). Kısa adlar SUM!K sütununda, tam adlar SUM!A'da.
-
-GÜNCELLEME (dosyanın kopyasını alın)
- 1) Güven Merkezi > Makro Ayarları > "VBA proje nesne modeline erişime güven" -> AÇ
- 2) Alt+F11 > Ekle > Modül, adını "Kurulum" yapın, ModulleriYukle kodunu yapıştırın
-    (önceki mesajdaki kod), F5 ile çalıştırıp bu klasörü seçin.
-    Makro eski modülleri siler, 13 modülü yükler (yeni: modPdfText).
- 3) ThisWorkbook koduna dokunmayın, aynen kalabilir.
- 4) Hata Ayıkla > VBAProject'i Derle.
- 5) Kurulum modülünü silin, güven ayarını tekrar KAPATIN.
- 6) Başlıkların kısalması için listeyi bir kez yeniden işleyin
-    (Temizle > Eklemeye Başla veya Liste Üstüne Ekle).
-
-KORUMA (değişmedi)
- - Formül hücreleri kilitli, GECMIS kilitli, sayfa silme / kopyalama kapalı.
- - Parola: modProtect > PROTECT_PWD. Bakım için Yonetici_KorumayiKaldir.
-
-KÜTÜPHANE TEMİZLİĞİ (bir kez)
- Alt+F8 > Kutuphane_Temizle > Çalıştır. 221 YENI_EKLE + 160 TANIMSIZ satırı silinir,
- silinenler SILINEN_KAYITLAR sayfasında durur.
-
-PDF İŞ AKIŞI
- Makroda PDF'leri doğrudan seçin (v3.5). Aşağıdaki HTML aracı artık isteğe bağlıdır:
- 1) PDF_BOM_Okuyucu.html dosyasını çift tıklayıp tarayıcıda açın (internet gerekir, kütüphaneler için).
- 2) PDF'leri kutuya sürükleyin. Her dosya için okunan tabloyu "Okunan tabloyu göster" ile kontrol edin.
- 3) "Tümünü Excel olarak indir (ZIP)" -> ZIP'i açın.
- 4) Makroda Eklemeye Başla / Liste Üstüne Ekle ile bu Excel dosyalarını (ve diğer listeleri) seçin.
- Montaj çizimleri (FA-F-...) ile parça çizimlerini (FAC51410A...) AYNI anda seçin ya da parça
- çizimleri SUM'da zaten olsun: çift sayım koruması ancak böyle çalışır.
- PDF'i makroda doğrudan seçmek hâlâ mümkün (Power Query), ama montaj çizimlerinde güvenilir değil.

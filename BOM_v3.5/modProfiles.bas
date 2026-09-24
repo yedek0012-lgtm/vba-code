@@ -89,7 +89,7 @@ End If
     
     parts = Split(temp, Chr(42))
     If UBound(parts) = 1 Then
-        If IsNumeric(Replace(parts(0), ",", ".")) And IsNumeric(Replace(parts(1), ",", ".")) Then
+        If IsNumToken(parts(0)) And IsNumToken(parts(1)) Then
             temp = parts(0) & Chr(42) & parts(0) & Chr(42) & parts(1)
 End If
     End If

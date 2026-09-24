@@ -57,6 +57,7 @@ Sub Evrensel_BOM_Cevirici_Core()
     Application.EnableCancelKey = xlErrorHandler
     On Error GoTo ErrorHandler
     conflictCount = 0
+    bufOverflowMsg = ""
 
     Dim fd As FileDialog
     Dim fileNo As Integer
@@ -133,6 +134,8 @@ Sub Evrensel_BOM_Cevirici_Core()
     Dim partStatus As String, partConf As Long, partIssue As String
     Dim partParsed As String
     Dim rawQty As Long, fireliQty As Long
+    Dim reconTxt As String, reconOut As Long, reconNoRef As Long, reconRow As Long, reconSheet As String, reconPrev As Long
+    Dim capTxt As String
 
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
@@ -182,22 +185,40 @@ End If
     extraPct = usrExtraPct
     isMerge = usrIsMerge
 
-    Set fd = Application.FileDialog(msoFileDialogFilePicker)
-    fd.Title = "Ýþlenecek BOM Dosyalarýný Seçin"
-    fd.Filters.Clear
-    fd.Filters.Add "Tüm BOM Dosyalarý", "*.xsr; *.txt; *.xls; *.xlsx; *.xlsm; *.xlsb; *.csv; *.pdf"
-    fd.AllowMultiSelect = True
-    
-    If fd.Show <> -1 Then
-        GoTo Cikis
-    End If
-    If fd.SelectedItems.Count = 0 Then
-        GoTo Cikis
+    ' Dosyalar: hazýr liste (son iþlemi yenile / test) ya da dosya seçme penceresi
+    Dim selFiles() As String, selCount As Long, sfI As Long
+    If IsArray(runPresetFiles) Then
+        selCount = UBound(runPresetFiles) - LBound(runPresetFiles) + 1
+        If selCount > 0 Then
+            ReDim selFiles(1 To selCount)
+            For sfI = 1 To selCount
+                selFiles(sfI) = CStr(runPresetFiles(LBound(runPresetFiles) + sfI - 1))
+            Next sfI
+        End If
+        runPresetFiles = Empty
+        If selCount <= 0 Then GoTo Cikis
+    Else
+        Set fd = Application.FileDialog(msoFileDialogFilePicker)
+        fd.Title = "Ýþlenecek BOM Dosyalarýný Seçin"
+        fd.Filters.Clear
+        fd.Filters.Add "Tüm BOM Dosyalarý", "*.xsr; *.txt; *.xls; *.xlsx; *.xlsm; *.xlsb; *.csv; *.pdf"
+        fd.AllowMultiSelect = True
+        If fd.Show <> -1 Then
+            GoTo Cikis
+        End If
+        selCount = fd.SelectedItems.Count
+        If selCount = 0 Then
+            GoTo Cikis
+        End If
+        ReDim selFiles(1 To selCount)
+        For sfI = 1 To selCount
+            selFiles(sfI) = fd.SelectedItems(sfI)
+        Next sfI
     End If
 
     runMode = IIf(appendMode, "ÜSTÜNE EKLE", "SIFIRDAN")
     ' Ýþlemden önce þablonun tarihli yedeði
-    If prmBackup And Not isDryRun Then runBackupPath = MakeBackup()
+    If prmBackup And Not isDryRun And Not runQuiet Then runBackupPath = MakeBackup()
 
     Set fso = CreateObject("Scripting.FileSystemObject")
     Set dictBoltWeights = CreateObject("Scripting.Dictionary")
@@ -209,19 +230,15 @@ End If
     dictProfileLib.CompareMode = 1
     dictSelectedFiles.CompareMode = 1
     dictFeedback.CompareMode = 1
+    Call LoadLearnedItems
     
     If Not wsBoltLib Is Nothing Then
         For rLib = 3 To wsBoltLib.Cells(wsBoltLib.Rows.Count, 1).End(xlUp).Row
             If Trim(wsBoltLib.Cells(rLib, 1).Text) <> "" Then
                 pCode = Trim(wsBoltLib.Cells(rLib, 1).Text)
                 pName = Trim(wsBoltLib.Cells(rLib, 2).Text)
-                If IsNumeric(wsBoltLib.Cells(rLib, 3).Value) Then
-                    bWt = CDbl(wsBoltLib.Cells(rLib, 3).Value)
-                ElseIf IsNumeric(wsBoltLib.Cells(rLib, 4).Value) Then
-                    bWt = CDbl(wsBoltLib.Cells(rLib, 4).Value) / 1000#
-                Else
-                    bWt = 0
-                End If
+                bWt = CellNumber(wsBoltLib.Cells(rLib, 3))
+                If bWt <= 0 Then bWt = CellNumber(wsBoltLib.Cells(rLib, 4)) / 1000#
                 If pCode <> "" And bWt > 0 Then dictBoltWeights(pCode) = bWt
                 If pName <> "" And bWt > 0 Then dictBoltWeights(pName) = bWt
             End If
@@ -247,10 +264,10 @@ End If
     
     If appendMode And Not isDryRun Then
         existingFileCount = CountExistingOutputFiles(curWsSum)
-        If (existingFileCount + fd.SelectedItems.Count) > 45 Then
+        If (existingFileCount + selCount) > 45 Then
             MsgBox "DÝKKAT: Þablon kapasitesi (Maksimum 45 Dosya) aþýlýyor!" & vbCrLf & vbCrLf & _
                    "Mevcut Dosya: " & existingFileCount & vbCrLf & _
-                   "Yeni Seçilen: " & fd.SelectedItems.Count & vbCrLf & _
+                   "Yeni Seçilen: " & selCount & vbCrLf & _
                    "AZ Formül sütununu korumak için iþlem durduruldu. Lütfen yeni liste oluþturun.", vbCritical, "Kapasite Ýhlali"
             GoTo Cikis
         End If
@@ -259,11 +276,12 @@ End If
     logText = "=== MTL BOM OTOMASYON MOTORU RAPORU ===" & vbCrLf
     logText = logText & "Tarih: " & Now & vbCrLf & "-----------------------------------" & vbCrLf
     
-    ReDim validFiles(1 To fd.SelectedItems.Count)
+    ReDim validFiles(1 To selCount)
     vfCount = 0
     duplicateCount = 0
     
-    For Each vItem In fd.SelectedItems
+    For sfI = 1 To selCount
+        vItem = selFiles(sfI)
         fileName = fso.GetBaseName(vItem)
         If Not dictSelectedFiles.Exists(fileName) Then
             dictSelectedFiles.Add fileName, True
@@ -273,7 +291,7 @@ Else
             duplicateCount = duplicateCount + 1
             logText = logText & "- ATLANDI (Mükerrer): " & fileName & vbCrLf
 End If
-    Next vItem
+    Next sfI
     
     If vfCount = 0 Then
         MsgBox "Geçerli yeni bir dosya seçilmedi.", vbExclamation
@@ -626,7 +644,15 @@ End If
         
         Call FlushAllBuffers(curWsAngle, curWsPlate, curWsBolt, curWsSum, targetRowAngle, targetRowPlate, targetRowBolt, sumRow, currentColAngle, currentColPlate, currentColBolt)
         If Not isDryRun Then
+            ' þablon kapasitesi: ANGLE H (UNIT WEIGHT), PLATE G (UNIT WEIGHT) formülleri yeterli mi?
+            capTxt = capTxt & TemplateCapacityWarning(curWsAngle, targetRowAngle - 1, 8)
+            capTxt = capTxt & TemplateCapacityWarning(curWsPlate, targetRowPlate - 1, 7)
+        End If
+        If Not isDryRun Then
             Call WriteSumReconciliation(curWsSum, sumRow - 1)
+            reconPrev = reconRow
+            reconTxt = reconTxt & CollectReconciliation(curWsSum, sumRow - 1, reconOut, reconNoRef, reconRow)
+            If reconPrev = 0 And reconRow > 0 Then reconSheet = curWsSum.Name
             Call UpdateFileHeaders(curWsSum, curWsAngle, curWsPlate, curWsBolt)
             Call CheckLibraryHealth(curWsAngle, targetRowAngle - 1)
         End If
@@ -642,7 +668,7 @@ End If
     Call RemoveProgress
 
     logText = logText & vbCrLf & "-----------------------------------" & vbCrLf
-    logText = logText & "Toplam Atýlan Dosya: " & fd.SelectedItems.Count & vbCrLf
+    logText = logText & "Toplam Atýlan Dosya: " & selCount & vbCrLf
     logText = logText & "Baþarýyla Ýþlenen Dosya: " & vfCount & vbCrLf
     logText = logText & "Þablona Ýþlenen Toplam Poz: " & totalProcessed & vbCrLf
     
@@ -669,8 +695,8 @@ End If
     If ogrenilenSayi > 0 Then
         Call WriteUnknownsSheet(dictFeedback)
         finalMsg = finalMsg & vbCrLf & vbCrLf & "DÝKKAT: " & ogrenilenSayi & " adet tanýnmayan parça 'OGRENME' sayfasýnda listelendi." & vbCrLf & _
-                   "Her parça için 4 veriyi (MALZEME KODU, MALZEME CÝNSÝ, kg/m, YÜZEY ALAN) sarý alana yazýp" & vbCrLf & _
-                   "'KÜTÜPHANEYE AKTAR' düðmesine basýn, sonra listeyi yeniden iþleyin."
+                   "Her parça için TÜR'ü (ANGLE / PLATE / BOLTS&WASHER) seçip sarý alanlarý doldurun ve" & vbCrLf & _
+                   "'KÜTÜPHANEYE AKTAR' düðmesine basýn; son iþlem ayný dosyalarla otomatik yenilenir."
     End If
     
     If conflictCount > 0 Then
@@ -678,9 +704,25 @@ End If
                    "Adetler toplandý; NOT sütununda 'ÇAKIÞMA!' ve AUDIT'te detay var."
     End If
 
-    If Not isDryRun Then
+    If bufOverflowMsg <> "" Or capTxt <> "" Then
+        finalMsg = finalMsg & vbCrLf & vbCrLf & "KAPASÝTE AÞILDI - bazý satýrlar eksik ya da aðýrlýksýz:" & vbCrLf & _
+                   bufOverflowMsg & capTxt & "Listeyi bölerek (daha az dosya ile) iþleyin."
+        AuditRecord "", "SYSTEM", 0, "", "Kapasite", "SYSTEM", "ERROR", 0, "", Replace(bufOverflowMsg & capTxt, vbCrLf, " ")
+    End If
+    If reconOut > 0 Then
+        finalMsg = finalMsg & vbCrLf & vbCrLf & "AÐIRLIK MUTABAKATI: " & reconOut & " dosyada þablon aðýrlýðý listedekinden" & vbCrLf & _
+                   "tolerans (±" & prmWeightTolPct & "%) dýþýnda farklý:" & vbCrLf & FirstLines(reconTxt, 10) & _
+                   "Olasý nedenler: tanýnmayan/atlanan parça (OGRENME, AUDIT), kütüphanede eksik veya yanlýþ kg/m" & vbCrLf & _
+                   "(Kutuphane_Kontrol), boy birimi. SUM sayfasýnda J sütunu kýrmýzý."
+    End If
+    If reconNoRef > 0 Then
+        finalMsg = finalMsg & vbCrLf & vbCrLf & reconNoRef & " dosyanýn listesinde toplam aðýrlýk yok; aðýrlýk mutabakatý yapýlamadý."
+    End If
+
+    If Not isDryRun And Not runQuiet Then
         runRev = UpdateRevDate(appendMode)
         Call AppendRunHistory(validFiles, vfCount, totalProcessed)
+        Call SaveLastRun(validFiles, vfCount, appendMode, extraPct, isMerge, runBackupPath)
     End If
     Call FinalizeAuditSheet
     logFilePath = IIf(ThisWorkbook.Path <> "", ThisWorkbook.Path & "\MTL_BOM_Log.txt", Environ("USERPROFILE") & "\Desktop\MTL_BOM_Log.txt")
@@ -716,11 +758,17 @@ End If
     ThisWorkbook.Sheets("SUM").Range("A5").Select
     On Error GoTo 0
     
-    MsgBox finalMsg, vbInformation, "MTL Evrensel Motor"
-    If ogrenilenSayi > 0 Then
+    If Not runQuiet Then MsgBox finalMsg, IIf(ogrenilenSayi > 0 Or reconOut > 0 Or conflictCount > 0 Or bufOverflowMsg <> "" Or capTxt <> "", vbExclamation, vbInformation), "MTL Evrensel Motor"
+    If ogrenilenSayi > 0 And Not runQuiet Then
         On Error Resume Next
         ThisWorkbook.Sheets("OGRENME").Activate
         ThisWorkbook.Sheets("OGRENME").Range("D2").Select
+        On Error GoTo 0
+    ElseIf reconOut > 0 And Not runQuiet And reconSheet <> "" Then
+        ' tolerans dýþýndaki ilk dosyanýn fark hücresine git
+        On Error Resume Next
+        ThisWorkbook.Sheets(reconSheet).Activate
+        ThisWorkbook.Sheets(reconSheet).Cells(reconRow, 10).Select
         On Error GoTo 0
     End If
     forcedRunMode = 0
@@ -818,16 +866,18 @@ Sub Can_Temizleyici()
            "AZ sütunundaki formülünüz ve þablon formülleriniz korundu.", vbInformation, "Can Temizleyici"
 End Sub
 
-' OGRENME sayfasýnda 4 verisi (KOD, CÝNS, kg/m, YÜZEY ALAN) girilen parçalarý kütüphaneye tek seferde ekler
-'   PROFÝL -> L-U-I-O-Y-LIBRARY : A=kod, B=cins, D=kg/m, E=yüzey alan
-'   CIVATA -> BOLT-LIBRARY      : A=kod, B=cins, C=birim aðýrlýk, D=1000 adet aðýrlýðý
+' OGRENME sayfasýndaki parçalarý TÜR'üne göre aktarýr:
+'   ANGLE        -> L-U-I-O-Y-LIBRARY (A kod, B cins, D kg/m, E yüzey alan)
+'   PLATE        -> kütüphane yok; kalýnlýk / geniþlik OGRENILEN'de tutulur
+'   BOLTS&WASHER -> BOLT-LIBRARY (A kod, B cins, C birim aðýrlýk, D 1000 adet aðýrlýðý)
+' Her aktarýlan parçanýn türü OGRENILEN sayfasýna yazýlýr; sonra son iþlem otomatik yenilenir.
 Sub Kutuphaneye_Aktar()
     Dim ws As Worksheet, wsLib As Worksheet, wsBoltLib As Worksheet
     Dim dictLib As Object, dictBolt As Object, dictNew As Object
     Dim r As Long, lastR As Long, libRow As Long, boltRow As Long, i As Long
-    Dim prof As String, code As String, cins As String, hedef As String, eksik As String, durum As String, key As String
-    Dim v1 As Double, v2 As Double, isBolt As Boolean, hitRow As Long
-    Dim nAdded As Long, nSkipped As Long, nExists As Long, nMissing As Long
+    Dim prof As String, code As String, cins As String, tp As String, eksik As String, durum As String, key As String
+    Dim v1 As Double, v2 As Double, hitRow As Long, warnTxt As String
+    Dim nAdded As Long, nSkipped As Long, nExists As Long, nMissing As Long, nLearned As Long, nWarned As Long
 
     On Error Resume Next
     Set ws = ThisWorkbook.Sheets("OGRENME")
@@ -838,6 +888,7 @@ Sub Kutuphaneye_Aktar()
         MsgBox "OGRENME veya L-U-I-O-Y-LIBRARY sayfasý bulunamadý.", vbCritical
         Exit Sub
     End If
+    Call UnprotectForMacro
 
     ' Profil kütüphanesi: ad (kanonik) -> satýr
     Set dictLib = CreateObject("Scripting.Dictionary")
@@ -867,13 +918,12 @@ Sub Kutuphaneye_Aktar()
         prof = Trim$(ws.Cells(r, 1).Text)
         If prof = "" Or Left$(CStr(ws.Cells(r, 8).Value), 9) = "AKTARILDI" Then GoTo NextUnk
 
-        hedef = UCase$(Trim$(ws.Cells(r, 3).Text))
-        isBolt = (Left$(hedef, 1) = "C")                 ' CIVATA / CÝVATA
+        tp = OgrenmeTypeCode(ws.Cells(r, 3).Text)
         code = UCase$(Trim$(ws.Cells(r, 4).Text))
         cins = Trim$(ws.Cells(r, 5).Text)
         If cins = "" Then cins = prof
-        v1 = OgrenmeNumber(ws.Cells(r, 6))
-        v2 = OgrenmeNumber(ws.Cells(r, 7))
+        v1 = CellNumber(ws.Cells(r, 6))
+        v2 = CellNumber(ws.Cells(r, 7))
         ws.Cells(r, 8).Interior.ColorIndex = xlColorIndexNone
 
         ' Hiçbir þey girilmemiþse: kullanýcý tanýmlamak istemiyor
@@ -882,8 +932,13 @@ Sub Kutuphaneye_Aktar()
             nSkipped = nSkipped + 1
             GoTo NextUnk
         End If
-
-        If isBolt And wsBoltLib Is Nothing Then
+        If tp = "" Then
+            ws.Cells(r, 8).Value = "TÜR seçin (ANGLE / PLATE / BOLTS&WASHER)"
+            ws.Cells(r, 8).Interior.Color = RGB(255, 199, 206)
+            nMissing = nMissing + 1
+            GoTo NextUnk
+        End If
+        If tp = "BOLT" And wsBoltLib Is Nothing Then
             ws.Cells(r, 8).Value = "BOLT-LIBRARY sayfasý yok"
             ws.Cells(r, 8).Interior.Color = RGB(255, 199, 206)
             nMissing = nMissing + 1
@@ -891,15 +946,24 @@ Sub Kutuphaneye_Aktar()
         End If
 
         ' Cývatada iki aðýrlýktan biri yeterli: birim aðýrlýk = 1000 adet / 1000
-        If isBolt Then
+        If tp = "BOLT" Then
             If v1 <= 0 And v2 > 0 Then v1 = v2 / 1000#
             If v2 <= 0 And v1 > 0 Then v2 = v1 * 1000#
         End If
 
         eksik = ""
-        If code = "" Then eksik = eksik & ", MALZEME KODU"
-        If v1 <= 0 Then eksik = eksik & IIf(isBolt, ", BÝRÝM AÐIRLIK", ", kg/m")
-        If v2 <= 0 And Not isBolt Then eksik = eksik & ", YÜZEY ALAN"
+        Select Case tp
+            Case "ANGLE"
+                If code = "" Then eksik = eksik & ", MALZEME KODU"
+                If v1 <= 0 Then eksik = eksik & ", kg/m"
+                If v2 <= 0 Then eksik = eksik & ", YÜZEY ALAN"
+            Case "PLATE"
+                If v1 <= 0 Then eksik = eksik & ", KALINLIK"
+                If v2 <= 0 Then eksik = eksik & ", GENÝÞLÝK"
+            Case "BOLT"
+                If code = "" Then eksik = eksik & ", MALZEME KODU"
+                If v1 <= 0 Then eksik = eksik & ", BÝRÝM AÐIRLIK"
+        End Select
         If eksik <> "" Then
             ws.Cells(r, 8).Value = "EKSÝK: " & Mid$(eksik, 3)
             ws.Cells(r, 8).Interior.Color = RGB(255, 199, 206)
@@ -907,81 +971,179 @@ Sub Kutuphaneye_Aktar()
             GoTo NextUnk
         End If
 
-        If isBolt Then
-            ' ---------------- BOLT-LIBRARY ----------------
-            hitRow = 0
-            key = UCase$(Replace(code, " ", ""))
-            If dictBolt.Exists(key) Then hitRow = dictBolt(key)
-            key = UCase$(Replace(cins, " ", ""))
-            If hitRow = 0 And dictBolt.Exists(key) Then hitRow = dictBolt(key)
-            If hitRow > 0 Then
-                ws.Cells(r, 8).Value = "Zaten kütüphanede (satýr " & hitRow & ")"
-                nExists = nExists + 1
-            Else
-                wsBoltLib.Cells(boltRow, 1).Value = LibraryCodeValue(code)
-                wsBoltLib.Cells(boltRow, 2).Value = cins
-                wsBoltLib.Cells(boltRow, 3).Value = v1
-                wsBoltLib.Cells(boltRow, 4).Value = v2
-                wsBoltLib.Cells(boltRow, 1).Resize(1, 4).Interior.Color = RGB(198, 239, 206)
-                dictBolt(UCase$(Replace(code, " ", ""))) = boltRow
-                dictBolt(UCase$(Replace(cins, " ", ""))) = boltRow
-                boltRow = boltRow + 1
-                ws.Cells(r, 8).Value = "AKTARILDI"
+        durum = ""
+        Select Case tp
+            Case "PLATE"
+                ' plakanýn kütüphanesi yok: ölçüler OGRENILEN'de
+                durum = "AKTARILDI (PLATE " & NumToText(v1) & "x" & NumToText(v2) & ")"
                 nAdded = nAdded + 1
-            End If
-        Else
-            ' ---------------- L-U-I-O-Y-LIBRARY ----------------
-            hitRow = 0
-            key = CanonicalSectionKey(cins)
-            If dictLib.Exists(key) Then hitRow = dictLib(key)
-            key = CanonicalSectionKey(prof)
-            If hitRow = 0 And dictLib.Exists(key) Then hitRow = dictLib(key)
-            If hitRow > 0 Then
-                ' Eski "YENI_EKLE"/"TANIMSIZ" satýrý varsa 4 veriyi o satýra yaz
-                If UCase$(Trim$(wsLib.Cells(hitRow, 1).Text)) = "YENI_EKLE" Or _
-                   UCase$(Trim$(wsLib.Cells(hitRow, 1).Text)) = "TANIMSIZ" Or _
-                   Trim$(wsLib.Cells(hitRow, 1).Text) = "" Then
-                    Call WriteProfileLibRow(wsLib, hitRow, code, wsLib.Cells(hitRow, 2).Value, v1, v2)
-                    ws.Cells(r, 8).Value = "AKTARILDI"
-                    nAdded = nAdded + 1
-                Else
-                    ws.Cells(r, 8).Value = "Zaten kütüphanede (kod " & wsLib.Cells(hitRow, 1).Text & ")"
-                    nExists = nExists + 1
-                End If
-            Else
-                Call WriteProfileLibRow(wsLib, libRow, code, cins, v1, v2)
-                dictLib(CanonicalSectionKey(cins)) = libRow
-                libRow = libRow + 1
-                durum = "AKTARILDI"
 
-                ' Cins adý deðiþtirildiyse listedeki ham ad bu satýrla eþleþiyor mu? Eþleþmiyorsa
-                ' ham adý da ayný 4 veriyle ekle (yoksa parça bir sonraki iþlemde yine tanýnmaz).
-                Set dictNew = CreateObject("Scripting.Dictionary")
-                dictNew.CompareMode = 1
-                dictNew(CanonicalSectionKey(cins)) = code
-                dictNew(CanonicalSectionKey(code)) = code
-                dictNew(UCase$(Replace(cins, " ", ""))) = code
-                If StandardizeProfileName(cins) <> "" Then dictNew(StandardizeProfileName(cins)) = code
-                If Not ProfileKnown(UCase$(prof), dictNew) Then
-                    Call WriteProfileLibRow(wsLib, libRow, code, prof, v1, v2)
-                    dictLib(CanonicalSectionKey(prof)) = libRow
-                    libRow = libRow + 1
-                    durum = "AKTARILDI (+ ham ad da eklendi)"
+            Case "BOLT"
+                hitRow = 0
+                key = UCase$(Replace(code, " ", ""))
+                If dictBolt.Exists(key) Then hitRow = dictBolt(key)
+                If hitRow > 0 Then
+                    durum = "AKTARILDI (kod kütüphanede vardý, satýr " & hitRow & ")"
+                    nExists = nExists + 1
+                Else
+                    wsBoltLib.Cells(boltRow, 1).Value = LibraryCodeValue(code)
+                    wsBoltLib.Cells(boltRow, 2).Value = cins
+                    wsBoltLib.Cells(boltRow, 3).Value = v1
+                    wsBoltLib.Cells(boltRow, 4).Value = v2
+                    wsBoltLib.Cells(boltRow, 1).Resize(1, 4).Interior.Color = RGB(198, 239, 206)
+                    dictBolt(UCase$(Replace(code, " ", ""))) = boltRow
+                    dictBolt(UCase$(Replace(cins, " ", ""))) = boltRow
+                    boltRow = boltRow + 1
+                    durum = "AKTARILDI"
+                    nAdded = nAdded + 1
                 End If
-                ws.Cells(r, 8).Value = durum
-                nAdded = nAdded + 1
-            End If
+
+            Case "ANGLE"
+                hitRow = 0
+                key = CanonicalSectionKey(cins)
+                If dictLib.Exists(key) Then hitRow = dictLib(key)
+                key = CanonicalSectionKey(prof)
+                If hitRow = 0 And dictLib.Exists(key) Then hitRow = dictLib(key)
+                If hitRow > 0 Then
+                    ' Eski "YENI_EKLE"/"TANIMSIZ" satýrý varsa 4 veriyi o satýra yaz; kodlu satýr varsa onun kodu kullanýlýr
+                    If UCase$(Trim$(wsLib.Cells(hitRow, 1).Text)) = "YENI_EKLE" Or _
+                       UCase$(Trim$(wsLib.Cells(hitRow, 1).Text)) = "TANIMSIZ" Or _
+                       Trim$(wsLib.Cells(hitRow, 1).Text) = "" Then
+                        Call WriteProfileLibRow(wsLib, hitRow, code, wsLib.Cells(hitRow, 2).Value, v1, v2)
+                        durum = "AKTARILDI"
+                        nAdded = nAdded + 1
+                    Else
+                        code = UCase$(Trim$(wsLib.Cells(hitRow, 1).Text))
+                        durum = "AKTARILDI (kütüphanede vardý, kod " & code & ")"
+                        nExists = nExists + 1
+                    End If
+                Else
+                    Call WriteProfileLibRow(wsLib, libRow, code, cins, v1, v2)
+                    dictLib(CanonicalSectionKey(cins)) = libRow
+                    libRow = libRow + 1
+                    durum = "AKTARILDI"
+
+                    ' Cins adý deðiþtirildiyse listedeki ham ad bu satýrla eþleþiyor mu? Eþleþmiyorsa
+                    ' ham adý da ayný 4 veriyle ekle.
+                    Set dictNew = CreateObject("Scripting.Dictionary")
+                    dictNew.CompareMode = 1
+                    dictNew(CanonicalSectionKey(cins)) = code
+                    dictNew(CanonicalSectionKey(code)) = code
+                    dictNew(UCase$(Replace(cins, " ", ""))) = code
+                    If StandardizeProfileName(cins) <> "" Then dictNew(StandardizeProfileName(cins)) = code
+                    If Not ProfileKnown(UCase$(prof), dictNew) Then
+                        Call WriteProfileLibRow(wsLib, libRow, code, prof, v1, v2)
+                        dictLib(CanonicalSectionKey(prof)) = libRow
+                        libRow = libRow + 1
+                        durum = "AKTARILDI (+ ham ad da eklendi)"
+                    End If
+                    nAdded = nAdded + 1
+                End If
+        End Select
+
+        ' Türü kaydet: bir sonraki iþlemde parça adýndan tanýnýr ve doðru sayfaya yazýlýr
+        Call SaveLearnedItem(prof, tp, code, cins, v1, v2)
+        nLearned = nLearned + 1
+        ' Girilen kg/m / yüzey alan profil ölçüsüyle uyumlu mu? (aktarýlýr ama sarý uyarý)
+        warnTxt = ""
+        If tp = "ANGLE" Then
+            warnTxt = SectionValueWarning(cins, v1, v2)
+            If warnTxt = "" And UCase$(cins) <> UCase$(prof) Then warnTxt = SectionValueWarning(prof, v1, v2)
         End If
-        If Left$(ws.Cells(r, 8).Value, 9) = "AKTARILDI" Then ws.Cells(r, 8).Interior.Color = RGB(198, 239, 206)
+        If warnTxt <> "" Then
+            ws.Cells(r, 8).Value = durum & " | KONTROL EDÝN: " & warnTxt
+            ws.Cells(r, 8).Interior.Color = RGB(255, 235, 156)
+            nWarned = nWarned + 1
+        Else
+            ws.Cells(r, 8).Value = durum
+            ws.Cells(r, 8).Interior.Color = RGB(198, 239, 206)
+        End If
 NextUnk:
     Next r
 
-    MsgBox nAdded & " parça kütüphaneye eklendi." & vbCrLf & _
-           nExists & " parça zaten vardý, " & nSkipped & " parça boþ býrakýldý." & vbCrLf & _
-           IIf(nMissing > 0, nMissing & " parça EKSÝK veri nedeniyle aktarýlmadý (DURUM sütununa bakýn)." & vbCrLf, "") & vbCrLf & _
-           "Yeni kodlarýn kullanýlmasý için listeyi yeniden iþleyin.", _
+    Call ProtectAfterMacro
+    MsgBox nAdded & " parça kütüphaneye eklendi, " & nExists & " parçanýn kodu zaten vardý." & vbCrLf & _
+           nLearned & " parçanýn türü OGRENILEN sayfasýna kaydedildi." & vbCrLf & _
+           nSkipped & " parça boþ býrakýldý." & vbCrLf & _
+           IIf(nWarned > 0, nWarned & " parçanýn kg/m / yüzey alaný ölçüden hesaplanandan çok farklý (DURUM'da sarý)." & vbCrLf, "") & _
+           IIf(nMissing > 0, nMissing & " parça EKSÝK veri nedeniyle aktarýlmadý (DURUM sütununa bakýn)." & vbCrLf, ""), _
            IIf(nMissing > 0, vbExclamation, vbInformation), "Öðrenen Kütüphane"
+    If nLearned > 0 Then Call Son_Islemi_Yenile
 End Sub
+
+' Kütüphane saðlýðý: iki kütüphaneyi tarar, sorunlarý KUTUPHANE_KONTROL sayfasýna yazar (deðiþtirmez)
+Sub Kutuphane_Kontrol()
+    Call RunLibraryCheck
+End Sub
+
+' Son iþlemi (ayný dosyalar, ayný mod) dosya seçmeden yeniden yapar.
+' ÜSTÜNE EKLE modunda önce son iþlemden önceki yedek geri yüklenir (aksi halde adetler iki kez eklenirdi).
+Sub Son_Islemi_Yenile()
+    Dim ws As Worksheet, r As Long, n As Long, files() As String, nMiss As Long, missTxt As String
+    Dim md As String, bkp As String, msg As String, fso2 As Object, p As String
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("SON_CALISMA")
+    On Error GoTo 0
+    If ws Is Nothing Then
+        MsgBox "Kayýtlý son iþlem yok. Listeyi Eklemeye Baþla / Liste Üstüne Ekle ile iþleyin.", vbInformation
+        Exit Sub
+    End If
+    md = UCase$(Trim$(ws.Range("B1").Text))
+    bkp = Trim$(ws.Range("B4").Text)
+    Set fso2 = CreateObject("Scripting.FileSystemObject")
+    ReDim files(1 To 1)
+    For r = 7 To ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+        p = Trim$(ws.Cells(r, 1).Text)
+        If p <> "" Then
+            If fso2.FileExists(p) Then
+                n = n + 1
+                ReDim Preserve files(1 To n)
+                files(n) = p
+            Else
+                nMiss = nMiss + 1
+                If nMiss <= 5 Then missTxt = missTxt & vbCrLf & "  - " & p
+            End If
+        End If
+    Next r
+    If n = 0 Then
+        MsgBox "Son iþlemin dosyalarý bulunamadý; listeyi elle yeniden iþleyin." & missTxt, vbExclamation
+        Exit Sub
+    End If
+
+    msg = "Son iþlem ayný " & n & " dosya ile yeniden yapýlsýn mý?" & vbCrLf & _
+          "Mod: " & IIf(md = "USTUNE", "LÝSTE ÜSTÜNE EKLE", "SIFIRDAN") & vbCrLf
+    If nMiss > 0 Then msg = msg & vbCrLf & "Bulunamayan " & nMiss & " dosya atlanacak:" & missTxt & vbCrLf
+    If md = "USTUNE" Then
+        If bkp = "" Or bkp = "-" Or Not fso2.FileExists(bkp) Then
+            MsgBox "Son iþlem LÝSTE ÜSTÜNE EKLE modundaydý ama iþlem öncesi yedek bulunamadý." & vbCrLf & _
+                   "Adetler iki kez eklenmesin diye otomatik yenileme yapýlmadý; listeyi elle yeniden iþleyin.", vbExclamation
+            Exit Sub
+        End If
+        msg = msg & vbCrLf & "ANGLE / PLATE / BOLTS&WASHER / SUM, son iþlemden önceki yedekten geri yüklenecek:" & vbCrLf & _
+              "  " & bkp & vbCrLf & "(o iþlemden sonra bu sayfalarda elle yaptýðýnýz deðiþiklikler kaybolur)"
+    End If
+    If MsgBox(msg, vbYesNo + vbQuestion, "Son Ýþlemi Yenile") = vbNo Then Exit Sub
+
+    If md = "USTUNE" Then
+        Application.ScreenUpdating = False
+        Call UnprotectForMacro
+        If Not RestoreOutputsFromBackup(bkp) Then
+            Call ProtectAfterMacro
+            Application.ScreenUpdating = True
+            MsgBox "Yedek geri yüklenemedi: " & bkp & vbCrLf & "Listeyi elle yeniden iþleyin.", vbCritical
+            Exit Sub
+        End If
+        Call ProtectAfterMacro
+    End If
+
+    usrAppendMode = (md = "USTUNE")
+    usrExtraPct = 0
+    If IsNumeric(ws.Range("B2").Value) Then usrExtraPct = CDbl(ws.Range("B2").Value)
+    usrIsMerge = (Trim$(ws.Range("B3").Text) = "1")
+    runPresetFiles = files
+    Call Evrensel_BOM_Cevirici_Core
+End Sub
+
 
 ' L-U-I-O-Y-LIBRARY satýrýna 4 veriyi yazar: A kod, B cins, D kg/m, E yüzey alan
 Private Sub WriteProfileLibRow(ByVal wsLib As Worksheet, ByVal r As Long, ByVal code As String, _
@@ -992,20 +1154,6 @@ Private Sub WriteProfileLibRow(ByVal wsLib As Worksheet, ByVal r As Long, ByVal 
     wsLib.Cells(r, 5).Value = alan
     wsLib.Cells(r, 1).Resize(1, 5).Interior.Color = RGB(198, 239, 206)
 End Sub
-
-' OGRENME hücresindeki sayýyý bölge ayarýndan baðýmsýz okur (14,6 / 14.6 / boþ -> 0)
-Private Function OgrenmeNumber(ByVal c As Range) As Double
-    On Error GoTo Fail
-    If IsEmpty(c.Value) Then Exit Function
-    If VarType(c.Value) = vbDouble Or VarType(c.Value) = vbCurrency Or VarType(c.Value) = vbLong Or VarType(c.Value) = vbInteger Then
-        OgrenmeNumber = CDbl(c.Value)
-    Else
-        OgrenmeNumber = ParseBOMNumber(CStr(c.Value))
-    End If
-    Exit Function
-Fail:
-    OgrenmeNumber = 0
-End Function
 
 ' Verilen sütunlardaki son dolu satýr (A boþ, B dolu satýrlar da sayýlýr)
 Private Function LastUsedRow(ByVal ws As Worksheet, ByVal col1 As Long, ByVal col2 As Long) As Long
@@ -1028,7 +1176,7 @@ End Sub
 ' modül adýný atýp makroyu yeniden baðlar (dosya her açýldýðýnda kontrol edilir).
 Public Sub FixButtonMacros()
     Dim ws As Worksheet, shp As Shape, act As String, nm As String, p As Long, known As String
-    known = "|DUGME_SIFIRDAN_BASLA|DUGME_USTUNE_EKLE|DUGME_TEMIZLE|CAN_TEMIZLEYICI|PANELI_AC|KUTUPHANEYE_AKTAR|EVRENSEL_BOM_CEVIRICI_CORE|"
+    known = "|DUGME_SIFIRDAN_BASLA|DUGME_USTUNE_EKLE|DUGME_TEMIZLE|CAN_TEMIZLEYICI|PANELI_AC|KUTUPHANEYE_AKTAR|EVRENSEL_BOM_CEVIRICI_CORE|SON_ISLEMI_YENILE|TEST_CALISTIR|TEST_BEKLENEN_KAYDET|KUTUPHANE_KONTROL|"
     On Error Resume Next
     For Each ws In ThisWorkbook.Worksheets
         For Each shp In ws.Shapes

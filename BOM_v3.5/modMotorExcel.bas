@@ -31,6 +31,7 @@ Public Sub ProcessExcelFile()
     Dim mbIssue As String, mbStatus As String, mbConf As Long
     Dim mbSheetsUsed As Long
     Dim mbLenMul As Double
+    Dim mbLrn As Variant, mbLrnKind As String, mbLrnCode As String, mbLrnName As String, mbLrnT As Double, mbLrnW As Double
 
     Set wbIn = Nothing
     wbOpenAlready = False
@@ -168,6 +169,24 @@ Public Sub ProcessExcelFile()
                 End If
 
                 mbKind = ClassifyBOMItem(rawName, mbDinRaw, quality, posNo)
+                ' Öðrenilen parça (OGRENME'de türü seçilip aktarýlan): tür ve deðerler OGRENILEN'den
+                mbLrnKind = "": mbLrnCode = "": mbLrnName = "": mbLrnT = 0: mbLrnW = 0
+                If Not dictLearned Is Nothing Then
+                    mbTmp = LearnedKey(rawName)
+                    If dictLearned.Exists(mbTmp) Then
+                        mbLrn = dictLearned(mbTmp)
+                        mbLrnKind = CStr(mbLrn(0))
+                        mbLrnCode = CStr(mbLrn(1))
+                        mbLrnName = CStr(mbLrn(2))
+                        mbLrnT = CDbl(mbLrn(3))
+                        mbLrnW = CDbl(mbLrn(4))
+                        Select Case mbLrnKind
+                            Case "ANGLE": mbKind = "ANGLE"
+                            Case "PLATE": mbKind = "PLATE"
+                            Case "BOLT": mbKind = "LBOLT"
+                        End Select
+                    End If
+                End If
                 ' Yuvarlak kesit (D460 / Ø20): boy < çap ise DAÝRE PLAKA, deðilse YUVARLAK ÇUBUK (kütüphane Y kodu)
                 mbDisc = False
                 If mbKind = "ROUND" Then
@@ -241,6 +260,27 @@ Public Sub ProcessExcelFile()
                             If Not dictFeedback.Exists(rawNameUpper) Then dictFeedback.Add rawNameUpper, fileName & " (Satýr: " & r & ")"
                         End If
 
+                    ' ---------- ÖÐRENÝLEN CIVATA / PUL / BAÐLANTI PARÇASI ----------
+                    ' Kod, cins ve aðýrlýk BOLT-LIBRARY'den; özel bölüme yazýlýr (otomatik somun/pul seti üretilmez)
+                    Case "LBOLT"
+                        If quantVal <= 0 Then
+                            AuditRecord fileName, "EXCEL", r, wsIn.Name, rawName, "BOLT", "WARNING", 40, "", "Adet okunamadý, satýr atlandý."
+                            GoTo NextRowExcel
+                        End If
+                        finalBoltQty = IIf(extraPct > 0, quantVal + Int((quantVal * (extraPct / 100#)) + 0.5), quantVal)
+                        hwCodeE = mbLrnCode
+                        hwNameE = IIf(mbLrnName <> "", mbLrnName, rawName)
+                        boltKeyE = "99|0000|" & hwCodeE & "|" & quality
+                        If Not dictBoltList.Exists(boltKeyE) Then
+                            dictBoltList.Add boltKeyE, "99^0^" & hwCodeE & "^" & hwNameE & "^" & quality & "^True^" & notStr
+                        End If
+                        qtyKeyE = boltKeyE & "|" & currentColBolt
+                        dictBoltQty(qtyKeyE) = IIf(dictBoltQty.Exists(qtyKeyE), dictBoltQty(qtyKeyE) + finalBoltQty, finalBoltQty)
+                        If Not dictDiameters.Exists("99") Then dictDiameters.Add "99", 99
+                        totalProcessed = totalProcessed + 1
+                        AuditRecord fileName, "EXCEL", r, wsIn.Name, rawName, "BOLT-SPECIAL", "EXACT", 100, _
+                                    "KOD=" & hwCodeE & "; " & hwNameE & "; ADET=" & quantVal & " (öðrenilen parça)", ""
+
                     ' ---------- SOMUN / PUL / YAYLI RONDELA (müþteri satýrý) ----------
                     ' Þablon bunlarý her çap için cývatalardan otomatik üretir (yeþil 3'lü set).
                     ' Müþterinin yazdýðý adet sadece kontrol amaçlý toplanýr.
@@ -265,6 +305,12 @@ Public Sub ProcessExcelFile()
                         ' Ýsimde ölçü yoksa Dicke / Breite sütunlarýndan al
                         If pThickE <= 0 And mbCols(9) > 0 Then pThickE = BomCellNum(srcData, r, mbCols(9), maxC)
                         If pWidthE <= 0 And mbCols(10) > 0 Then pWidthE = BomCellNum(srcData, r, mbCols(10), maxC)
+                        ' Öðrenilen plaka: kalýnlýk / geniþlik OGRENILEN'den
+                        If mbLrnKind = "PLATE" Then
+                            If mbLrnT > 0 Then pThickE = mbLrnT
+                            If mbLrnW > 0 Then pWidthE = mbLrnW
+                            If pNoteE = "" And mbLrnName <> "" And UCase$(mbLrnName) <> UCase$(rawName) Then pNoteE = mbLrnName
+                        End If
                         ' Daire plaka: Ø x Ø kare pafta; kalýnlýk Dicke sütunundan, yoksa LENGTH'ten (Tekla: D460, L=4)
                         If mbDisc Then
                             pWidthE = mbDia2
@@ -332,7 +378,7 @@ Public Sub ProcessExcelFile()
                         rawNameUpper = UCase$(rawName)
                         cleanNoSpace = Replace(rawNameUpper, " ", "")
                         mbIssue = ""
-                        If Not ProfileKnown(rawNameUpper, dictProfileLib) Then
+                        If mbLrnKind <> "ANGLE" And Not ProfileKnown(rawNameUpper, dictProfileLib) Then
                             mbIssue = "Profil kütüphanede yok."
                             If Not dictFeedback.Exists(rawNameUpper) Then
                                 dictFeedback.Add rawNameUpper, fileName
@@ -341,6 +387,7 @@ Public Sub ProcessExcelFile()
                         End If
 
                         matCodeStrE = GetProfileMaterialCode(rawName, dictProfileLib)
+                        If mbLrnKind = "ANGLE" And mbLrnCode <> "" Then matCodeStrE = mbLrnCode
 
                         If posNo = "" Then
                             posKeyAngleE = "NOPOS_" & r & "|" & wsIn.Name & "|" & fileName

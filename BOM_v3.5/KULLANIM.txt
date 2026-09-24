@@ -1,0 +1,48 @@
+﻿BOM ÇEVİRİCİ v3.5 - KULLANIM KILAVUZU
+====================================
+Müşteri malzeme listelerini (Excel, CSV, Tekla XSR, PDF) şablondaki ANGLE / PLATE / BOLTS&WASHER / SUM
+sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro formüllü (turuncu) sütunlara dokunmaz.
+
+1) LİSTE İŞLEME
+ - SUM sayfasındaki düğmeler:
+     Eklemeye Başla     : şablonu temizler, seçilen listeleri SIFIRDAN işler.
+     Liste Üstüne Ekle  : mevcut sonuçların üstüne yeni listeleri ekler (yeni dosya sütunları açılır).
+     Temizle            : sonuçları ve AUDIT / FEEDBACK / OGRENME sayfalarını temizler (formüller korunur).
+ - Açılan pencerede ek yüzde (cıvata fire) ve "birleştir" (aynı poz farklı dosyalarda tek satır) seçilir.
+ - Dosya seçme penceresinde birden fazla dosya seçebilirsiniz: .xlsx .xls .xlsm .xlsb .csv .xsr .txt .pdf
+ - PDF: metin tabanlı (Tekla / CAD çıktısı) PDF'ler doğrudan okunur. Taranmış (resim) PDF okunamaz.
+ - Montaj çizimleri ile parça çizimlerini AYNI anda seçin: montaj listesindeki bir poz kendi parça listesiyle
+   birlikte işleniyorsa çift sayılmaz.
+ - İşlem öncesi şablonun tarihli yedeği otomatik alınır (YEDEK klasörü).
+
+2) SONUÇLAR
+ - ANGLE / PLATE: TYPE (A) = kaynak dosya adı. Aynı poz no farklı kesit / ölçü / boyla gelirse ayrı satırdır.
+   Boylar mm yazılır; listede metre ise (başlıkta [m] ya da değerler metre gibiyse) otomatik x1000 yapılır.
+ - BOLTS&WASHER: cıvatalar çapa göre dizilir, her çap için somun / pul / yaylı rondela (yeşil) otomatik eklenir.
+   Turuncu ağırlık = kütüphanede olmadığı için tahmin edildi.
+ - SUM: her dosyanın şablon ağırlığı (C+D), listedeki ağırlık (H) ve farkı (J). Tolerans dışı fark kırmızıdır
+   ve işlem sonunda mesajda listelenir.
+ - AUDIT: her satırın nasıl okunduğu (EXACT / WARNING / ERROR / SKIPPED). Satır numarası müşteri dosyasındaki
+   satıra götürür. Sorun ararken ilk bakılacak yer.
+
+3) TANINMAYAN PARÇALAR (OGRENME sayfası)
+ Makro tanımadığı parçaları OGRENME sayfasında listeler. Her satır için:
+  a) TÜR seçin:
+       ANGLE         profil / köşebent   -> MALZEME KODU, MALZEME CİNSİ, kg/m, YÜZEY ALAN
+       PLATE         plaka / ızgara       -> KALINLIK (mm), GENİŞLİK (mm)  (boy listeden okunur)
+       BOLTS&WASHER  cıvata / bağlantı    -> MALZEME KODU, MALZEME CİNSİ, BİRİM veya 1000 ADET AĞIRLIĞI
+  b) Sarı alanları doldurun; tanımlamak istemediklerinizi boş bırakın.
+  c) KÜTÜPHANEYE AKTAR: parçalar kütüphaneye yazılır, türleri OGRENILEN sayfasına kaydedilir ve son işlem
+     aynı dosyalarla otomatik yeniden yapılır (dosyaları tekrar seçmeniz gerekmez).
+ - DURUM sütunu: yeşil = aktarıldı, sarı = aktarıldı ama kg/m ölçüden hesaplanandan çok farklı (kontrol edin),
+   kırmızı = eksik veri, aktarılmadı.
+ - Bir kez öğretilen parça sonraki bütün listelerde otomatik tanınır.
+
+4) SORUN GİDERME
+ - Ağırlık farkı (SUM J kırmızı): AUDIT'te o dosyanın ERROR / WARNING satırlarına bakın; OGRENME'de bekleyen
+   parça var mı; Alt+F8 > Kutuphane_Kontrol ile kütüphanede boş / şüpheli kg/m var mı.
+ - Parça yanlış sayfaya gitti: OGRENILEN sayfasındaki satırını düzeltin ya da silin, Alt+F8 > Son_Islemi_Yenile.
+ - PDF okunmadı: AUDIT'te "taranmış PDF olabilir" yazıyorsa PDF resimdir; müşteriden Excel / metin PDF isteyin
+   ya da PDF_BOM_Okuyucu.html aracını deneyin.
+ - "KAPASİTE AŞILDI" mesajı: listeyi daha az dosyayla, parça parça işleyin.
+ - İşlem yarıda kesilirse (ESC ile durdurulabilir) şablonun işlem öncesi hali YEDEK klasöründedir.
