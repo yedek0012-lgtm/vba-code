@@ -237,8 +237,9 @@ End If
         Call SafeClear(wsS.Range("I4:I" & lastRow))
         Call SafeClear(wsS.Range("J4:J" & lastRow))
         Call SafeClear(wsS.Range("K4:K" & lastRow))
-        wsS.Range("I4:K" & lastRow).Interior.ColorIndex = xlNone
-        wsS.Range("I4:K" & lastRow).Font.Bold = False
+        Call SafeClear(wsS.Range("L4:L" & lastRow))
+        wsS.Range("I4:L" & lastRow).Interior.ColorIndex = xlNone
+        wsS.Range("I4:L" & lastRow).Font.Bold = False
 End If
     On Error GoTo 0
 End Sub
@@ -459,7 +460,7 @@ Public Sub WriteSumReconciliation(ByVal ws As Worksheet, ByVal lastRow As Long)
     ws.Range("I4:J4").Font.Bold = True
     ws.Range("I4:J4").HorizontalAlignment = xlCenter
     ' Dosya olmayan satýrlarda eski çalýþmalardan kalan I/J/K deðerlerini temizle
-    Call SafeClear(ws.Range(ws.Cells(IIf(lastRow < 5, 5, lastRow + 1), 9), ws.Cells(5000, 11)))
+    Call SafeClear(ws.Range(ws.Cells(IIf(lastRow < 5, 5, lastRow + 1), 9), ws.Cells(5000, 12)))
     If lastRow < 5 Then Exit Sub
     For r = 5 To lastRow
         If Trim$(ws.Cells(r, 1).Text) <> "" Then
@@ -504,6 +505,63 @@ Public Function CollectReconciliation(ByVal ws As Worksheet, ByVal lastRow As Lo
         End If
     Next r
     CollectReconciliation = s
+End Function
+
+' ADET MUTABAKATI (dosya baþýna; Excel / CSV / PDF motoru sayar, XSR sayýlmaz)
+' Kaynaktaki parça adedi = ANGLE + PLATE'e yazýlan (dosyanýn sütunu, tampondan okunur) + cývata
+'                          + bilinçli atlanan (somun/pul seti, çift sayým) + tanýnmayan (OGRENME)
+' Fark ya da adedi okunamayan satýr varsa sonuç saklanýr; CollectQtyCheck SUM L'ye yazar ve raporlar.
+Public Sub RecordQtyCheck(ByVal sumR As Long, ByVal colA As Long, ByVal colP As Long)
+    Dim r As Long, placed As Double
+    On Error Resume Next
+    If qtySrc <= 0 And qtyNoRows = 0 Then Exit Sub
+    If colA >= 1 And colA <= UBound(bufAngle, 2) Then
+        For r = 5 To UBound(bufAngle, 1)
+            If Not IsEmpty(bufAngle(r, colA)) Then placed = placed + BufNum(bufAngle(r, colA))
+        Next r
+    End If
+    If colP >= 1 And colP <= UBound(bufPlate, 2) Then
+        For r = 5 To UBound(bufPlate, 1)
+            If Not IsEmpty(bufPlate(r, colP)) Then placed = placed + BufNum(bufPlate(r, colP))
+        Next r
+    End If
+    If dictQtyCheck Is Nothing Then Set dictQtyCheck = CreateObject("Scripting.Dictionary")
+    dictQtyCheck(sumR) = Array(fileName, qtySrc, placed + qtyBolt, qtySkip, qtyUnk, _
+                               qtySrc - (placed + qtyBolt + qtySkip + qtyUnk), qtyNoRows)
+End Sub
+
+' SUM L = adet farký (kaynak - aktarýlan - ayrýlan). 0 = tamam. Sorunlu dosyalar AUDIT'e ve dönen metne.
+Public Function CollectQtyCheck(ByVal ws As Worksheet, ByRef nBad As Long) As String
+    Dim k As Variant, a As Variant, r As Long, s As String, ln As String
+    On Error Resume Next
+    If dictQtyCheck Is Nothing Then Exit Function
+    ws.Range("L4").Value = "Adet Farký"
+    ws.Range("L4").Font.Bold = True
+    ws.Range("L4").HorizontalAlignment = xlCenter
+    For Each k In dictQtyCheck.Keys
+        a = dictQtyCheck(k)
+        r = CLng(k)
+        ws.Cells(r, 12).Value = a(5)
+        ws.Cells(r, 12).NumberFormat = "+0;-0;0"
+        ws.Cells(r, 12).HorizontalAlignment = xlCenter
+        If Abs(a(5)) > 0.001 Or a(6) > 0 Then
+            nBad = nBad + 1
+            ws.Cells(r, 12).Interior.Color = RGB(255, 199, 206)
+            ln = "kaynak " & NumToText(a(1)) & " adet, aktarýlan " & NumToText(a(2))
+            If a(3) > 0 Then ln = ln & ", ayrýlan (set/çift) " & NumToText(a(3))
+            If a(4) > 0 Then ln = ln & ", tanýnmayan " & NumToText(a(4))
+            If a(5) > 0.001 Then ln = ln & " -> " & NumToText(a(5)) & " adet EKSÝK"
+            If a(5) < -0.001 Then ln = ln & " -> " & NumToText(-a(5)) & " adet FAZLA"
+            If a(6) > 0 Then ln = ln & "; " & a(6) & " satýrda adet okunamadý"
+            s = s & "  - " & CStr(a(0)) & ": " & ln & vbLf
+            AuditRecord CStr(a(0)), "SUM", r, ws.Name, "Adet mutabakatý", "FILE", "WARNING", 50, ln, _
+                        "Kaynaktaki parça adedi þablona yazýlan + ayrýlan adetle tutmuyor ya da bazý satýrlarda adet okunamadý."
+        Else
+            ws.Cells(r, 12).Interior.ColorIndex = xlColorIndexNone
+        End If
+    Next k
+    Set dictQtyCheck = Nothing
+    CollectQtyCheck = s
 End Function
 
 ' Metnin ilk n satýrý (fazlasý "... ve N dosya daha")

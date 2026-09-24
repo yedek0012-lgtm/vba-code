@@ -135,6 +135,7 @@ Sub Evrensel_BOM_Cevirici_Core()
     Dim partParsed As String
     Dim rawQty As Long, fireliQty As Long
     Dim reconTxt As String, reconOut As Long, reconNoRef As Long, reconRow As Long, reconSheet As String, reconPrev As Long
+    Dim qtyTxt As String, qtyBadN As Long
     Dim capTxt As String
 
     Application.ScreenUpdating = False
@@ -231,6 +232,7 @@ End If
     dictSelectedFiles.CompareMode = 1
     dictFeedback.CompareMode = 1
     Call LoadLearnedItems
+    Set dictQtyCheck = Nothing
     
     If Not wsBoltLib Is Nothing Then
         For rLib = 3 To wsBoltLib.Cells(wsBoltLib.Rows.Count, 1).End(xlUp).Row
@@ -468,6 +470,8 @@ End If
 End If
             sumRow = sumRow + 1
             
+            qtySrc = 0: qtyBolt = 0: qtySkip = 0: qtyUnk = 0: qtyNoRows = 0
+
             ' --- Dosya tipine göre motor (modMotorXSR / modMotorExcel) ---
             On Error GoTo ErrorHandler
             If ext = "xsr" Or ext = "txt" Then
@@ -481,6 +485,7 @@ End If
             If Not isDryRun Then
                 Call SafeWrite(curWsSum, currentSumRow, 8, fileWeight)
                 Call SafeWrite(curWsSum, currentSumRow, 9, totalProcessed - fileStartCount)
+                Call RecordQtyCheck(currentSumRow, currentColAngle, currentColPlate)
                                                                 currentColAngle = currentColAngle + 1
                 currentColPlate = currentColPlate + 1
                 currentColBolt = currentColBolt + 1
@@ -657,6 +662,7 @@ End If
             reconPrev = reconRow
             reconTxt = reconTxt & CollectReconciliation(curWsSum, sumRow - 1, reconOut, reconNoRef, reconRow)
             If reconPrev = 0 And reconRow > 0 Then reconSheet = curWsSum.Name
+            qtyTxt = qtyTxt & CollectQtyCheck(curWsSum, qtyBadN)
             Call UpdateFileHeaders(curWsSum, curWsAngle, curWsPlate, curWsBolt)
             Call CheckLibraryHealth(curWsAngle, targetRowAngle - 1)
         End If
@@ -718,6 +724,10 @@ End If
                    "tolerans (±" & prmWeightTolPct & "%) dýþýnda farklý:" & vbCrLf & FirstLines(reconTxt, 10) & _
                    "Olasý nedenler: tanýnmayan/atlanan parça (OGRENME, AUDIT), kütüphanede eksik veya yanlýþ kg/m" & vbCrLf & _
                    "(Kutuphane_Kontrol), boy birimi. SUM sayfasýnda J sütunu kýrmýzý."
+    End If
+    If qtyBadN > 0 Then
+        finalMsg = finalMsg & vbCrLf & vbCrLf & "ADET MUTABAKATI: " & qtyBadN & " dosyada adet tutmuyor ya da okunamayan adet var:" & vbCrLf & _
+                   FirstLines(qtyTxt, 10) & "Kaynak listeyi kontrol edin (SUM L sütunu kýrmýzý, ayrýntý AUDIT'te)."
     End If
     If reconNoRef > 0 Then
         finalMsg = finalMsg & vbCrLf & vbCrLf & reconNoRef & " dosyanýn listesinde toplam aðýrlýk yok; aðýrlýk mutabakatý yapýlamadý."

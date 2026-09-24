@@ -98,3 +98,12 @@ Public bufOverflowMsg As String
 
 ' --- Bu çalýþtýrmada / SUM'da bulunan dosya iþaretleri (montaj çift sayým korumasý) ---
 Public dictFileMarks As Object
+
+' --- Adet mutabakatý (dosya baþýna, Excel/CSV/PDF motoru): kaynak adet, cývata, bilinçli atlanan,
+'     tanýnmayan (OGRENME) ve adedi okunamayan satýr sayýsý ---
+Public qtySrc As Double
+Public qtyBolt As Double
+Public qtySkip As Double
+Public qtyUnk As Double
+Public qtyNoRows As Long
+Public dictQtyCheck As Object

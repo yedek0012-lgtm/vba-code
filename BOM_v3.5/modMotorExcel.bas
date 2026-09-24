@@ -201,10 +201,14 @@ Public Sub ProcessExcelFile()
                 End If
                 rawNameUpper = UCase$(rawName)
 
+                ' Adet mutabakatý: her parça satýrýnýn adedi kaynak toplamýna eklenir
+                If mbKind <> "EMPTY" And mbKind <> "GARBAGE" And quantVal > 0 Then qtySrc = qtySrc + quantVal
+
                 ' Montaj çift sayým korumasý: bu poz baþka bir dosyanýn kendi listesi ise (ör. FAC51410A) atla
                 If (mbKind = "ANGLE" Or mbKind = "PLATE") And posNo <> "" And Not dictFileMarks Is Nothing Then
                     If dictFileMarks.Exists(UCase$(Trim$(posNo))) And UCase$(Trim$(posNo)) <> mbMyMark Then
                         auditSkipped = auditSkipped + 1
+                        qtySkip = qtySkip + quantVal
                         AuditRecord fileName, "EXCEL", r, wsIn.Name, rawName & " | Poz: " & posNo, mbKind, "SKIPPED", 100, "", _
                                     "Bu montajýn kendi parça listesi de iþleniyor; çift sayýlmamasý için atlandý."
                         GoTo NextRowExcel
@@ -225,6 +229,7 @@ Public Sub ProcessExcelFile()
                     ' ---------------- CIVATA ----------------
                     Case "BOLT", "FURING"
                         If quantVal <= 0 Then
+                            If posNo <> "" Or lengthVal > 0 Then qtyNoRows = qtyNoRows + 1   ' devam satýrý (poz/boy yok) sayýlmaz
                             AuditRecord fileName, "EXCEL", r, wsIn.Name, rawName, "BOLT", "WARNING", 40, "", "Adet okunamadý, satýr atlandý."
                             GoTo NextRowExcel
                         End If
@@ -245,6 +250,7 @@ Public Sub ProcessExcelFile()
                             End If
                             qtyKeyE = boltKeyE & "|" & currentColBolt
                             dictBoltQty(qtyKeyE) = IIf(dictBoltQty.Exists(qtyKeyE), dictBoltQty(qtyKeyE) + finalBoltQty, finalBoltQty)
+                            qtyBolt = qtyBolt + quantVal
                             If Not dictDiameters.Exists(CStr(dValE)) Then dictDiameters.Add CStr(dValE), dValE
                             If Not isFuRingE Then mbBoltDia(CStr(dValE)) = mbBoltDia(CStr(dValE)) + quantVal
                             totalProcessed = totalProcessed + 1
@@ -257,6 +263,7 @@ Public Sub ProcessExcelFile()
                                         "KOD=" & hwCodeE & "; " & hwNameE & "; KALITE=" & boltQualE & "; ADET=" & quantVal, mbIssue
                         Else
                             AuditRecord fileName, "EXCEL", r, wsIn.Name, rawName, "BOLT", "ERROR", 20, "", "Cývata çapý/boyu çözülemedi."
+                            qtyUnk = qtyUnk + quantVal
                             If Not dictFeedback.Exists(rawNameUpper) Then dictFeedback.Add rawNameUpper, fileName & " (Satýr: " & r & ")"
                         End If
 
@@ -264,6 +271,7 @@ Public Sub ProcessExcelFile()
                     ' Kod, cins ve aðýrlýk BOLT-LIBRARY'den; özel bölüme yazýlýr (otomatik somun/pul seti üretilmez)
                     Case "LBOLT"
                         If quantVal <= 0 Then
+                            If posNo <> "" Or lengthVal > 0 Then qtyNoRows = qtyNoRows + 1   ' devam satýrý (poz/boy yok) sayýlmaz
                             AuditRecord fileName, "EXCEL", r, wsIn.Name, rawName, "BOLT", "WARNING", 40, "", "Adet okunamadý, satýr atlandý."
                             GoTo NextRowExcel
                         End If
@@ -276,6 +284,7 @@ Public Sub ProcessExcelFile()
                         End If
                         qtyKeyE = boltKeyE & "|" & currentColBolt
                         dictBoltQty(qtyKeyE) = IIf(dictBoltQty.Exists(qtyKeyE), dictBoltQty(qtyKeyE) + finalBoltQty, finalBoltQty)
+                        qtyBolt = qtyBolt + quantVal
                         If Not dictDiameters.Exists("99") Then dictDiameters.Add "99", 99
                         totalProcessed = totalProcessed + 1
                         AuditRecord fileName, "EXCEL", r, wsIn.Name, rawName, "BOLT-SPECIAL", "EXACT", 100, _
@@ -291,12 +300,14 @@ Public Sub ProcessExcelFile()
                             mbHwCust(mbHwKey) = mbHwCust(mbHwKey) + quantVal
                         End If
                         auditSkipped = auditSkipped + 1
+                        qtySkip = qtySkip + quantVal
                         AuditRecord fileName, "EXCEL", r, wsIn.Name, rawName, mbKind, "SKIPPED", 100, "M" & mbDia & "; ADET=" & quantVal, _
                                     "Otomatik set (somun/pul/yaylý rondela) ile üretilir; adet kontrol için kaydedildi."
 
                     ' ---------------- PLAKA ----------------
                     Case "PLATE"
                         If quantVal <= 0 Then
+                            If posNo <> "" Or lengthVal > 0 Then qtyNoRows = qtyNoRows + 1   ' devam satýrý (poz/boy yok) sayýlmaz
                             AuditRecord fileName, "EXCEL", r, wsIn.Name, rawName, "PLATE", "WARNING", 40, "", "Adet okunamadý, satýr atlandý."
                             GoTo NextRowExcel
                         End If
@@ -371,6 +382,7 @@ Public Sub ProcessExcelFile()
                     ' ---------------- PROFÝL / KÖÞEBENT ----------------
                     Case "ANGLE"
                         If quantVal <= 0 Then
+                            If posNo <> "" Or lengthVal > 0 Then qtyNoRows = qtyNoRows + 1   ' devam satýrý (poz/boy yok) sayýlmaz
                             AuditRecord fileName, "EXCEL", r, wsIn.Name, rawName, "ANGLE", "WARNING", 40, "", "Adet okunamadý, satýr atlandý."
                             GoTo NextRowExcel
                         End If
@@ -428,6 +440,7 @@ Public Sub ProcessExcelFile()
                     ' ---------------- TANINMAYAN ----------------
                     Case Else
                         If quantVal > 0 Then
+                            qtyUnk = qtyUnk + quantVal
                             If Not dictFeedback.Exists(rawNameUpper) Then
                                 dictFeedback.Add rawNameUpper, fileName & " (Poz: " & posNo & ")"
                                 ' (kütüphaneye ekleme artýk OGRENME sayfasýndan yapýlýr)

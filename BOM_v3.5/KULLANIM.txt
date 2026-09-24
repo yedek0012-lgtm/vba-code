@@ -24,6 +24,8 @@ sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro for
    (ağırlıksa tahmin). Kodu kütüphaneye ekleyin; sonraki SIFIRDAN çalıştırmada formül geri gelir.
  - SUM: her dosyanın şablon ağırlığı (C+D), listedeki ağırlık (H) ve farkı (J). Tolerans dışı fark kırmızıdır
    ve işlem sonunda mesajda listelenir.
+   L = ADET FARKI (Excel / CSV / PDF): kaynaktaki parça adedi - (şablona yazılan + cıvata + somun/pul seti
+   + tanınmayan). 0 olmalı. Kırmızı = adet eksik/fazla ya da bazı satırlarda adet okunamadı (mesajda ve AUDIT'te).
  - AUDIT: her satırın nasıl okunduğu (EXACT / WARNING / ERROR / SKIPPED). Satır numarası müşteri dosyasındaki
    satıra götürür. Sorun ararken ilk bakılacak yer.
 
@@ -43,6 +45,8 @@ sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro for
 4) SORUN GİDERME
  - Ağırlık farkı (SUM J kırmızı): AUDIT'te o dosyanın ERROR / WARNING satırlarına bakın; OGRENME'de bekleyen
    parça var mı; Alt+F8 > Kutuphane_Kontrol ile kütüphanede boş / şüpheli kg/m var mı.
+ - Adet farkı (SUM L kırmızı): AUDIT'te o dosyada "Adet okunamadı" satırlarını arayın. PDF'te genellikle
+   tablo sütunu kaymıştır; kaynak listeyle karşılaştırıp gerekirse müşteriden Excel isteyin.
  - Parça yanlış sayfaya gitti: OGRENILEN sayfasındaki satırını düzeltin ya da silin, Alt+F8 > Son_Islemi_Yenile.
  - PDF okunmadı: AUDIT'te "taranmış PDF olabilir" yazıyorsa PDF resimdir; müşteriden Excel / metin PDF isteyin
    ya da PDF_BOM_Okuyucu.html aracını deneyin.
