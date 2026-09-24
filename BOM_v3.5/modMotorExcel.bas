@@ -287,13 +287,14 @@ Public Sub ProcessExcelFile()
                         If posNo = "" Then
                             posKeyPlateE = "NOPOS_" & r & "|" & wsIn.Name & "|" & fileName
                         ElseIf isMerge Then
-                            posKeyPlateE = posNo
+                            posKeyPlateE = MakePosKeyPlate(posNo, pThickE, pWidthE, lengthVal)
                         Else
-                            posKeyPlateE = posNo & "|" & fileName
+                            posKeyPlateE = MakePosKeyPlate(posNo, pThickE, pWidthE, lengthVal) & "|" & fileName
                         End If
 
                         If Not isDryRun Then
                             If Not dictPosPlate.Exists(posKeyPlateE) Then
+                                Call SafeWrite(curWsPlate, targetRowPlate, 1, FileTypeLabel(fileName))
                                 Call SafeWrite(curWsPlate, targetRowPlate, 2, posNo)
                                 Call SafeWrite(curWsPlate, targetRowPlate, 3, pThickE)
                                 Call SafeWrite(curWsPlate, targetRowPlate, 4, pWidthE)
@@ -305,6 +306,7 @@ Public Sub ProcessExcelFile()
                                 targetRowPlate = targetRowPlate + 1
                             Else
                                 existRow = dictPosPlate(posKeyPlateE)
+                                Call AddTypeLabel(curWsPlate, existRow, False, fileName)
                                 Call CheckPosConflict("PLATE", existRow, posNo, "", pThickE, pWidthE, lengthVal, fileName, "EXCEL", r)
                                 pQtyE = Val(bufPlate(existRow, currentColPlate))
                                 Call SafeWrite(curWsPlate, existRow, currentColPlate, pQtyE + quantVal)
@@ -343,13 +345,14 @@ Public Sub ProcessExcelFile()
                         If posNo = "" Then
                             posKeyAngleE = "NOPOS_" & r & "|" & wsIn.Name & "|" & fileName
                         ElseIf isMerge Then
-                            posKeyAngleE = posNo
+                            posKeyAngleE = MakePosKeyAngle(posNo, matCodeStrE, lengthVal)
                         Else
-                            posKeyAngleE = posNo & "|" & fileName
+                            posKeyAngleE = MakePosKeyAngle(posNo, matCodeStrE, lengthVal) & "|" & fileName
                         End If
 
                         If Not isDryRun Then
                             If Not dictPosAngle.Exists(posKeyAngleE) Then
+                                Call SafeWrite(curWsAngle, targetRowAngle, 1, FileTypeLabel(fileName))
                                 Call SafeWrite(curWsAngle, targetRowAngle, 2, posNo)
                                 Call SafeWrite(curWsAngle, targetRowAngle, 3, matCodeStrE)
                                 Call SafeWrite(curWsAngle, targetRowAngle, 5, quality)
@@ -360,6 +363,7 @@ Public Sub ProcessExcelFile()
                                 targetRowAngle = targetRowAngle + 1
                             Else
                                 existRow = dictPosAngle(posKeyAngleE)
+                                Call AddTypeLabel(curWsAngle, existRow, True, fileName)
                                 Call CheckPosConflict("ANGLE", existRow, posNo, matCodeStrE, 0, 0, lengthVal, fileName, "EXCEL", r)
                                 aQtyE = Val(bufAngle(existRow, currentColAngle))
                                 Call SafeWrite(curWsAngle, existRow, currentColAngle, aQtyE + quantVal)

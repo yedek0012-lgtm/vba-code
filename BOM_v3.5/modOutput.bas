@@ -59,7 +59,7 @@ Public Sub FlushAllBuffers(wsA As Worksheet, wsP As Worksheet, wsB As Worksheet,
     On Error Resume Next
     ' 1. ANGLE Sheet Dump
     If Not wsA Is Nothing And lastRowA >= 5 Then
-        Call FlushBufferBlock(wsA, bufAngle, 5, lastRowA - 1, 2, 3)
+        Call FlushBufferBlock(wsA, bufAngle, 5, lastRowA - 1, 1, 3)      ' A = TYPE (dosya adý)
         Call FlushBufferBlock(wsA, bufAngle, 5, lastRowA - 1, 5, 6)
         If colA > 9 Then Call FlushBufferBlock(wsA, bufAngle, 5, lastRowA - 1, 9, colA - 1)
         Call FlushBufferBlock(wsA, bufAngle, 5, lastRowA - 1, 57, 57)
@@ -67,7 +67,7 @@ Public Sub FlushAllBuffers(wsA As Worksheet, wsP As Worksheet, wsB As Worksheet,
 
     ' 2. PLATE Sheet Dump
     If Not wsP Is Nothing And lastRowP >= 5 Then
-        Call FlushBufferBlock(wsP, bufPlate, 5, lastRowP - 1, 2, 6)
+        Call FlushBufferBlock(wsP, bufPlate, 5, lastRowP - 1, 1, 6)      ' A = TYPE (dosya adý)
         If colP > 8 Then Call FlushBufferBlock(wsP, bufPlate, 5, lastRowP - 1, 8, colP - 1)
         Call FlushBufferBlock(wsP, bufPlate, 5, lastRowP - 1, 56, 56)
     End If
@@ -104,7 +104,7 @@ Public Sub CleanTemplateRanges(wsA As Worksheet, wsP As Worksheet, wsB As Worksh
     If Not wsA Is Nothing Then
         lastRow = wsA.Cells(wsA.Rows.Count, "I").End(xlUp).Row
         If lastRow < 1503 Then lastRow = 1503
-        wsA.Range("B5:C" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        wsA.Range("A5:C" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
         wsA.Range("E5:F" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
         wsA.Range("I4:BA" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
         ' D, G, H, BC, BD (turuncu, formüllü) sütunlarýna dokunulmaz; not sütunu BE
@@ -114,7 +114,7 @@ End If
     If Not wsP Is Nothing Then
         lastRow = wsP.Cells(wsP.Rows.Count, "H").End(xlUp).Row
         If lastRow < 1503 Then lastRow = 1503
-        wsP.Range("B5:F" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        wsP.Range("A5:F" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
         wsP.Range("H4:BA" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
         ' G, BB, BC (turuncu, formüllü) sütunlarýna dokunulmaz; not sütunu BD
         wsP.Range("BD5:BF" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
@@ -180,6 +180,39 @@ SafeExit:
     GetNextOutputRow = firstRow
 End Function
 
+' Poz anahtarý: ayný poz no FARKLI kesit / ölçü / boy ile gelirse ayrý satýr olur (toplanmaz)
+Public Function MakePosKeyAngle(ByVal posNo As String, ByVal code As Variant, ByVal lengthVal As Double) As String
+    MakePosKeyAngle = UCase$(Trim$(posNo)) & "|" & NormCodeText(code) & "|" & NumToText(lengthVal)
+End Function
+
+Public Function MakePosKeyPlate(ByVal posNo As String, ByVal thick As Double, ByVal width As Double, ByVal lengthVal As Double) As String
+    MakePosKeyPlate = UCase$(Trim$(posNo)) & "|" & NumToText(thick) & "x" & NumToText(width) & "|" & NumToText(lengthVal)
+End Function
+
+' TYPE sütunu (A): dosya adý (uzantýsýz)
+Public Function FileTypeLabel(ByVal fn As String) As String
+    Dim p As Long
+    fn = Trim$(fn)
+    p = InStrRev(fn, ".")
+    If p > 1 Then fn = Left$(fn, p - 1)
+    FileTypeLabel = fn
+End Function
+
+' Birleþtirilen satýra baþka dosyadan adet gelirse TYPE'a o dosyanýn adý da eklenir
+Public Sub AddTypeLabel(ByVal ws As Worksheet, ByVal rw As Long, ByVal isAngle As Boolean, ByVal fn As String)
+    Dim cur As String, lbl As String
+    On Error Resume Next
+    lbl = FileTypeLabel(fn)
+    If lbl = "" Then Exit Sub
+    If isAngle Then cur = CStr(bufAngle(rw, 1)) Else cur = CStr(bufPlate(rw, 1))
+    cur = Trim$(cur)
+    If cur = "" Then
+        Call SafeWrite(ws, rw, 1, lbl)
+    ElseIf InStr(" / " & cur & " / ", " / " & lbl & " / ") = 0 Then
+        Call SafeWrite(ws, rw, 1, cur & " / " & lbl)
+    End If
+End Sub
+
 Public Sub LoadExistingPositionDictionaries(ByVal wsA As Worksheet, ByVal wsP As Worksheet, ByVal dictA As Object, ByVal dictP As Object)
     Dim lastRow As Long, r As Long, key As String, pos As String
     On Error Resume Next
@@ -188,7 +221,7 @@ Public Sub LoadExistingPositionDictionaries(ByVal wsA As Worksheet, ByVal wsP As
         For r = 5 To lastRow
             pos = Trim(CStr(wsA.Cells(r, 2).Value))
             If pos <> "" Then
-                key = pos
+                key = MakePosKeyAngle(pos, wsA.Cells(r, 3).Value, BufNum(wsA.Cells(r, 6).Value))
                 If Not dictA.Exists(key) Then dictA.Add key, r
 End If
         Next r
@@ -198,7 +231,7 @@ End If
         For r = 5 To lastRow
             pos = Trim(CStr(wsP.Cells(r, 2).Value))
             If pos <> "" Then
-                key = pos
+                key = MakePosKeyPlate(pos, BufNum(wsP.Cells(r, 3).Value), BufNum(wsP.Cells(r, 4).Value), BufNum(wsP.Cells(r, 6).Value))
                 If Not dictP.Exists(key) Then dictP.Add key, r
 End If
         Next r
