@@ -370,31 +370,80 @@ Public Sub SaveLastRun(ByRef files() As String, ByVal fileCount As Long, ByVal i
 Done:
 End Sub
 
-' Üstüne ekle modunda yeniden iþlemeden önce çýktý sayfalarýný son iþlemden önceki yedekten geri yükler
+' Üstüne ekle modunda yeniden iþlemeden önce çýktý sayfalarýný son iþlemden önceki yedekten geri yükler.
+' Yalnýzca veri alaný (4. satýrdan aþaðýsý) ve SUM REV/DATE geri alýnýr; baþlýklar (birleþtirilmiþ hücreler) ayný kalýr.
+' Formül METÝNLERÝ kopyalanýr (kopyala-yapýþtýr yedeðe dýþ baðlantý oluþtururdu). Yedeðin makrolarý çalýþtýrýlmaz.
 Public Function RestoreOutputsFromBackup(ByVal backupPath As String) As Boolean
     Dim wbB As Workbook, nm As Variant, wsS As Worksheet, wsD As Worksheet, lastR As Long, lastC As Long
+    Dim prevSec As Long, prevEvents As Boolean, bLast As Long
     On Error GoTo Fail
-    Set wbB = Application.Workbooks.Open(backupPath, UpdateLinks:=0, ReadOnly:=True)
+    prevEvents = Application.EnableEvents
+    prevSec = Application.AutomationSecurity
+    Application.EnableEvents = False
+    Application.AutomationSecurity = 3              ' msoAutomationSecurityForceDisable: yedeðin makrolarý çalýþmaz
+    Set wbB = Application.Workbooks.Open(backupPath, UpdateLinks:=0, ReadOnly:=True, AddToMru:=False)
+    Application.AutomationSecurity = prevSec
     wbB.Windows(1).Visible = False
     ThisWorkbook.Activate
     For Each nm In Array("ANGLE", "PLATE", "BOLTS&WASHER", "SUM")
         Set wsS = wbB.Sheets(CStr(nm))
         Set wsD = ThisWorkbook.Sheets(CStr(nm))
-        lastR = wsS.UsedRange.Row + wsS.UsedRange.Rows.Count - 1
-        If wsD.UsedRange.Row + wsD.UsedRange.Rows.Count - 1 > lastR Then lastR = wsD.UsedRange.Row + wsD.UsedRange.Rows.Count - 1
-        lastC = wsS.UsedRange.Column + wsS.UsedRange.Columns.Count - 1
-        If wsD.UsedRange.Column + wsD.UsedRange.Columns.Count - 1 > lastC Then lastC = wsD.UsedRange.Column + wsD.UsedRange.Columns.Count - 1
-        ' formül metinleri birebir (kopyala-yapýþtýr dýþ baðlantý oluþtururdu)
-        wsD.Range(wsD.Cells(1, 1), wsD.Cells(lastR, lastC)).Formula = wsS.Range(wsS.Cells(1, 1), wsS.Cells(lastR, lastC)).Formula
+        lastR = UsedLastRow(wsS)
+        If UsedLastRow(wsD) > lastR Then lastR = UsedLastRow(wsD)
+        lastC = UsedLastCol(wsS)
+        If UsedLastCol(wsD) > lastC Then lastC = UsedLastCol(wsD)
+        If lastR >= 4 Then Call CopyFormulaBlock(wsS, wsD, 4, lastR, lastC)
     Next nm
+    ' SUM: REV / DATE
+    ThisWorkbook.Sheets("SUM").Range("G1").Value = wbB.Sheets("SUM").Range("G1").Value
+    ThisWorkbook.Sheets("SUM").Range("G2").Value = wbB.Sheets("SUM").Range("G2").Value
+    ' BOLTS: geri alýnan iþlemin eklediði satýrlardaki makro boyalarý (yeþil set / turuncu tahmin) temizlenir
+    bLast = wbB.Sheets("BOLTS&WASHER").Cells(wbB.Sheets("BOLTS&WASHER").Rows.Count, 2).End(xlUp).Row
+    If bLast < 4 Then bLast = 4
+    With ThisWorkbook.Sheets("BOLTS&WASHER")
+        .Range(.Cells(bLast + 1, 2), .Cells(bLast + 2000, 5)).Interior.ColorIndex = xlColorIndexNone
+        .Range(.Cells(bLast + 1, 2), .Cells(bLast + 2000, 5)).Font.ColorIndex = xlAutomatic
+    End With
     wbB.Close SaveChanges:=False
+    Application.EnableEvents = prevEvents
     RestoreOutputsFromBackup = True
     Exit Function
 Fail:
     On Error Resume Next
+    Application.AutomationSecurity = prevSec
+    Application.EnableEvents = prevEvents
     If Not wbB Is Nothing Then wbB.Close SaveChanges:=False
     RestoreOutputsFromBackup = False
 End Function
+
+Private Function UsedLastRow(ByVal ws As Worksheet) As Long
+    UsedLastRow = ws.UsedRange.Row + ws.UsedRange.Rows.Count - 1
+End Function
+
+Private Function UsedLastCol(ByVal ws As Worksheet) As Long
+    UsedLastCol = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
+End Function
+
+' Formül metinlerini toplu kopyalar; birleþtirilmiþ hücre yüzünden hata olursa satýr satýr, hücre hücre
+Private Sub CopyFormulaBlock(ByVal wsS As Worksheet, ByVal wsD As Worksheet, ByVal r1 As Long, ByVal r2 As Long, ByVal lastC As Long)
+    Dim r As Long, c As Long, cel As Range
+    On Error Resume Next
+    Err.Clear
+    wsD.Range(wsD.Cells(r1, 1), wsD.Cells(r2, lastC)).Formula = wsS.Range(wsS.Cells(r1, 1), wsS.Cells(r2, lastC)).Formula
+    If Err.Number = 0 Then Exit Sub
+    For r = r1 To r2
+        Err.Clear
+        wsD.Range(wsD.Cells(r, 1), wsD.Cells(r, lastC)).Formula = wsS.Range(wsS.Cells(r, 1), wsS.Cells(r, lastC)).Formula
+        If Err.Number <> 0 Then
+            For c = 1 To lastC
+                Set cel = wsD.Cells(r, c)
+                If Not cel.MergeCells Or cel.Address = cel.MergeArea.Cells(1, 1).Address Then
+                    cel.Formula = wsS.Cells(r, c).Formula
+                End If
+            Next c
+        End If
+    Next r
+End Sub
 
 ' =========================================================================
 ' v2.3 - TEMÝZLE düðmesi için rapor sayfalarý

@@ -93,5 +93,8 @@ Public runQuiet As Boolean
 ' --- Öðrenilen parçalar (OGRENILEN sayfasý): ad -> Array(tür, kod, cins, deðer1, deðer2) ---
 Public dictLearned As Object
 
+' --- Kapasite: tampon dýþýna düþen yazmalar (sessiz satýr kaybýný raporlamak için) ---
+Public bufOverflowMsg As String
+
 ' --- Bu çalýþtýrmada / SUM'da bulunan dosya iþaretleri (montaj çift sayým korumasý) ---
 Public dictFileMarks As Object

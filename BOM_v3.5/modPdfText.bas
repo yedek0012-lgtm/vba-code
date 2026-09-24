@@ -76,6 +76,8 @@ Private ltC(15) As Long
 Private ltS(319) As Long
 Private dtC(15) As Long
 Private dtS(31) As Long
+Private fastL(511) As Long       ' 9 bitlik hýzlý çözme tablosu: sembol * 16 + kod boyu (-1 = yok)
+Private fastD(511) As Long
 Private lenBase(28) As Long
 Private lenExt(28) As Long
 Private distBase(29) As Long
@@ -1437,7 +1439,7 @@ Private Function GlyphW(ByVal code As Long, ByVal cid As Boolean) As Double
 End Function
 
 Private Function MapChar(ByVal code As Long, ByVal cid As Boolean) As String
-    Dim col As Collection, s As String, found As Boolean, rg As Variant, k As Long, e As Variant
+    Dim col As Collection, s As String, found As Boolean, rg As Variant, k As Long, e As Variant, cp As Long
     If curFont > 0 Then
         Set col = fnUni(curFont)
         If col.Count > 0 Then
@@ -1457,8 +1459,8 @@ Private Function MapChar(ByVal code As Long, ByVal cid As Boolean) As String
             For k = 0 To UBound(rg)
                 e = rg(k)
                 If code >= e(0) And code <= e(1) Then
-                    k = e(3) + code - e(0)
-                    If k >= 0 And k <= 65535 Then MapChar = e(2) & ChrW(k)
+                    cp = e(3) + code - e(0)
+                    If cp >= 0 And cp <= 65535 Then MapChar = e(2) & ChrW(cp)
                     Exit Function
                 End If
             Next k
@@ -1640,12 +1642,16 @@ Private Function Inflate(src() As Byte) As Variant
         If (zi(0) And 15) = 8 And ((CLng(zi(0)) * 256 + zi(1)) Mod 31) = 0 Then ziPos = 2
     End If
     Do
-        bfinal = GetBit()
+        bfinal = GetBits(1)
         btype = GetBits(2)
         If zEOF Then Exit Do
         Select Case btype
             Case 0
-                zCnt = 0
+                ' bayt sýnýrýna hizala: yarým baytý at, tamponda bekleyen tam baytlarý girdiye geri ver
+                zBit = zBit \ p2(zCnt Mod 8)
+                zCnt = zCnt - (zCnt Mod 8)
+                ziPos = ziPos - zCnt \ 8
+                zBit = 0: zCnt = 0
                 If ziPos + 4 > ziEnd Then Exit Do
                 ln = zi(ziPos) + 256& * zi(ziPos + 1)
                 ziPos = ziPos + 4
@@ -1675,39 +1681,26 @@ Private Function Inflate(src() As Byte) As Variant
     End If
 End Function
 
-Private Function GetBit() As Long
-    If zCnt = 0 Then
-        If ziPos >= ziEnd Then
-            zEOF = True
-            GetBit = 0
-            Exit Function
-        End If
-        zBit = zi(ziPos)
+' Bit tamponu: zBit'te en fazla 24 bit bekler (LSB önce); ZFill en az 17 bite tamamlar
+Private Sub ZFill()
+    Do While zCnt <= 16
+        If ziPos >= ziEnd Then Exit Do
+        zBit = zBit + zi(ziPos) * p2(zCnt)
         ziPos = ziPos + 1
-        zCnt = 8
-    End If
-    GetBit = zBit And 1
-    zBit = zBit \ 2
-    zCnt = zCnt - 1
-End Function
+        zCnt = zCnt + 8
+    Loop
+End Sub
 
 Private Function GetBits(ByVal n As Long) As Long
-    Dim i As Long, v As Long
-    For i = 0 To n - 1
-        If zCnt = 0 Then
-            If ziPos >= ziEnd Then
-                zEOF = True
-                Exit For
-            End If
-            zBit = zi(ziPos)
-            ziPos = ziPos + 1
-            zCnt = 8
-        End If
-        If (zBit And 1) = 1 Then v = v + p2(i)
-        zBit = zBit \ 2
-        zCnt = zCnt - 1
-    Next i
-    GetBits = v
+    If n <= 0 Then Exit Function
+    If zCnt < n Then ZFill
+    GetBits = zBit And (p2(n) - 1)
+    zBit = zBit \ p2(n)
+    zCnt = zCnt - n
+    If zCnt < 0 Then
+        zEOF = True
+        zCnt = 0
+    End If
 End Function
 
 Private Sub PutByte(ByVal v As Long)
@@ -1719,8 +1712,10 @@ Private Sub PutByte(ByVal v As Long)
 End Sub
 
 ' which: 0 = uzunluk/harf tablosu, 1 = mesafe tablosu
+' Kanonik Huffman tablosu (yavaþ yol) + 9 bite kadar kodlar için hýzlý arama tablosu
 Private Sub BuildTree(lens() As Long, ByVal off As Long, ByVal num As Long, ByVal which As Long)
-    Dim cnt(15) As Long, offs(15) As Long, i As Long, s As Long, L As Long
+    Dim cnt(15) As Long, offs(15) As Long, nextc(15) As Long, i As Long, s As Long, L As Long
+    Dim code As Long, rv As Long, b As Long, k As Long
     For i = 0 To num - 1
         cnt(lens(off + i)) = cnt(lens(off + i)) + 1
     Next i
@@ -1733,11 +1728,33 @@ Private Sub BuildTree(lens() As Long, ByVal off As Long, ByVal num As Long, ByVa
     For i = 0 To 15
         If which = 0 Then ltC(i) = cnt(i) Else dtC(i) = cnt(i)
     Next i
+    For i = 0 To 511
+        If which = 0 Then fastL(i) = -1 Else fastD(i) = -1
+    Next i
+    code = 0
+    For L = 1 To 15
+        code = (code + cnt(L - 1)) * 2
+        nextc(L) = code
+    Next L
     For i = 0 To num - 1
         L = lens(off + i)
         If L > 0 Then
             If which = 0 Then ltS(offs(L)) = i Else dtS(offs(L)) = i
             offs(L) = offs(L) + 1
+            code = nextc(L)
+            nextc(L) = code + 1
+            If L <= 9 Then
+                ' deflate bitleri ters sýrada okur: kodu ters çevir, boþta kalan üst bitlerin tüm deðerlerini doldur
+                rv = 0
+                For b = 0 To L - 1
+                    If (code And p2(b)) <> 0 Then rv = rv + p2(L - 1 - b)
+                Next b
+                k = rv
+                Do While k < 512
+                    If which = 0 Then fastL(k) = i * 16 + L Else fastD(k) = i * 16 + L
+                    k = k + p2(L)
+                Loop
+            End If
         End If
     Next i
 End Sub
@@ -1754,17 +1771,29 @@ Private Sub BuildFixed()
 End Sub
 
 Private Function DecodeSym(ByVal which As Long) As Long
-    Dim cur As Long, s As Long, L As Long, cn As Long
+    Dim cur As Long, s As Long, L As Long, cn As Long, e As Long
+    ' hýzlý yol: 9 bite kadar kodlar tek tabloda
+    If zCnt < 9 Then ZFill
+    If which = 0 Then e = fastL(zBit And 511) Else e = fastD(zBit And 511)
+    If e >= 0 Then
+        L = e And 15
+        If L <= zCnt Then
+            zBit = zBit \ p2(L)
+            zCnt = zCnt - L
+            DecodeSym = e \ 16
+            Exit Function
+        End If
+    End If
+    ' yavaþ yol: uzun kodlar / dosya sonu (kanonik, bit bit)
+    L = 0
     Do
         If zCnt = 0 Then
-            If ziPos >= ziEnd Then
+            ZFill
+            If zCnt = 0 Then
                 zEOF = True
                 DecodeSym = 256
                 Exit Function
             End If
-            zBit = zi(ziPos)
-            ziPos = ziPos + 1
-            zCnt = 8
         End If
         cur = 2 * cur + (zBit And 1)
         zBit = zBit \ 2
@@ -1774,7 +1803,7 @@ Private Function DecodeSym(ByVal which As Long) As Long
         s = s + cn
         cur = cur - cn
         If cur < 0 Then Exit Do
-        If L >= 15 Or zEOF Then
+        If L >= 15 Then
             zEOF = True
             DecodeSym = 256
             Exit Function

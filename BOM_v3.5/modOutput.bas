@@ -20,18 +20,40 @@ Public Sub SafeWrite(ws As Worksheet, rw As Long, col As Long, val As Variant, O
     
     On Error Resume Next
     If ws Is curWsAngleRef Then
-        If rw <= UBound(bufAngle, 1) And col <= UBound(bufAngle, 2) Then bufAngle(rw, col) = finalVal
+        If rw <= UBound(bufAngle, 1) And col <= UBound(bufAngle, 2) Then bufAngle(rw, col) = finalVal Else Call NoteOverflow(ws, rw)
     ElseIf ws Is curWsPlateRef Then
-        If rw <= UBound(bufPlate, 1) And col <= UBound(bufPlate, 2) Then bufPlate(rw, col) = finalVal
+        If rw <= UBound(bufPlate, 1) And col <= UBound(bufPlate, 2) Then bufPlate(rw, col) = finalVal Else Call NoteOverflow(ws, rw)
     ElseIf ws Is curWsBoltRef Then
-        If rw <= UBound(bufBolt, 1) And col <= UBound(bufBolt, 2) Then bufBolt(rw, col) = finalVal
+        If rw <= UBound(bufBolt, 1) And col <= UBound(bufBolt, 2) Then bufBolt(rw, col) = finalVal Else Call NoteOverflow(ws, rw)
     ElseIf ws Is curWsSumRef Then
-        If rw <= UBound(bufSum, 1) And col <= UBound(bufSum, 2) Then bufSum(rw, col) = finalVal
+        If rw <= UBound(bufSum, 1) And col <= UBound(bufSum, 2) Then bufSum(rw, col) = finalVal Else Call NoteOverflow(ws, rw)
     Else
         ws.Cells(rw, col).Value = finalVal
     End If
     On Error GoTo 0
 End Sub
+
+' Tampon sýnýrý aþýldý: satýr yazýlamadý (sayfa baþýna bir kez not edilir, son mesajda gösterilir)
+Private Sub NoteOverflow(ByVal ws As Worksheet, ByVal rw As Long)
+    On Error Resume Next
+    If InStr(bufOverflowMsg, "[" & ws.Name & "]") = 0 Then
+        bufOverflowMsg = bufOverflowMsg & "[" & ws.Name & "] " & rw & ". satýrdan itibaren yazýlamadý" & vbCrLf
+    End If
+End Sub
+
+' Þablondaki formüllü satýr sayýsý yetmiyor mu? (formülsüz satýrýn aðýrlýðý hesaplanmaz)
+Public Function TemplateCapacityWarning(ByVal ws As Worksheet, ByVal lastDataRow As Long, ByVal formulaCol As Long) As String
+    Dim lastF As Long
+    On Error Resume Next
+    If lastDataRow < 5 Then Exit Function
+    lastF = ws.Cells(ws.Rows.Count, formulaCol).End(xlUp).Row
+    If lastF < 5 Then Exit Function
+    If Not ws.Cells(lastF, formulaCol).HasFormula Then Exit Function
+    If lastDataRow > lastF Then
+        TemplateCapacityWarning = "[" & ws.Name & "] þablonda formül " & lastF & ". satýra kadar; " & _
+                                  (lastDataRow - lastF) & " satýrýn aðýrlýðý hesaplanmýyor" & vbCrLf
+    End If
+End Function
 
 Public Sub FlushBufferBlock(ws As Worksheet, ByRef buf() As Variant, ByVal rStart As Long, ByVal rEnd As Long, ByVal cStart As Long, ByVal cEnd As Long)
     If ws Is Nothing Then Exit Sub
@@ -189,12 +211,19 @@ Public Function MakePosKeyPlate(ByVal posNo As String, ByVal thick As Double, By
     MakePosKeyPlate = UCase$(Trim$(posNo)) & "|" & NumToText(thick) & "x" & NumToText(width) & "|" & NumToText(lengthVal)
 End Function
 
-' TYPE sütunu (A): dosya adý (uzantýsýz)
+' TYPE sütunu (A): dosya adý (uzantýsýz). fileName zaten uzantýsýzdýr; adýn içindeki noktalar korunur,
+' yalnýzca bilinen bir liste uzantýsýyla bitiyorsa o kýsým atýlýr.
 Public Function FileTypeLabel(ByVal fn As String) As String
-    Dim p As Long
+    Dim p As Long, e As String
     fn = Trim$(fn)
     p = InStrRev(fn, ".")
-    If p > 1 Then fn = Left$(fn, p - 1)
+    If p > 1 Then
+        e = LCase$(Mid$(fn, p + 1))
+        Select Case e
+            Case "xsr", "txt", "xls", "xlsx", "xlsm", "xlsb", "csv", "pdf"
+                fn = Left$(fn, p - 1)
+        End Select
+    End If
     FileTypeLabel = fn
 End Function
 

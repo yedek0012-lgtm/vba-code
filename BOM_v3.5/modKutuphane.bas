@@ -110,12 +110,12 @@ Public Function SectionValueWarning(ByVal nm As String, ByVal kgm As Double, ByV
     SectionValueWarning = s
 End Function
 
-Private Sub Report(ByVal lib As String, ByVal r As Long, ByVal code As String, ByVal nm As String, _
+Private Sub Report(ByVal libName As String, ByVal r As Long, ByVal code As String, ByVal nm As String, _
                    ByVal isErr As Boolean, ByVal issue As String, ByVal detail As String)
     repRow = repRow + 1
-    repWs.Cells(repRow, 1).Value = lib
+    repWs.Cells(repRow, 1).Value = libName
     repWs.Cells(repRow, 2).Value = r
-    repWs.Hyperlinks.Add Anchor:=repWs.Cells(repRow, 2), Address:="", SubAddress:="'" & lib & "'!A" & r, TextToDisplay:=CStr(r)
+    repWs.Hyperlinks.Add Anchor:=repWs.Cells(repRow, 2), Address:="", SubAddress:="'" & libName & "'!A" & r, TextToDisplay:=CStr(r)
     repWs.Cells(repRow, 3).NumberFormat = "@"
     repWs.Cells(repRow, 3).Value = code
     repWs.Cells(repRow, 4).Value = nm

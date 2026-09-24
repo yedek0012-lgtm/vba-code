@@ -1,0 +1,69 @@
+' Bu metnin TAMAMINI Alt+F11 > Ekle > Modül ile açýlan boþ modüle yapýþtýrýn (modülün adýný Kurulum yapýn).
+
+' =========================================================================
+' BOM ÇEVÝRÝCÝ - MODÜL YÜKLEYÝCÝ
+' Kullaným (yalnýzca yönetici, dosyanýn KOPYASINDA):
+'  1) Dosya > Seçenekler > Güven Merkezi > Makro Ayarlarý > "VBA proje nesne modeline eriþime güven" -> AÇ
+'  2) Alt+F11 > Ekle > Modül; bu metnin tamamýný yapýþtýrýn; F5 ile ModulleriYukle'yi çalýþtýrýn
+'  3) BOM_v3.5 klasörünü seçin. Ayný adlý eski modüller ve eski "Module1, Module6..." modülleri
+'     (onayýnýzla) kaldýrýlýr, klasördeki tüm .bas dosyalarý yüklenir.
+'  4) Hata Ayýkla > VBAProject'i Derle. Bu "Kurulum" modülünü silin, güven ayarýný KAPATIN.
+' ThisWorkbook ve UserForm1'e dokunulmaz.
+' =========================================================================
+Sub ModulleriYukle()
+    Dim fd As FileDialog, folder As String, f As String, vbp As Object, vbc As Object
+    Dim files As Object, toRemove As Collection, k As Variant, msg As String, nImp As Long
+
+    Set fd = Application.FileDialog(msoFileDialogFolderPicker)
+    fd.Title = "Modül (.bas) dosyalarýnýn bulunduðu klasörü seçin"
+    If fd.Show <> -1 Then Exit Sub
+    folder = fd.SelectedItems(1)
+    If Right$(folder, 1) <> "\" Then folder = folder & "\"
+
+    Set files = CreateObject("Scripting.Dictionary")
+    files.CompareMode = 1
+    f = Dir(folder & "*.bas")
+    Do While f <> ""
+        files(Left$(f, Len(f) - 4)) = folder & f
+        f = Dir
+    Loop
+    If files.Count = 0 Then
+        MsgBox "Klasörde .bas dosyasý yok:" & vbCrLf & folder, vbExclamation
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    Set vbp = ThisWorkbook.VBProject
+    If vbp Is Nothing Or Err.Number <> 0 Then
+        On Error GoTo 0
+        MsgBox "VBA projesine eriþilemiyor." & vbCrLf & _
+               "Güven Merkezi > Makro Ayarlarý > 'VBA proje nesne modeline eriþime güven' seçeneðini açýn.", vbCritical
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    ' Kaldýrýlacak standart modüller: klasördekilerle ayný adlýlar + eski "ModuleN" modülleri
+    Set toRemove = New Collection
+    For Each vbc In vbp.VBComponents
+        If vbc.Type = 1 And vbc.Name <> "Kurulum" Then
+            If files.Exists(vbc.Name) Or vbc.Name Like "Module#*" Then
+                toRemove.Add vbc.Name
+                msg = msg & "  - " & vbc.Name & vbCrLf
+            End If
+        End If
+    Next vbc
+    If MsgBox(files.Count & " modül yüklenecek." & vbCrLf & vbCrLf & _
+              IIf(toRemove.Count > 0, "Kaldýrýlacak eski modüller:" & vbCrLf & msg & vbCrLf, "") & _
+              "Devam edilsin mi?", vbYesNo + vbQuestion, "Modül Yükleyici") = vbNo Then Exit Sub
+
+    For Each k In toRemove
+        vbp.VBComponents.Remove vbp.VBComponents(CStr(k))
+    Next k
+    For Each k In files.keys
+        vbp.VBComponents.Import files(k)
+        nImp = nImp + 1
+    Next k
+    MsgBox nImp & " modül yüklendi." & vbCrLf & vbCrLf & _
+           "Þimdi: Hata Ayýkla > VBAProject'i Derle." & vbCrLf & _
+           "Sonra bu Kurulum modülünü silin ve güven ayarýný kapatýn.", vbInformation, "Modül Yükleyici"
+End Sub

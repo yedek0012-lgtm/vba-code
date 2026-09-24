@@ -57,6 +57,7 @@ Sub Evrensel_BOM_Cevirici_Core()
     Application.EnableCancelKey = xlErrorHandler
     On Error GoTo ErrorHandler
     conflictCount = 0
+    bufOverflowMsg = ""
 
     Dim fd As FileDialog
     Dim fileNo As Integer
@@ -134,6 +135,7 @@ Sub Evrensel_BOM_Cevirici_Core()
     Dim partParsed As String
     Dim rawQty As Long, fireliQty As Long
     Dim reconTxt As String, reconOut As Long, reconNoRef As Long, reconRow As Long, reconSheet As String, reconPrev As Long
+    Dim capTxt As String
 
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
@@ -642,6 +644,11 @@ End If
         
         Call FlushAllBuffers(curWsAngle, curWsPlate, curWsBolt, curWsSum, targetRowAngle, targetRowPlate, targetRowBolt, sumRow, currentColAngle, currentColPlate, currentColBolt)
         If Not isDryRun Then
+            ' þablon kapasitesi: ANGLE H (UNIT WEIGHT), PLATE G (UNIT WEIGHT) formülleri yeterli mi?
+            capTxt = capTxt & TemplateCapacityWarning(curWsAngle, targetRowAngle - 1, 8)
+            capTxt = capTxt & TemplateCapacityWarning(curWsPlate, targetRowPlate - 1, 7)
+        End If
+        If Not isDryRun Then
             Call WriteSumReconciliation(curWsSum, sumRow - 1)
             reconPrev = reconRow
             reconTxt = reconTxt & CollectReconciliation(curWsSum, sumRow - 1, reconOut, reconNoRef, reconRow)
@@ -697,6 +704,11 @@ End If
                    "Adetler toplandý; NOT sütununda 'ÇAKIÞMA!' ve AUDIT'te detay var."
     End If
 
+    If bufOverflowMsg <> "" Or capTxt <> "" Then
+        finalMsg = finalMsg & vbCrLf & vbCrLf & "KAPASÝTE AÞILDI - bazý satýrlar eksik ya da aðýrlýksýz:" & vbCrLf & _
+                   bufOverflowMsg & capTxt & "Listeyi bölerek (daha az dosya ile) iþleyin."
+        AuditRecord "", "SYSTEM", 0, "", "Kapasite", "SYSTEM", "ERROR", 0, "", Replace(bufOverflowMsg & capTxt, vbCrLf, " ")
+    End If
     If reconOut > 0 Then
         finalMsg = finalMsg & vbCrLf & vbCrLf & "AÐIRLIK MUTABAKATI: " & reconOut & " dosyada þablon aðýrlýðý listedekinden" & vbCrLf & _
                    "tolerans (±" & prmWeightTolPct & "%) dýþýnda farklý:" & vbCrLf & FirstLines(reconTxt, 10) & _
@@ -746,7 +758,7 @@ End If
     ThisWorkbook.Sheets("SUM").Range("A5").Select
     On Error GoTo 0
     
-    If Not runQuiet Then MsgBox finalMsg, IIf(ogrenilenSayi > 0 Or reconOut > 0 Or conflictCount > 0, vbExclamation, vbInformation), "MTL Evrensel Motor"
+    If Not runQuiet Then MsgBox finalMsg, IIf(ogrenilenSayi > 0 Or reconOut > 0 Or conflictCount > 0 Or bufOverflowMsg <> "" Or capTxt <> "", vbExclamation, vbInformation), "MTL Evrensel Motor"
     If ogrenilenSayi > 0 And Not runQuiet Then
         On Error Resume Next
         ThisWorkbook.Sheets("OGRENME").Activate
