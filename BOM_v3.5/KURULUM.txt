@@ -2,6 +2,10 @@
 ==============================
 
 Değişenler:
+ - (v3.5) ANGLE / PLATE TYPE (A) sütunu = dosya adı (uzantısız). Birleştirilen satıra başka dosyadan
+          adet gelirse o dosyanın adı " / " ile eklenir.
+ - (v3.5) AYNI POZ, FARKLI KESİT: poz no aynı ama profil/kod veya boy (plakada kalınlık/genişlik/boy)
+          farklıysa ayrı satıra yazılır, toplanmaz. Değişen modüller: modOutput, modMotorExcel, modMotorXSR.
  - (v3.5) BOY BİRİMİ: listede boylar metre ise (başlıkta [m]/(m)/"in m" ya da değerler metre gibi:
           en büyük <= 30 ve ondalıklı) x1000 ile mm'ye çevrilir; AUDIT'e yazılır. cm için x10.
           Daha önce metre olarak yazılmış satırlar için listeyi yeniden işleyin. Değişen modül: modMotorExcel.

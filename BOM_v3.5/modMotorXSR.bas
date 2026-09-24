@@ -314,13 +314,14 @@ End If
                         
                         matCodeStr = GetProfileMaterialCode(parts(0), dictProfileLib)
                         If isMerge Then
-                            posKeyAngle = posNo
+                            posKeyAngle = MakePosKeyAngle(posNo, matCodeStr, lengthVal)
 Else
-                            posKeyAngle = posNo & "|" & fileName
+                            posKeyAngle = MakePosKeyAngle(posNo, matCodeStr, lengthVal) & "|" & fileName
 End If
                         
                         If Not isDryRun Then
                             If Not dictPosAngle.Exists(posKeyAngle) Then
+                                Call SafeWrite(curWsAngle, targetRowAngle, 1, FileTypeLabel(fileName))
                                 Call SafeWrite(curWsAngle, targetRowAngle, 2, posNo)
                                 Call SafeWrite(curWsAngle, targetRowAngle, 3, matCodeStr)
                                 Call SafeWrite(curWsAngle, targetRowAngle, 5, quality)
@@ -331,6 +332,7 @@ End If
                                 targetRowAngle = targetRowAngle + 1
 Else
                                 existRow = dictPosAngle(posKeyAngle)
+                                Call AddTypeLabel(curWsAngle, existRow, True, fileName)
                                 Call CheckPosConflict("ANGLE", existRow, posNo, matCodeStr, 0, 0, lengthVal, fileName, "XSR", sourceLineNo)
                                 aQty = val(bufAngle(existRow, currentColAngle))
                                 Call SafeWrite(curWsAngle, existRow, currentColAngle, aQty + quantVal)
@@ -351,13 +353,14 @@ End If
                         End If
                         
                         If isMerge Then
-                            posKeyPlate = posNo
+                            posKeyPlate = MakePosKeyPlate(posNo, pThick, pWidth, lengthVal)
 Else
-                            posKeyPlate = posNo & "|" & fileName
+                            posKeyPlate = MakePosKeyPlate(posNo, pThick, pWidth, lengthVal) & "|" & fileName
 End If
                         
                         If Not isDryRun Then
                             If Not dictPosPlate.Exists(posKeyPlate) Then
+                                Call SafeWrite(curWsPlate, targetRowPlate, 1, FileTypeLabel(fileName))
                                 Call SafeWrite(curWsPlate, targetRowPlate, 2, posNo)
                                 Call SafeWrite(curWsPlate, targetRowPlate, 3, pThick)
                                 Call SafeWrite(curWsPlate, targetRowPlate, 4, pWidth)
@@ -369,6 +372,7 @@ End If
                                 targetRowPlate = targetRowPlate + 1
 Else
                                 existRow = dictPosPlate(posKeyPlate)
+                                Call AddTypeLabel(curWsPlate, existRow, False, fileName)
                                 Call CheckPosConflict("PLATE", existRow, posNo, "", pThick, pWidth, lengthVal, fileName, "XSR", sourceLineNo)
                                 pQty = val(bufPlate(existRow, currentColPlate))
                                 Call SafeWrite(curWsPlate, existRow, currentColPlate, pQty + quantVal)
