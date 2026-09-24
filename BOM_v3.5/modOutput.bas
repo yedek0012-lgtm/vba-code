@@ -96,7 +96,8 @@ Public Sub FlushAllBuffers(wsA As Worksheet, wsP As Worksheet, wsB As Worksheet,
 
     ' 3. BOLT Sheet Dump
     If Not wsB Is Nothing And lastRowB >= 5 Then
-        Call FlushBufferBlock(wsB, bufBolt, 5, lastRowB - 1, 2, 5)
+        ' C (MATERIAL) ve E (UNIT WEIGHT) turuncu formüllü sütunlar: formüller korunur
+        Call FlushBoltBlock(wsB, 5, lastRowB - 1)
         If colB > 6 Then Call FlushBufferBlock(wsB, bufBolt, 5, lastRowB - 1, 6, colB - 1)
         Call FlushBufferBlock(wsB, bufBolt, 5, lastRowB - 1, 54, 54)
     End If
@@ -109,9 +110,73 @@ Public Sub FlushAllBuffers(wsA As Worksheet, wsP As Worksheet, wsB As Worksheet,
     On Error GoTo 0
 End Sub
 
+' BOLTS: B (kod) ve D (kalite) deðer olarak yazýlýr. C ve E'de þablon formülü varsa
+' dokunulmaz (BOLT-LIBRARY'den kendisi çeker); formül boþ/0 dönerse (kod kütüphanede yok
+' ya da formülün aralýðý dýþýnda) makronun deðeri yazýlýr ve kýrmýzý kalýn yazýyla iþaretlenir.
+' Formül, bir sonraki SIFIRDAN temizliðinde (CleanTemplateRanges) geri konur.
+Private Sub FlushBoltBlock(ByVal ws As Worksheet, ByVal rStart As Long, ByVal rEnd As Long)
+    If ws Is Nothing Or rEnd < rStart Then Exit Sub
+    Call FlushBufferBlock(ws, bufBolt, rStart, rEnd, 2, 2)
+    Call FlushBufferBlock(ws, bufBolt, rStart, rEnd, 4, 4)
+    Call FlushKeepFormula(ws, rStart, rEnd, 3)
+    Call FlushKeepFormula(ws, rStart, rEnd, 5)
+End Sub
+
+Private Sub FlushKeepFormula(ByVal ws As Worksheet, ByVal rStart As Long, ByVal rEnd As Long, ByVal col As Long)
+    Dim r As Long, bv As Variant, cel As Range, cv As Variant, useMacro As Boolean
+    On Error Resume Next
+    ws.Range(ws.Cells(rStart, col), ws.Cells(rEnd, col)).Calculate
+    For r = rStart To rEnd
+        bv = bufBolt(r, col)
+        Set cel = ws.Cells(r, col)
+        If Not cel.HasFormula Then
+            If Not IsEmpty(bv) Then cel.Value = bv
+        ElseIf Not IsEmpty(bv) And Not IsEmpty(bufBolt(r, 2)) Then
+            cv = cel.Value
+            useMacro = False
+            If IsError(cv) Then
+                useMacro = True
+            ElseIf Trim$(CStr(cv)) = "" Then
+                useMacro = True
+            ElseIf col = 5 Then
+                If CellNumber(cel) = 0 And BufNum(bv) > 0 Then useMacro = True
+            End If
+            If useMacro Then
+                If col = 5 Then pnlBoltFallback = pnlBoltFallback + 1
+                cel.Value = bv
+                cel.Font.Color = RGB(192, 0, 0)
+                cel.Font.Bold = True
+                AuditRecord "", "LIBRARY", r, ws.Name, CStr(bufBolt(r, 2)) & " | " & CStr(bufBolt(r, 3)), "BOLT", "WARNING", 70, _
+                            IIf(col = 5, "Aðýrlýk", "Malzeme adý") & " = " & CStr(bv), _
+                            "Þablon formülü boþ döndü (kod BOLT-LIBRARY'de yok ya da formülün aralýðý dýþýnda); makro deðeri yazýldý (kýrmýzý)."
+            End If
+        End If
+    Next r
+    On Error GoTo 0
+End Sub
+
+' Temizlikte, makronun deðer yazdýðý (formülü silinmiþ) C/E hücrelerine þablon formülünü geri koy
+Private Sub RestoreColumnFormula(ByVal ws As Worksheet, ByVal col As Long, ByVal lastRow As Long)
+    Dim r As Long, firstF As Long, lastF As Long, fR1C1 As String
+    On Error Resume Next
+    For r = 5 To lastRow
+        If ws.Cells(r, col).HasFormula Then
+            If firstF = 0 Then firstF = r: fR1C1 = ws.Cells(r, col).FormulaR1C1
+            lastF = r
+        End If
+    Next r
+    If firstF = 0 Or fR1C1 = "" Then Exit Sub
+    For r = firstF To lastF
+        If Not ws.Cells(r, col).HasFormula Then
+            If IsEmpty(ws.Cells(r, col).Value) Then ws.Cells(r, col).FormulaR1C1 = fR1C1
+        End If
+    Next r
+End Sub
+
 Public Sub FormatGreenRow(ws As Worksheet, rw As Long)
     On Error Resume Next
-    With ws.Range(ws.Cells(rw, 2), ws.Cells(rw, 4))
+    ' Sadece B (kod) ve D (kalite); turuncu formüllü C ve E'nin rengine dokunulmaz
+    With ws.Range(ws.Cells(rw, 2).Address & "," & ws.Cells(rw, 4).Address)
         .Interior.Color = RGB(0, 153, 76)
         .Font.Color = RGB(255, 255, 255)
         .Font.Bold = False
@@ -144,14 +209,19 @@ End If
     
     If Not wsB Is Nothing Then
         lastRow = wsB.Cells(wsB.Rows.Count, "F").End(xlUp).Row
+        If wsB.Cells(wsB.Rows.Count, "B").End(xlUp).Row > lastRow Then lastRow = wsB.Cells(wsB.Rows.Count, "B").End(xlUp).Row
         If lastRow < 502 Then lastRow = 502
         wsB.Range("B5:E" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        ' makronun deðer yazdýðý C/E hücrelerine þablon formülünü geri koy
+        Call RestoreColumnFormula(wsB, 3, lastRow)
+        Call RestoreColumnFormula(wsB, 5, lastRow)
         wsB.Range("F4:AY" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
         wsB.Range("BB5:BG" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
         
-        ' Sadece makronun boyadýðý B:E (yeþil somun/pul satýrý, turuncu tahmini aðýrlýk) sýfýrlanýr;
-        ' þablonun kendi renkli (formüllü) sütunlarýna dokunulmaz
-        wsB.Range("B5:E" & lastRow).Interior.ColorIndex = xlNone
+        ' Sadece makronun boyadýðý B ve D (yeþil somun/pul satýrý) sýfýrlanýr;
+        ' turuncu formüllü C ve E'nin dolgu rengine dokunulmaz (yazý rengi/kalýnlýk sýfýrlanýr)
+        wsB.Range("B5:B" & lastRow).Interior.ColorIndex = xlNone
+        wsB.Range("D5:D" & lastRow).Interior.ColorIndex = xlNone
         wsB.Range("B5:E" & lastRow).Font.ColorIndex = xlAutomatic
         wsB.Range("B5:E" & lastRow).Font.Bold = False
 End If
@@ -168,8 +238,9 @@ End If
         Call SafeClear(wsS.Range("I4:I" & lastRow))
         Call SafeClear(wsS.Range("J4:J" & lastRow))
         Call SafeClear(wsS.Range("K4:K" & lastRow))
-        wsS.Range("I4:K" & lastRow).Interior.ColorIndex = xlNone
-        wsS.Range("I4:K" & lastRow).Font.Bold = False
+        Call SafeClear(wsS.Range("L4:L" & lastRow))
+        wsS.Range("I4:L" & lastRow).Interior.ColorIndex = xlNone
+        wsS.Range("I4:L" & lastRow).Font.Bold = False
 End If
     On Error GoTo 0
 End Sub
@@ -390,7 +461,7 @@ Public Sub WriteSumReconciliation(ByVal ws As Worksheet, ByVal lastRow As Long)
     ws.Range("I4:J4").Font.Bold = True
     ws.Range("I4:J4").HorizontalAlignment = xlCenter
     ' Dosya olmayan satýrlarda eski çalýþmalardan kalan I/J/K deðerlerini temizle
-    Call SafeClear(ws.Range(ws.Cells(IIf(lastRow < 5, 5, lastRow + 1), 9), ws.Cells(5000, 11)))
+    Call SafeClear(ws.Range(ws.Cells(IIf(lastRow < 5, 5, lastRow + 1), 9), ws.Cells(5000, 12)))
     If lastRow < 5 Then Exit Sub
     For r = 5 To lastRow
         If Trim$(ws.Cells(r, 1).Text) <> "" Then
@@ -419,8 +490,10 @@ Public Function CollectReconciliation(ByVal ws As Worksheet, ByVal lastRow As Lo
             cd = CellNumber(ws.Cells(r, 3)) + CellNumber(ws.Cells(r, 4))
             If h <= 0 Then
                 nNoRef = nNoRef + 1
+                Call PanelSetWeight(ws.Name, r, False, 0)
             Else
                 diff = (cd - h) / h
+                Call PanelSetWeight(ws.Name, r, True, diff)
                 If Abs(diff) > tol Then
                     nOut = nOut + 1
                     If firstBadRow = 0 Then firstBadRow = r
@@ -435,6 +508,63 @@ Public Function CollectReconciliation(ByVal ws As Worksheet, ByVal lastRow As Lo
         End If
     Next r
     CollectReconciliation = s
+End Function
+
+' ADET MUTABAKATI (dosya baþýna; Excel / CSV / PDF motoru sayar, XSR sayýlmaz)
+' Kaynaktaki parça adedi = ANGLE + PLATE'e yazýlan (dosyanýn sütunu, tampondan okunur) + cývata
+'                          + bilinçli atlanan (somun/pul seti, çift sayým) + tanýnmayan (OGRENME)
+' Fark ya da adedi okunamayan satýr varsa sonuç saklanýr; CollectQtyCheck SUM L'ye yazar ve raporlar.
+Public Sub RecordQtyCheck(ByVal sumR As Long, ByVal colA As Long, ByVal colP As Long)
+    Dim r As Long, placed As Double
+    On Error Resume Next
+    If qtySrc <= 0 And qtyNoRows = 0 Then Exit Sub
+    If colA >= 1 And colA <= UBound(bufAngle, 2) Then
+        For r = 5 To UBound(bufAngle, 1)
+            If Not IsEmpty(bufAngle(r, colA)) Then placed = placed + BufNum(bufAngle(r, colA))
+        Next r
+    End If
+    If colP >= 1 And colP <= UBound(bufPlate, 2) Then
+        For r = 5 To UBound(bufPlate, 1)
+            If Not IsEmpty(bufPlate(r, colP)) Then placed = placed + BufNum(bufPlate(r, colP))
+        Next r
+    End If
+    If dictQtyCheck Is Nothing Then Set dictQtyCheck = CreateObject("Scripting.Dictionary")
+    dictQtyCheck(sumR) = Array(fileName, qtySrc, placed + qtyBolt, qtySkip, qtyUnk, _
+                               qtySrc - (placed + qtyBolt + qtySkip + qtyUnk), qtyNoRows)
+End Sub
+
+' SUM L = adet farký (kaynak - aktarýlan - ayrýlan). 0 = tamam. Sorunlu dosyalar AUDIT'e ve dönen metne.
+Public Function CollectQtyCheck(ByVal ws As Worksheet, ByRef nBad As Long) As String
+    Dim k As Variant, a As Variant, r As Long, s As String, ln As String
+    On Error Resume Next
+    If dictQtyCheck Is Nothing Then Exit Function
+    ws.Range("L4").Value = "Adet Farký"
+    ws.Range("L4").Font.Bold = True
+    ws.Range("L4").HorizontalAlignment = xlCenter
+    For Each k In dictQtyCheck.Keys
+        a = dictQtyCheck(k)
+        r = CLng(k)
+        ws.Cells(r, 12).Value = a(5)
+        ws.Cells(r, 12).NumberFormat = "+0;-0;0"
+        ws.Cells(r, 12).HorizontalAlignment = xlCenter
+        If Abs(a(5)) > 0.001 Or a(6) > 0 Then
+            nBad = nBad + 1
+            ws.Cells(r, 12).Interior.Color = RGB(255, 199, 206)
+            ln = "kaynak " & NumToText(a(1)) & " adet, aktarýlan " & NumToText(a(2))
+            If a(3) > 0 Then ln = ln & ", ayrýlan (set/çift) " & NumToText(a(3))
+            If a(4) > 0 Then ln = ln & ", tanýnmayan " & NumToText(a(4))
+            If a(5) > 0.001 Then ln = ln & " -> " & NumToText(a(5)) & " adet EKSÝK"
+            If a(5) < -0.001 Then ln = ln & " -> " & NumToText(-a(5)) & " adet FAZLA"
+            If a(6) > 0 Then ln = ln & "; " & a(6) & " satýrda adet okunamadý"
+            s = s & "  - " & CStr(a(0)) & ": " & ln & vbLf
+            AuditRecord CStr(a(0)), "SUM", r, ws.Name, "Adet mutabakatý", "FILE", "WARNING", 50, ln, _
+                        "Kaynaktaki parça adedi þablona yazýlan + ayrýlan adetle tutmuyor ya da bazý satýrlarda adet okunamadý."
+        Else
+            ws.Cells(r, 12).Interior.ColorIndex = xlColorIndexNone
+        End If
+    Next k
+    Set dictQtyCheck = Nothing
+    CollectQtyCheck = s
 End Function
 
 ' Metnin ilk n satýrý (fazlasý "... ve N dosya daha")
@@ -472,6 +602,7 @@ Public Sub CheckLibraryHealth(ByVal wsA As Worksheet, ByVal lastRow As Long)
                 If CDbl(gv) = 0 Then issue = "Kütüphanede kg/m (D sütunu) boþ."
             End If
             If issue <> "" Then
+                pnlAngleZero = pnlAngleZero + 1
                 AuditRecord "", "LIBRARY", r, wsA.Name, "Poz " & wsA.Cells(r, 2).Text & " | Kod " & wsA.Cells(r, 3).Text, _
                             "ANGLE", "WARNING", 50, "", issue & " Aðýrlýk 0 hesaplanýyor."
             End If
@@ -479,10 +610,10 @@ Public Sub CheckLibraryHealth(ByVal wsA As Worksheet, ByVal lastRow As Long)
     Next r
 End Sub
 
-' Kütüphanede olmayan cývata/somun/pul: aðýrlýk hücresi turuncu + AUDIT
+' Kütüphanede olmayan cývata/somun/pul: AUDIT kaydý (aðýrlýk hücresi yazýlýrken kýrmýzý iþaretlenir;
+' turuncu formüllü E sütununun dolgusu deðiþtirilmez)
 Public Sub FlagEstimatedWeight(ByVal ws As Worksheet, ByVal rw As Long, ByVal code As String, ByVal nm As String, ByVal wt As Double)
     On Error Resume Next
-    ws.Cells(rw, 5).Interior.Color = RGB(255, 204, 153)
     AuditRecord "", "LIBRARY", rw, ws.Name, code & " | " & nm, "BOLT", "WARNING", 70, _
                 "Tahmini aðýrlýk = " & NumToText(wt) & " kg", "BOLT-LIBRARY'de yok; aðýrlýk tahmin edildi. Kütüphaneye ekleyin."
 End Sub
@@ -571,6 +702,7 @@ Public Sub CheckPosConflict(ByVal kind As String, ByVal existRow As Long, ByVal 
     If diff = "" Then Exit Sub
 
     conflictCount = conflictCount + 1
+    If pnlActive Then pnlConf = pnlConf + 1
     If kind = "ANGLE" Then
         curNote = CStr(bufAngle(existRow, 57))
         If InStr(curNote, "ÇAKIÞMA") = 0 Then bufAngle(existRow, 57) = Trim$(curNote & " ÇAKIÞMA!")

@@ -60,6 +60,11 @@ Public Sub AuditRecord(ByVal fileName As String, ByVal sourceType As String, ByV
         Case "ERROR": auditError = auditError + 1
         Case "UNMATCHED": auditUnmatched = auditUnmatched + 1
     End Select
+    ' Sonuç paneli: iþlenen dosyanýn çözülemeyen / tanýnmayan satýrlarý (dosya düzeyi hatalar hariç:
+    ' onlar "parça okunamadý" olarak ayrýca görünür)
+    If pnlActive And UCase$(itemType) <> "FILE" Then
+        If UCase$(status) = "ERROR" Or UCase$(status) = "UNMATCHED" Then pnlBad = pnlBad + 1
+    End If
 
     If auditWs Is Nothing Then Exit Sub
     auditWs.Cells(auditNextRow, 1).Value = Now
@@ -397,11 +402,12 @@ Public Function RestoreOutputsFromBackup(ByVal backupPath As String) As Boolean
     ' SUM: REV / DATE
     ThisWorkbook.Sheets("SUM").Range("G1").Value = wbB.Sheets("SUM").Range("G1").Value
     ThisWorkbook.Sheets("SUM").Range("G2").Value = wbB.Sheets("SUM").Range("G2").Value
-    ' BOLTS: geri alýnan iþlemin eklediði satýrlardaki makro boyalarý (yeþil set / turuncu tahmin) temizlenir
+    ' BOLTS: geri alýnan iþlemin eklediði satýrlardaki makro boyalarý (yeþil set, kýrmýzý yazý) temizlenir
     bLast = wbB.Sheets("BOLTS&WASHER").Cells(wbB.Sheets("BOLTS&WASHER").Rows.Count, 2).End(xlUp).Row
     If bLast < 4 Then bLast = 4
     With ThisWorkbook.Sheets("BOLTS&WASHER")
-        .Range(.Cells(bLast + 1, 2), .Cells(bLast + 2000, 5)).Interior.ColorIndex = xlColorIndexNone
+        .Range(.Cells(bLast + 1, 2), .Cells(bLast + 2000, 2)).Interior.ColorIndex = xlColorIndexNone
+        .Range(.Cells(bLast + 1, 4), .Cells(bLast + 2000, 4)).Interior.ColorIndex = xlColorIndexNone   ' C, E turuncu: dokunulmaz
         .Range(.Cells(bLast + 1, 2), .Cells(bLast + 2000, 5)).Font.ColorIndex = xlAutomatic
     End With
     wbB.Close SaveChanges:=False
@@ -468,6 +474,12 @@ Public Sub ClearReportSheets()
     If Not ws Is Nothing Then
         ws.Buttons.Delete
         ws.Cells.Validation.Delete
+        ws.Cells.Clear
+    End If
+    Set ws = Nothing
+    Set ws = ThisWorkbook.Sheets("SONUC")
+    If Not ws Is Nothing Then
+        ws.Hyperlinks.Delete
         ws.Cells.Clear
     End If
     ' Önceki çalýþtýrmadan kalan SUM mutabakat sütunlarý

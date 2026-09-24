@@ -98,3 +98,22 @@ Public bufOverflowMsg As String
 
 ' --- Bu çalýþtýrmada / SUM'da bulunan dosya iþaretleri (montaj çift sayým korumasý) ---
 Public dictFileMarks As Object
+
+' --- Adet mutabakatý (dosya baþýna, Excel/CSV/PDF motoru): kaynak adet, cývata, bilinçli atlanan,
+'     tanýnmayan (OGRENME) ve adedi okunamayan satýr sayýsý ---
+Public qtySrc As Double
+Public qtyBolt As Double
+Public qtySkip As Double
+Public qtyUnk As Double
+Public qtyNoRows As Long
+Public dictQtyCheck As Object
+
+' --- Sonuç paneli (modPanel): dosya baþýna sayaçlar ---
+Public pnlBad As Long              ' tanýnmayan / çözülemeyen satýr (ERROR, UNMATCHED, kütüphanede olmayan profil)
+Public pnlConf As Long             ' poz çakýþmasý
+Public pnlFileErr As String        ' dosya iþlenirken beklenmeyen hata
+Public pnlActive As Boolean        ' dosya iþlenirken AuditRecord sayar
+Public dictPanel As Object         ' "SAYFA|satýr" -> dosya sonuçlarý
+Public pnlBoltFallback As Long     ' BOLT-LIBRARY'de olmayan cývata/somun/pul (makro aðýrlýðý)
+Public pnlAngleZero As Long        ' ANGLE'da aðýrlýðý 0 hesaplanan satýr
+Public curInputWb As Workbook      ' Excel motorunun açtýðý kaynak kitap (hata olursa kapatýlýr)

@@ -16,12 +16,24 @@ sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro for
  - İşlem öncesi şablonun tarihli yedeği otomatik alınır (YEDEK klasörü).
 
 2) SONUÇLAR
+ - SONUC sayfası (ilk sekme, işlem bitince sorun varsa kendiliğinden açılır): her dosya için tek satır.
+     ✔ GÜVENLİ    : adet ve/veya ağırlık tuttu, tanınmayan parça yok.
+     ⚠ KONTROL ET : ağırlık farkı tolerans dışında, bazı satırlarda adet okunamadı, poz çakışması
+                    ya da hiçbir doğrulama yapılamadı (listede ağırlık yok, adet sayılamadı).
+     ✖ EKSİK      : dosyadan parça okunamadı, işlenirken hata, tanınmayan parça (OGRENME) ya da adet farkı.
+   NEDEN sütunu ne yapılacağını söyler; dosya adına tıklayınca SUM'daki satırına gider.
+   Liste ancak bütün dosyalar GÜVENLİ olunca teslim edilmeli. Bir dosyada hata çıkarsa işlem durmaz:
+   o dosya EKSİK işaretlenir, diğerleri işlenir.
  - ANGLE / PLATE: TYPE (A) = kaynak dosya adı. Aynı poz no farklı kesit / ölçü / boyla gelirse ayrı satırdır.
    Boylar mm yazılır; listede metre ise (başlıkta [m] ya da değerler metre gibiyse) otomatik x1000 yapılır.
  - BOLTS&WASHER: cıvatalar çapa göre dizilir, her çap için somun / pul / yaylı rondela (yeşil) otomatik eklenir.
-   Turuncu ağırlık = kütüphanede olmadığı için tahmin edildi.
+   MATERIAL (C) ve UNIT WEIGHT (E) şablon formülüyle BOLT-LIBRARY'den gelir; makro bu formüllere dokunmaz.
+   KIRMIZI KALIN yazı = kod BOLT-LIBRARY'de yok (veya formülün aralığı dışında); değeri makro yazdı
+   (ağırlıksa tahmin). Kodu kütüphaneye ekleyin; sonraki SIFIRDAN çalıştırmada formül geri gelir.
  - SUM: her dosyanın şablon ağırlığı (C+D), listedeki ağırlık (H) ve farkı (J). Tolerans dışı fark kırmızıdır
    ve işlem sonunda mesajda listelenir.
+   L = ADET FARKI (Excel / CSV / PDF): kaynaktaki parça adedi - (şablona yazılan + cıvata + somun/pul seti
+   + tanınmayan). 0 olmalı. Kırmızı = adet eksik/fazla ya da bazı satırlarda adet okunamadı (mesajda ve AUDIT'te).
  - AUDIT: her satırın nasıl okunduğu (EXACT / WARNING / ERROR / SKIPPED). Satır numarası müşteri dosyasındaki
    satıra götürür. Sorun ararken ilk bakılacak yer.
 
@@ -41,6 +53,8 @@ sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro for
 4) SORUN GİDERME
  - Ağırlık farkı (SUM J kırmızı): AUDIT'te o dosyanın ERROR / WARNING satırlarına bakın; OGRENME'de bekleyen
    parça var mı; Alt+F8 > Kutuphane_Kontrol ile kütüphanede boş / şüpheli kg/m var mı.
+ - Adet farkı (SUM L kırmızı): AUDIT'te o dosyada "Adet okunamadı" satırlarını arayın. PDF'te genellikle
+   tablo sütunu kaymıştır; kaynak listeyle karşılaştırıp gerekirse müşteriden Excel isteyin.
  - Parça yanlış sayfaya gitti: OGRENILEN sayfasındaki satırını düzeltin ya da silin, Alt+F8 > Son_Islemi_Yenile.
  - PDF okunmadı: AUDIT'te "taranmış PDF olabilir" yazıyorsa PDF resimdir; müşteriden Excel / metin PDF isteyin
    ya da PDF_BOM_Okuyucu.html aracını deneyin.
