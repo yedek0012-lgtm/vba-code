@@ -849,8 +849,8 @@ Sub Kutuphaneye_Aktar()
     Dim dictLib As Object, dictBolt As Object, dictNew As Object
     Dim r As Long, lastR As Long, libRow As Long, boltRow As Long, i As Long
     Dim prof As String, code As String, cins As String, tp As String, eksik As String, durum As String, key As String
-    Dim v1 As Double, v2 As Double, hitRow As Long
-    Dim nAdded As Long, nSkipped As Long, nExists As Long, nMissing As Long, nLearned As Long
+    Dim v1 As Double, v2 As Double, hitRow As Long, warnTxt As String
+    Dim nAdded As Long, nSkipped As Long, nExists As Long, nMissing As Long, nLearned As Long, nWarned As Long
 
     On Error Resume Next
     Set ws = ThisWorkbook.Sheets("OGRENME")
@@ -1017,8 +1017,20 @@ Sub Kutuphaneye_Aktar()
         ' Türü kaydet: bir sonraki iþlemde parça adýndan tanýnýr ve doðru sayfaya yazýlýr
         Call SaveLearnedItem(prof, tp, code, cins, v1, v2)
         nLearned = nLearned + 1
-        ws.Cells(r, 8).Value = durum
-        ws.Cells(r, 8).Interior.Color = RGB(198, 239, 206)
+        ' Girilen kg/m / yüzey alan profil ölçüsüyle uyumlu mu? (aktarýlýr ama sarý uyarý)
+        warnTxt = ""
+        If tp = "ANGLE" Then
+            warnTxt = SectionValueWarning(cins, v1, v2)
+            If warnTxt = "" And UCase$(cins) <> UCase$(prof) Then warnTxt = SectionValueWarning(prof, v1, v2)
+        End If
+        If warnTxt <> "" Then
+            ws.Cells(r, 8).Value = durum & " | KONTROL EDÝN: " & warnTxt
+            ws.Cells(r, 8).Interior.Color = RGB(255, 235, 156)
+            nWarned = nWarned + 1
+        Else
+            ws.Cells(r, 8).Value = durum
+            ws.Cells(r, 8).Interior.Color = RGB(198, 239, 206)
+        End If
 NextUnk:
     Next r
 
@@ -1026,9 +1038,15 @@ NextUnk:
     MsgBox nAdded & " parça kütüphaneye eklendi, " & nExists & " parçanýn kodu zaten vardý." & vbCrLf & _
            nLearned & " parçanýn türü OGRENILEN sayfasýna kaydedildi." & vbCrLf & _
            nSkipped & " parça boþ býrakýldý." & vbCrLf & _
+           IIf(nWarned > 0, nWarned & " parçanýn kg/m / yüzey alaný ölçüden hesaplanandan çok farklý (DURUM'da sarý)." & vbCrLf, "") & _
            IIf(nMissing > 0, nMissing & " parça EKSÝK veri nedeniyle aktarýlmadý (DURUM sütununa bakýn)." & vbCrLf, ""), _
            IIf(nMissing > 0, vbExclamation, vbInformation), "Öðrenen Kütüphane"
     If nLearned > 0 Then Call Son_Islemi_Yenile
+End Sub
+
+' Kütüphane saðlýðý: iki kütüphaneyi tarar, sorunlarý KUTUPHANE_KONTROL sayfasýna yazar (deðiþtirmez)
+Sub Kutuphane_Kontrol()
+    Call RunLibraryCheck
 End Sub
 
 ' Son iþlemi (ayný dosyalar, ayný mod) dosya seçmeden yeniden yapar.
@@ -1145,7 +1163,7 @@ End Sub
 ' modül adýný atýp makroyu yeniden baðlar (dosya her açýldýðýnda kontrol edilir).
 Public Sub FixButtonMacros()
     Dim ws As Worksheet, shp As Shape, act As String, nm As String, p As Long, known As String
-    known = "|DUGME_SIFIRDAN_BASLA|DUGME_USTUNE_EKLE|DUGME_TEMIZLE|CAN_TEMIZLEYICI|PANELI_AC|KUTUPHANEYE_AKTAR|EVRENSEL_BOM_CEVIRICI_CORE|SON_ISLEMI_YENILE|TEST_CALISTIR|TEST_BEKLENEN_KAYDET|"
+    known = "|DUGME_SIFIRDAN_BASLA|DUGME_USTUNE_EKLE|DUGME_TEMIZLE|CAN_TEMIZLEYICI|PANELI_AC|KUTUPHANEYE_AKTAR|EVRENSEL_BOM_CEVIRICI_CORE|SON_ISLEMI_YENILE|TEST_CALISTIR|TEST_BEKLENEN_KAYDET|KUTUPHANE_KONTROL|"
     On Error Resume Next
     For Each ws In ThisWorkbook.Worksheets
         For Each shp In ws.Shapes

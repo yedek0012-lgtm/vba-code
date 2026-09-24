@@ -2,6 +2,14 @@
 ==============================
 
 Değişenler:
+ - (v3.5) KÜTÜPHANE SAĞLIĞI (yeni modül modKutuphane): Alt+F8 > Kutuphane_Kontrol.
+          L-U-I-O-Y-LIBRARY ve BOLT-LIBRARY taranır, sorunlar KUTUPHANE_KONTROL sayfasına yazılır
+          (kütüphaneler değiştirilmez; SATIR'a tıklayınca ilgili satıra gider):
+          boş kod / cins / kg/m / yüzey alan / ağırlık, eski YENI_EKLE-TANIMSIZ satırları,
+          aynı cins farklı kod, aynı kod farklı kg/m / ağırlık, cıvatada birim x 1000 <> 1000 adet,
+          ölçüden hesaplanandan %15'ten fazla sapan kg/m (L, CHS, RHS/SHS, yuvarlak, lama; HEA/IPE/U hesaplanmaz).
+          OGRENME aktarımında da aynı kg/m kontrolü yapılır: parça aktarılır, DURUM sarı uyarı gösterir.
+          Toplam 15 modül.
  - (v3.5) OGRENME: TÜR seçimi ANGLE / PLATE / BOLTS&WASHER (açılır liste Türkçe Excel'de de çalışır).
           ANGLE        -> KOD, CİNS, kg/m, YÜZEY ALAN        (L-U-I-O-Y-LIBRARY)
           PLATE        -> KALINLIK, GENİŞLİK (mm)            (kütüphane yok, OGRENILEN'de tutulur)
@@ -73,7 +81,7 @@ GÜNCELLEME (dosyanın kopyasını alın)
  1) Güven Merkezi > Makro Ayarları > "VBA proje nesne modeline erişime güven" -> AÇ
  2) Alt+F11 > Ekle > Modül, adını "Kurulum" yapın, ModulleriYukle kodunu yapıştırın
     (önceki mesajdaki kod), F5 ile çalıştırıp bu klasörü seçin.
-    Makro eski modülleri siler, 14 modülü yükler (yeni: modPdfText, modTest).
+    Makro eski modülleri siler, 15 modülü yükler (yeni: modPdfText, modTest, modKutuphane).
  3) ThisWorkbook koduna dokunmayın, aynen kalabilir.
  4) Hata Ayıkla > VBAProject'i Derle.
  5) Kurulum modülünü silin, güven ayarını tekrar KAPATIN.
