@@ -373,6 +373,64 @@ Public Sub WriteSumReconciliation(ByVal ws As Worksheet, ByVal lastRow As Long)
     ws.Range("I5:J" & lastRow).HorizontalAlignment = xlCenter
 End Sub
 
+' AÐIRLIK MUTABAKATI: þablonun hesapladýðý aðýrlýk (C+D) ile listedeki aðýrlýk (H) tolerans (AYARLAR) dýþýnda
+' farklý olan dosyalar. Her biri AUDIT'e yazýlýr; dönen metin son mesajda gösterilir (her dosya bir satýr).
+Public Function CollectReconciliation(ByVal ws As Worksheet, ByVal lastRow As Long, ByRef nOut As Long, _
+                                      ByRef nNoRef As Long, ByRef firstBadRow As Long) As String
+    Dim r As Long, h As Double, cd As Double, diff As Double, tol As Double, s As String, nm As String
+    On Error Resume Next
+    If lastRow < 5 Then Exit Function
+    Application.Calculate
+    tol = prmWeightTolPct / 100#
+    For r = 5 To lastRow
+        If Trim$(ws.Cells(r, 1).Text) <> "" Then
+            nm = Trim$(ws.Cells(r, 11).Text)                 ' K = kýsa ad
+            If nm = "" Then nm = Trim$(ws.Cells(r, 1).Text)
+            h = CellDbl(ws.Cells(r, 8))
+            cd = CellDbl(ws.Cells(r, 3)) + CellDbl(ws.Cells(r, 4))
+            If h <= 0 Then
+                nNoRef = nNoRef + 1
+            Else
+                diff = (cd - h) / h
+                If Abs(diff) > tol Then
+                    nOut = nOut + 1
+                    If firstBadRow = 0 Then firstBadRow = r
+                    s = s & "  - " & nm & ": " & Format$(diff * 100, "+0.0;-0.0") & "%  (þablon " & NumToText(Round(cd, 1)) & _
+                        " kg / liste " & NumToText(Round(h, 1)) & " kg)" & vbLf
+                    AuditRecord Trim$(ws.Cells(r, 1).Text), "SUM", r, ws.Name, "Aðýrlýk mutabakatý", "FILE", "WARNING", 50, _
+                                "Fark " & Format$(diff * 100, "+0.0;-0.0") & "%", _
+                                "Þablon aðýrlýðý (C+D) listedekinden (H) tolerans dýþýnda farklý: tanýnmayan/atlanan parça, " & _
+                                "kütüphanede eksik veya yanlýþ kg/m ya da boy birimi olabilir."
+                End If
+            End If
+        End If
+    Next r
+    CollectReconciliation = s
+End Function
+
+Private Function CellDbl(ByVal c As Range) As Double
+    On Error GoTo Fail
+    If IsError(c.Value) Or IsEmpty(c.Value) Then Exit Function
+    If IsNumeric(c.Value) Then CellDbl = CDbl(c.Value)
+    Exit Function
+Fail:
+    CellDbl = 0
+End Function
+
+' Metnin ilk n satýrý (fazlasý "... ve N dosya daha")
+Public Function FirstLines(ByVal s As String, ByVal n As Long) As String
+    Dim a As Variant, i As Long, cnt As Long, out As String
+    a = Split(s, vbLf)
+    For i = 0 To UBound(a)
+        If Len(a(i)) > 0 Then
+            cnt = cnt + 1
+            If cnt <= n Then out = out & a(i) & vbCrLf
+        End If
+    Next i
+    If cnt > n Then out = out & "  ... ve " & (cnt - n) & " dosya daha (AUDIT)" & vbCrLf
+    FirstLines = out
+End Function
+
 ' ANGLE'da kodu kütüphanede olmayan veya kg/m'si boþ satýrlarý AUDIT'e yazar
 Public Sub CheckLibraryHealth(ByVal wsA As Worksheet, ByVal lastRow As Long)
     Dim r As Long, dv As Variant, gv As Variant, issue As String

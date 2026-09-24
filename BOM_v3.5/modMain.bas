@@ -133,6 +133,7 @@ Sub Evrensel_BOM_Cevirici_Core()
     Dim partStatus As String, partConf As Long, partIssue As String
     Dim partParsed As String
     Dim rawQty As Long, fireliQty As Long
+    Dim reconTxt As String, reconOut As Long, reconNoRef As Long, reconRow As Long, reconSheet As String, reconPrev As Long
 
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
@@ -647,6 +648,9 @@ End If
         Call FlushAllBuffers(curWsAngle, curWsPlate, curWsBolt, curWsSum, targetRowAngle, targetRowPlate, targetRowBolt, sumRow, currentColAngle, currentColPlate, currentColBolt)
         If Not isDryRun Then
             Call WriteSumReconciliation(curWsSum, sumRow - 1)
+            reconPrev = reconRow
+            reconTxt = reconTxt & CollectReconciliation(curWsSum, sumRow - 1, reconOut, reconNoRef, reconRow)
+            If reconPrev = 0 And reconRow > 0 Then reconSheet = curWsSum.Name
             Call UpdateFileHeaders(curWsSum, curWsAngle, curWsPlate, curWsBolt)
             Call CheckLibraryHealth(curWsAngle, targetRowAngle - 1)
         End If
@@ -698,6 +702,16 @@ End If
                    "Adetler toplandý; NOT sütununda 'ÇAKIÞMA!' ve AUDIT'te detay var."
     End If
 
+    If reconOut > 0 Then
+        finalMsg = finalMsg & vbCrLf & vbCrLf & "AÐIRLIK MUTABAKATI: " & reconOut & " dosyada þablon aðýrlýðý listedekinden" & vbCrLf & _
+                   "tolerans (±" & prmWeightTolPct & "%) dýþýnda farklý:" & vbCrLf & FirstLines(reconTxt, 10) & _
+                   "Olasý nedenler: tanýnmayan/atlanan parça (OGRENME, AUDIT), kütüphanede eksik veya yanlýþ kg/m" & vbCrLf & _
+                   "(Kutuphane_Kontrol), boy birimi. SUM sayfasýnda J sütunu kýrmýzý."
+    End If
+    If reconNoRef > 0 Then
+        finalMsg = finalMsg & vbCrLf & vbCrLf & reconNoRef & " dosyanýn listesinde toplam aðýrlýk yok; aðýrlýk mutabakatý yapýlamadý."
+    End If
+
     If Not isDryRun And Not runQuiet Then
         runRev = UpdateRevDate(appendMode)
         Call AppendRunHistory(validFiles, vfCount, totalProcessed)
@@ -737,11 +751,17 @@ End If
     ThisWorkbook.Sheets("SUM").Range("A5").Select
     On Error GoTo 0
     
-    If Not runQuiet Then MsgBox finalMsg, vbInformation, "MTL Evrensel Motor"
+    If Not runQuiet Then MsgBox finalMsg, IIf(ogrenilenSayi > 0 Or reconOut > 0 Or conflictCount > 0, vbExclamation, vbInformation), "MTL Evrensel Motor"
     If ogrenilenSayi > 0 And Not runQuiet Then
         On Error Resume Next
         ThisWorkbook.Sheets("OGRENME").Activate
         ThisWorkbook.Sheets("OGRENME").Range("D2").Select
+        On Error GoTo 0
+    ElseIf reconOut > 0 And Not runQuiet And reconSheet <> "" Then
+        ' tolerans dýþýndaki ilk dosyanýn fark hücresine git
+        On Error Resume Next
+        ThisWorkbook.Sheets(reconSheet).Activate
+        ThisWorkbook.Sheets(reconSheet).Cells(reconRow, 10).Select
         On Error GoTo 0
     End If
     forcedRunMode = 0

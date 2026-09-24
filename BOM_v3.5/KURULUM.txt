@@ -2,6 +2,10 @@
 ==============================
 
 Değişenler:
+ - (v3.5) AĞIRLIK MUTABAKATI UYARISI: işlem sonunda şablon ağırlığı (SUM C+D) listedeki ağırlıktan (H)
+          tolerans (AYARLAR, SUM!J3) dışında farklı olan dosyalar son mesajda listelenir, AUDIT'e WARNING
+          yazılır ve imleç ilk sorunlu dosyanın J hücresine gider. Listesinde toplam ağırlık olmayan dosyalar
+          ayrıca belirtilir. Değişen modüller: modMain, modOutput.
  - (v3.5) KÜTÜPHANE SAĞLIĞI (yeni modül modKutuphane): Alt+F8 > Kutuphane_Kontrol.
           L-U-I-O-Y-LIBRARY ve BOLT-LIBRARY taranır, sorunlar KUTUPHANE_KONTROL sayfasına yazılır
           (kütüphaneler değiştirilmez; SATIR'a tıklayınca ilgili satıra gider):
