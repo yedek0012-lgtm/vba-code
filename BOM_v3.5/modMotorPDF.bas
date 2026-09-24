@@ -8,15 +8,64 @@ Option Private Module
 ' tabloya çevirir; tablo geçici bir çalýþma kitabýna dökülür ve normal Excel motoru
 ' (baþlýk algýlama, sýnýflandýrma, mutabakat) aynen çalýþýr.
 ' Taranmýþ (resim) PDF'ler okunamaz -> AUDIT'e hata yazýlýr.
-' v3.5: Okuma arka planda yapýlýr ve PDF_TIMEOUT_SEC saniyede bitmezse iptal edilir
-'       (büyük montaj çizimlerinde Excel'in boþ "Tablo Tasarýmý" penceresinde donmasý).
-'       Geçici çalýþma kitabý gizli açýlýr. ESC ile de iptal edilebilir.
+' v3.5: PDF önce modPdfText ile (saf VBA, Power Query'siz) okunur; Tekla montaj çizimleri dahil.
+'       Yalnýzca o okuyamazsa (þifreli / bozuk dosya) Power Query denenir: arka planda,
+'       PDF_TIMEOUT_SEC saniyede bitmezse iptal edilir, ESC ile de iptal edilebilir.
 ' =========================================================================
 
 ' Bir PDF için en fazla bekleme süresi (saniye). Aþýlýrsa dosya atlanýr, AUDIT'e yazýlýr.
 Private Const PDF_TIMEOUT_SEC As Long = 90
 
 Public Sub ProcessPdfFile()
+    Dim v As Variant, nT As Long, errMsg As String, wb As Workbook, ws As Worksheet, r As Long, c As Long
+    Application.StatusBar = "PDF okunuyor: " & fileName
+    nT = PdfReadTables(CStr(vItem), v, errMsg)
+    If nT < 0 Then
+        ' VBA okuyucu açamadý (þifreli / bozuk) -> Power Query yedeði
+        Call ProcessPdfFilePQ
+        Exit Sub
+    End If
+    If nT = 0 Or Not IsArray(v) Then
+        AuditRecord fileName, "PDF", 0, "FILE", CStr(vItem), "FILE", "ERROR", 0, "", _
+                    "PDF'te malzeme listesi baþlýðý bulunamadý (taranmýþ/resim PDF olabilir)."
+        Application.StatusBar = False
+        Exit Sub
+    End If
+
+    On Error GoTo Fail
+    Set wb = Application.Workbooks.Add(xlWBATWorksheet)
+    wb.Windows(1).Visible = False
+    ThisWorkbook.Activate
+    Set ws = wb.Worksheets(1)
+    ws.Name = "PDF"
+    ' Metinler "'" ile yazýlýr: Excel "1-2" gibi deðerleri tarihe çevirmesin
+    For r = 1 To UBound(v, 1)
+        For c = 1 To UBound(v, 2)
+            If VarType(v(r, c)) = vbString Then
+                If Len(v(r, c)) > 0 Then v(r, c) = "'" & v(r, c)
+            End If
+        Next c
+    Next r
+    ws.Range("A1").Resize(UBound(v, 1), UBound(v, 2)).Value = v
+    AuditRecord fileName, "PDF", 0, "FILE", CStr(vItem), "FILE", "EXACT", 100, _
+                nT & " tablo, " & UBound(v, 1) & " satýr okundu (VBA PDF okuyucu)", ""
+    Set pdfTempWb = wb
+    Call ProcessExcelFile
+
+Cleanup:
+    On Error Resume Next
+    Set pdfTempWb = Nothing
+    If Not wb Is Nothing Then wb.Close SaveChanges:=False
+    Application.StatusBar = False
+    Exit Sub
+Fail:
+    AuditRecord fileName, "PDF", 0, "FILE", CStr(vItem), "FILE", "ERROR", 0, "", _
+                "PDF tablosu aktarýlamadý: " & Err.Description
+    Resume Cleanup
+End Sub
+
+' Yedek yol: Power Query PDF baðlayýcýsý (Excel 365 / 2021)
+Private Sub ProcessPdfFilePQ()
     Dim wb As Workbook, wsQ As Worksheet, wsD As Worksheet, lo As ListObject, qn As String, v As Variant
     Dim t0 As Single, el As Single, stopReason As String, prevCancel As XlEnableCancelKey
     On Error GoTo Fail

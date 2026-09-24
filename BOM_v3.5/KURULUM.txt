@@ -2,6 +2,12 @@
 ==============================
 
 Değişenler:
+ - (v3.5) PDF ARTIK DOĞRUDAN EXCEL İÇİNDE OKUNUR (yeni modül: modPdfText, saf VBA).
+          Power Query ve PDF_BOM_Okuyucu.html GEREKMEZ. Makroda Eklemeye Başla / Liste Üstüne Ekle
+          ile PDF'leri doğrudan seçin. Tekla montaj çizimleri (ör. FA-F-A3C2P2) dahil: parça listesi ve
+          cıvata/somun/pul listesi okunur, üst üste basılmış revizyon değerleri ve toplam satırları ayıklanır.
+          Taranmış (resim) PDF'te yazı olmadığı için okunamaz -> AUDIT'e yazılır.
+          Şifreli / bozuk PDF'te eski Power Query yolu (90 sn zaman aşımı) denenir.
  - (v3.5) OGRENME sayfasında tanımsız parçalar için 4 VERİ girilir:
           MALZEME KODU, MALZEME CİNSİ, kg/m, YÜZEY ALAN (sarı sütunlar D-G).
           KÜTÜPHANE sütunu (PROFİL / CIVATA) nereye yazılacağını seçer:
@@ -44,7 +50,7 @@ GÜNCELLEME (dosyanın kopyasını alın)
  1) Güven Merkezi > Makro Ayarları > "VBA proje nesne modeline erişime güven" -> AÇ
  2) Alt+F11 > Ekle > Modül, adını "Kurulum" yapın, ModulleriYukle kodunu yapıştırın
     (önceki mesajdaki kod), F5 ile çalıştırıp bu klasörü seçin.
-    Makro eski modülleri siler, 12 yeni modülü yükler.
+    Makro eski modülleri siler, 13 modülü yükler (yeni: modPdfText).
  3) ThisWorkbook koduna dokunmayın, aynen kalabilir.
  4) Hata Ayıkla > VBAProject'i Derle.
  5) Kurulum modülünü silin, güven ayarını tekrar KAPATIN.
@@ -59,7 +65,8 @@ KÜTÜPHANE TEMİZLİĞİ (bir kez)
  Alt+F8 > Kutuphane_Temizle > Çalıştır. 221 YENI_EKLE + 160 TANIMSIZ satırı silinir,
  silinenler SILINEN_KAYITLAR sayfasında durur.
 
-PDF İŞ AKIŞI (önerilen)
+PDF İŞ AKIŞI
+ Makroda PDF'leri doğrudan seçin (v3.5). Aşağıdaki HTML aracı artık isteğe bağlıdır:
  1) PDF_BOM_Okuyucu.html dosyasını çift tıklayıp tarayıcıda açın (internet gerekir, kütüphaneler için).
  2) PDF'leri kutuya sürükleyin. Her dosya için okunan tabloyu "Okunan tabloyu göster" ile kontrol edin.
  3) "Tümünü Excel olarak indir (ZIP)" -> ZIP'i açın.
