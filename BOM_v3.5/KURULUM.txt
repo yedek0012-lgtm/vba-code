@@ -2,6 +2,9 @@
 ==============================
 
 Değişenler:
+ - (v3.5) BOY BİRİMİ: listede boylar metre ise (başlıkta [m]/(m)/"in m" ya da değerler metre gibi:
+          en büyük <= 30 ve ondalıklı) x1000 ile mm'ye çevrilir; AUDIT'e yazılır. cm için x10.
+          Daha önce metre olarak yazılmış satırlar için listeyi yeniden işleyin. Değişen modül: modMotorExcel.
  - (v3.5) TURUNCU (formüllü) SÜTUNLARA DOKUNULMAZ: ANGLE D,G,H,BC,BD / PLATE G,BB,BC.
           Temizle bu sütunlardaki değerleri silmez, kırmızı uyarı rengi bunlara uygulanmaz,
           BOLTS&WASHER'da yalnız makronun boyadığı B:E renkleri sıfırlanır. Değişen modül: modOutput.
