@@ -110,20 +110,6 @@ Public Function SectionValueWarning(ByVal nm As String, ByVal kgm As Double, ByV
     SectionValueWarning = s
 End Function
 
-Private Function CellNum(ByVal c As Range) As Double
-    On Error GoTo Fail
-    If IsEmpty(c.Value) Or IsError(c.Value) Then Exit Function
-    Select Case VarType(c.Value)
-        Case vbDouble, vbCurrency, vbLong, vbInteger, vbSingle
-            CellNum = CDbl(c.Value)
-        Case Else
-            CellNum = ParseBOMNumber(CStr(c.Value))
-    End Select
-    Exit Function
-Fail:
-    CellNum = 0
-End Function
-
 Private Sub Report(ByVal lib As String, ByVal r As Long, ByVal code As String, ByVal nm As String, _
                    ByVal isErr As Boolean, ByVal issue As String, ByVal detail As String)
     repRow = repRow + 1
@@ -179,8 +165,8 @@ Public Sub RunLibraryCheck()
             code = Trim$(ws.Cells(r, 1).Text)
             nm = Trim$(ws.Cells(r, 2).Text)
             If code <> "" Or nm <> "" Then
-                kgm = CellNum(ws.Cells(r, 4))
-                area = CellNum(ws.Cells(r, 5))
+                kgm = CellNumber(ws.Cells(r, 4))
+                area = CellNumber(ws.Cells(r, 5))
                 If UCase$(code) = "YENI_EKLE" Or UCase$(code) = "TANIMSIZ" Then
                     Call Report(ws.Name, r, code, nm, True, "Eski yer tutucu", "Kodu girin ya da Kutuphane_Temizle ile silin.")
                 Else
@@ -228,8 +214,8 @@ Public Sub RunLibraryCheck()
             code = Trim$(wsB.Cells(r, 1).Text)
             nm = Trim$(wsB.Cells(r, 2).Text)
             If code <> "" Or nm <> "" Then
-                w1 = CellNum(wsB.Cells(r, 3))
-                w1000 = CellNum(wsB.Cells(r, 4))
+                w1 = CellNumber(wsB.Cells(r, 3))
+                w1000 = CellNumber(wsB.Cells(r, 4))
                 If code = "" Then Call Report(wsB.Name, r, code, nm, True, "Kod boþ", "")
                 If w1 <= 0 And w1000 <= 0 Then
                     Call Report(wsB.Name, r, code, nm, True, "Aðýrlýk boþ", "Makro aðýrlýðý tahmin eder (turuncu).")

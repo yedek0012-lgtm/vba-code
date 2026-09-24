@@ -386,8 +386,8 @@ Public Function CollectReconciliation(ByVal ws As Worksheet, ByVal lastRow As Lo
         If Trim$(ws.Cells(r, 1).Text) <> "" Then
             nm = Trim$(ws.Cells(r, 11).Text)                 ' K = kýsa ad
             If nm = "" Then nm = Trim$(ws.Cells(r, 1).Text)
-            h = CellDbl(ws.Cells(r, 8))
-            cd = CellDbl(ws.Cells(r, 3)) + CellDbl(ws.Cells(r, 4))
+            h = CellNumber(ws.Cells(r, 8))
+            cd = CellNumber(ws.Cells(r, 3)) + CellNumber(ws.Cells(r, 4))
             If h <= 0 Then
                 nNoRef = nNoRef + 1
             Else
@@ -406,15 +406,6 @@ Public Function CollectReconciliation(ByVal ws As Worksheet, ByVal lastRow As Lo
         End If
     Next r
     CollectReconciliation = s
-End Function
-
-Private Function CellDbl(ByVal c As Range) As Double
-    On Error GoTo Fail
-    If IsError(c.Value) Or IsEmpty(c.Value) Then Exit Function
-    If IsNumeric(c.Value) Then CellDbl = CDbl(c.Value)
-    Exit Function
-Fail:
-    CellDbl = 0
 End Function
 
 ' Metnin ilk n satýrý (fazlasý "... ve N dosya daha")

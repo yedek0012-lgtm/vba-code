@@ -84,6 +84,29 @@ Public Function NumToText(ByVal d As Double) As String
 End Function
 
 ' "1.234,5" / "1,234.5" / "12,5" / "4 Stk" -> sayý
+' TEK SAYI OKUYUCU (v3.5): hücre sayýysa olduðu gibi, metinse ParseBOMNumber (bölge ayarýndan baðýmsýz).
+' Tüm modüller hücreden sayý okurken bunu kullanýr (CDbl/Val metinde Türkçe/Ýngilizce ayara göre farklý sonuç verir).
+Public Function CellNumber(ByVal c As Range) As Double
+    Dim v As Variant
+    On Error GoTo Fail
+    v = c.Value
+    If IsError(v) Or IsEmpty(v) Then Exit Function
+    Select Case VarType(v)
+        Case vbDouble, vbSingle, vbCurrency, vbLong, vbInteger, vbByte, vbDecimal
+            CellNumber = CDbl(v)
+        Case vbString
+            CellNumber = ParseBOMNumber(CStr(v))
+    End Select
+    Exit Function
+Fail:
+    CellNumber = 0
+End Function
+
+' Metin tek baþýna bir sayý mý? ("12", "12.5", "12,5"; bölge ayarýndan baðýmsýz)
+Public Function IsNumToken(ByVal s As String) As Boolean
+    IsNumToken = RxTest(Trim$(s), "^[+-]?\d+([.,]\d+)?$")
+End Function
+
 Public Function ParseBOMNumber(ByVal s As String) As Double
     Dim t As String, lastDot As Long, lastCom As Long
     On Error GoTo Fail

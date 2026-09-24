@@ -235,13 +235,8 @@ End If
             If Trim(wsBoltLib.Cells(rLib, 1).Text) <> "" Then
                 pCode = Trim(wsBoltLib.Cells(rLib, 1).Text)
                 pName = Trim(wsBoltLib.Cells(rLib, 2).Text)
-                If IsNumeric(wsBoltLib.Cells(rLib, 3).Value) Then
-                    bWt = CDbl(wsBoltLib.Cells(rLib, 3).Value)
-                ElseIf IsNumeric(wsBoltLib.Cells(rLib, 4).Value) Then
-                    bWt = CDbl(wsBoltLib.Cells(rLib, 4).Value) / 1000#
-                Else
-                    bWt = 0
-                End If
+                bWt = CellNumber(wsBoltLib.Cells(rLib, 3))
+                If bWt <= 0 Then bWt = CellNumber(wsBoltLib.Cells(rLib, 4)) / 1000#
                 If pCode <> "" And bWt > 0 Then dictBoltWeights(pCode) = bWt
                 If pName <> "" And bWt > 0 Then dictBoltWeights(pName) = bWt
             End If
@@ -915,8 +910,8 @@ Sub Kutuphaneye_Aktar()
         code = UCase$(Trim$(ws.Cells(r, 4).Text))
         cins = Trim$(ws.Cells(r, 5).Text)
         If cins = "" Then cins = prof
-        v1 = OgrenmeNumber(ws.Cells(r, 6))
-        v2 = OgrenmeNumber(ws.Cells(r, 7))
+        v1 = CellNumber(ws.Cells(r, 6))
+        v2 = CellNumber(ws.Cells(r, 7))
         ws.Cells(r, 8).Interior.ColorIndex = xlColorIndexNone
 
         ' Hiçbir þey girilmemiþse: kullanýcý tanýmlamak istemiyor
@@ -1147,20 +1142,6 @@ Private Sub WriteProfileLibRow(ByVal wsLib As Worksheet, ByVal r As Long, ByVal 
     wsLib.Cells(r, 5).Value = alan
     wsLib.Cells(r, 1).Resize(1, 5).Interior.Color = RGB(198, 239, 206)
 End Sub
-
-' OGRENME hücresindeki sayýyý bölge ayarýndan baðýmsýz okur (14,6 / 14.6 / boþ -> 0)
-Private Function OgrenmeNumber(ByVal c As Range) As Double
-    On Error GoTo Fail
-    If IsEmpty(c.Value) Then Exit Function
-    If VarType(c.Value) = vbDouble Or VarType(c.Value) = vbCurrency Or VarType(c.Value) = vbLong Or VarType(c.Value) = vbInteger Then
-        OgrenmeNumber = CDbl(c.Value)
-    Else
-        OgrenmeNumber = ParseBOMNumber(CStr(c.Value))
-    End If
-    Exit Function
-Fail:
-    OgrenmeNumber = 0
-End Function
 
 ' Verilen sütunlardaki son dolu satýr (A boþ, B dolu satýrlar da sayýlýr)
 Private Function LastUsedRow(ByVal ws As Worksheet, ByVal col1 As Long, ByVal col2 As Long) As Long

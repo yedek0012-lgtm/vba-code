@@ -2,6 +2,12 @@
 ==============================
 
 Değişenler:
+ - (v3.5) SAYI OKUMA TEK YERDE: metinden sayı okuyan tüm yerler ParseBOMNumber / CellNumber / IsNumToken
+          (modText) kullanır; sonuç Windows bölge ayarından (Türkçe / İngilizce) bağımsızdır.
+          Düzeltilen: XSR boy ve plaka ölçüleri CDbl ile okunuyordu (Türkçe ayarda "4000.5" -> 40005),
+          BOLT-LIBRARY'de metin olarak yazılmış ağırlıklar ("0.0116" -> 116). Aynı işi yapan 4 ayrı
+          hücre okuyucu tek CellNumber'da birleşti. Değişen modüller: modText, modMotorXSR, modProfiles,
+          modMain, modAudit, modOutput, modKutuphane.
  - (v3.5) AĞIRLIK MUTABAKATI UYARISI: işlem sonunda şablon ağırlığı (SUM C+D) listedeki ağırlıktan (H)
           tolerans (AYARLAR, SUM!J3) dışında farklı olan dosyalar son mesajda listelenir, AUDIT'e WARNING
           yazılır ve imleç ilk sorunlu dosyanın J hücresine gider. Listesinde toplam ağırlık olmayan dosyalar

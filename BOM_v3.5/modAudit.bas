@@ -280,20 +280,6 @@ Public Function LearnedKey(ByVal nm As String) As String
     LearnedKey = Replace(FoldText(nm), " ", "")
 End Function
 
-Private Function CellNumAny(ByVal c As Range) As Double
-    On Error GoTo Fail
-    If IsEmpty(c.Value) Then Exit Function
-    Select Case VarType(c.Value)
-        Case vbDouble, vbCurrency, vbLong, vbInteger, vbSingle
-            CellNumAny = CDbl(c.Value)
-        Case Else
-            CellNumAny = ParseBOMNumber(CStr(c.Value))
-    End Select
-    Exit Function
-Fail:
-    CellNumAny = 0
-End Function
-
 Public Sub LoadLearnedItems()
     Dim ws As Worksheet, r As Long, k As String, tp As String
     Set dictLearned = CreateObject("Scripting.Dictionary")
@@ -307,7 +293,7 @@ Public Sub LoadLearnedItems()
         tp = UCase$(Trim$(ws.Cells(r, 2).Text))
         If k <> "" And (tp = "ANGLE" Or tp = "PLATE" Or tp = "BOLT") Then
             dictLearned(k) = Array(tp, Trim$(ws.Cells(r, 3).Text), Trim$(ws.Cells(r, 4).Text), _
-                                   CellNumAny(ws.Cells(r, 5)), CellNumAny(ws.Cells(r, 6)))
+                                   CellNumber(ws.Cells(r, 5)), CellNumber(ws.Cells(r, 6)))
         End If
     Next r
 End Sub
