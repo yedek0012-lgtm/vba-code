@@ -16,6 +16,9 @@ Değişenler:
           (modMotorPDF > PDF_TIMEOUT_SEC), ESC ile iptal edilebilir. Süre dolan PDF atlanır,
           AUDIT'e yazılır; o dosyayı PDF_BOM_Okuyucu.html ile Excel'e çevirip seçin.
           Değişen modül: modMotorPDF.
+ - (v3.5) PDF_BOM_Okuyucu.html: tabloya sonradan üst üste basılmış ikinci değer (ör. "121.6" üstünde
+          "115.7") artık tek değer okunur (tablonun kendi yazı boyundaki); "Doc.no." ayrı sütun olur;
+          listenin altındaki "Assemblies / Bolts spec. / Bolts" toplam satırları parça sayılmaz.
  - (v3.4) PDF'ler için PDF_BOM_Okuyucu.html aracı (aşağıya bakın). Tekla montaj çizimlerindeki
           küçük tablolar dahil tüm listeleri okur ve makronun işleyeceği Excel dosyaları üretir.
  - (v3.4) "No." başlıklı adet sütunu (Item No. varsa adet sayılır), Norveççe başlıklar.
