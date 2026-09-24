@@ -107,7 +107,8 @@ Public Sub CleanTemplateRanges(wsA As Worksheet, wsP As Worksheet, wsB As Worksh
         wsA.Range("B5:C" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
         wsA.Range("E5:F" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
         wsA.Range("I4:BA" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
-        wsA.Range("BD5:BG" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        ' D, G, H, BC, BD (turuncu, formüllü) sütunlarýna dokunulmaz; not sütunu BE
+        wsA.Range("BE5:BG" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
 End If
     
     If Not wsP Is Nothing Then
@@ -115,7 +116,8 @@ End If
         If lastRow < 1503 Then lastRow = 1503
         wsP.Range("B5:F" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
         wsP.Range("H4:BA" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
-        wsP.Range("BC5:BF" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        ' G, BB, BC (turuncu, formüllü) sütunlarýna dokunulmaz; not sütunu BD
+        wsP.Range("BD5:BF" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
 End If
     
     If Not wsB Is Nothing Then
@@ -125,9 +127,11 @@ End If
         wsB.Range("F4:AY" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
         wsB.Range("BB5:BG" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
         
-        wsB.Range("B5:BG" & lastRow).Interior.ColorIndex = xlNone
-        wsB.Range("B5:BG" & lastRow).Font.ColorIndex = xlAutomatic
-        wsB.Range("B5:BG" & lastRow).Font.Bold = False
+        ' Sadece makronun boyadýðý B:E (yeþil somun/pul satýrý, turuncu tahmini aðýrlýk) sýfýrlanýr;
+        ' þablonun kendi renkli (formüllü) sütunlarýna dokunulmaz
+        wsB.Range("B5:E" & lastRow).Interior.ColorIndex = xlNone
+        wsB.Range("B5:E" & lastRow).Font.ColorIndex = xlAutomatic
+        wsB.Range("B5:E" & lastRow).Font.Bold = False
 End If
     
     If Not wsS Is Nothing Then
@@ -382,9 +386,13 @@ Public Sub ApplyHealthFormatting()
         If ws.Visible = xlSheetVisible Then
             nm = UCase$(ws.Name)
             If nm = "ANGLE" Or nm Like "ANGLE_P*" Then
-                Call AddExprCF(ws, "B5:H3003", "=($C5<>"""")*(($D5=0)+($G5=0))", RGB(255, 199, 206))
+                ' Uyarý rengi turuncu (formüllü) D, G, H sütunlarýna uygulanmaz
+                Call RemoveCFByAddress(ws, "B5:H3003")        ' eski sürümün kuralý
+                Call AddExprCF(ws, "B5:C3003,E5:F3003", "=($C5<>"""")*(($D5=0)+($G5=0))", RGB(255, 199, 206))
             ElseIf nm = "PLATE" Or nm Like "PLATE_P*" Then
-                Call AddExprCF(ws, "B5:G1503", "=($B5<>"""")*(($C5=0)+($D5=0)+($F5=0))", RGB(255, 199, 206))
+                ' Uyarý rengi turuncu (formüllü) G sütununa uygulanmaz
+                Call RemoveCFByAddress(ws, "B5:G1503")        ' eski sürümün kuralý
+                Call AddExprCF(ws, "B5:F1503", "=($B5<>"""")*(($C5=0)+($D5=0)+($F5=0))", RGB(255, 199, 206))
             ElseIf nm = "SUM" Or nm Like "SUM_P*" Then
                 Call RemoveCFByAddress(ws, "K5:K5000")        ' v2.3'ün eski kuralý
                 Call AddExprCF(ws, "J5:J5000", "=($J5<>"""")*(($J5>$J$3)+($J5<-$J$3))", RGB(255, 199, 206))
