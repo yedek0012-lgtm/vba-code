@@ -100,7 +100,7 @@ tr.sep td{border:0;height:10px;background:var(--zinc)}
   }
   function compact(s) { return fold(s).replace(/[\s.\-_:]/g, ""); }
 
-  // Header roles: 1 pos, 2 qty, 3 name/description, 4 length, 5 material, 6 weight, 7 profile, 16 "No." (ambiguous)
+  // Header roles: 1 pos, 2 qty, 3 name/description, 4 length, 5 material, 6 weight, 7 profile, 8 doc no, 16 "No." (ambiguous)
   function roleOf(txt) {
     const t = fold(txt).trim();
     if (!t || t.endsWith(":") || t.length > 30) return 0;
@@ -108,6 +108,7 @@ tr.sep td{border:0;height:10px;background:var(--zinc)}
     if (/^(ITEMNO|ITEM|POS|POSNR|POSNO|POSITION|MARK|MARKNO|PARTNO|PARTMARK|POZ|POZNO|TEILENR)$/.test(c)) return 1;
     if (/^(QTY|QUANTITY|STCK|STK|STUCK|ANZ|ANZAHL|MENGE|ADET|MIKTAR|PCS|ANTALL|ANT)/.test(c)) return 2;
     if (/^(NO|NR|NOS|NUMBER)$/.test(c)) return 16;
+    if (/^(DOCNO|DOCNR|DOCUMENTNO|DOKNO|DOKUMENTNR|DRAWINGNO|DWGNO|ZEICHNUNGSNR|ZEICHNR)$/.test(c)) return 8;
     if (/(LENGTH|LANGE|LAENGE|LENGDE|UZUNLUK)/.test(c) || c === "BOY") return 4;
     if (/(PROFIL|SECTION|KESIT)/.test(c)) return 7;
     if (/(DESCRIPTION|BENENNUNG|BEZEICHNUNG|BESKRIVELSE|TANIM)/.test(c)) return 3;
@@ -267,11 +268,26 @@ tr.sep td{border:0;height:10px;background:var(--zinc)}
         const inr = L.items.filter(k => k.x1 > left && k.x0 < right && k.h > 0.55 * H && k.h < 1.7 * H);
         if (!inr.length) { if (L.y - lastY > 3 * pitch) break; continue; }
         if (L.y - lastY > 3.2 * pitch && rows.length) break;  // table ended
-        const row = new Array(cells.length).fill("");
-        for (const k of inr) { const c = colFor(cells, k); if (c >= 0) row[c] = row[c] ? row[c] + " " + k.s : k.s; }
+        const row = new Array(cells.length).fill(null).map(() => []);
+        for (const k of inr) { const c = colFor(cells, k); if (c >= 0) row[c].push(k); }
         if (rows.length) pitch = Math.max(0.9 * H, Math.min(3 * H, (L.y - lastY) * 0.5 + pitch * 0.5));
-        rows.push({ y: L.y, cells: row });
+        rows.push({ y: L.y, toks: row });
         lastY = L.y;
+      }
+      // Stacked revision text: a second value printed over the table's own value in another font
+      // size ("121.6" over "115.7"). Keep the tokens in the table's dominant data size.
+      const hc = {};
+      for (const r of rows) for (const cell of r.toks) for (const k of cell) { const q = k.h.toFixed(2); hc[q] = (hc[q] || 0) + 1; }
+      const dom = parseFloat(Object.keys(hc).sort((a, b) => hc[b] - hc[a])[0] || H);
+      const isDom = k => Math.abs(k.h - dom) <= 0.03 * dom;
+      for (const r of rows) {
+        r.cells = r.toks.map(cell => {
+          const num = cell.filter(k => /^-?\d+(?:[.,]\d+)?$/.test(k.s));
+          let use = cell;
+          if (num.length > 1 && num.length === cell.length && num.some(isDom) && num.some(k => !isDom(k))) use = cell.filter(isDom);
+          return use.map(k => k.s).join(" ");
+        });
+        delete r.toks;
       }
       // merge orphan fragments into the nearest row that has those columns empty
       const merged = [];
@@ -293,6 +309,14 @@ tr.sep td{border:0;height:10px;background:var(--zinc)}
         }
       }
       const header = cells.map(c => c.s);
+      // summary lines under the list ("Assemblies 19 3819.4", "Bolts spec.", "Bolts 85.4") are not parts
+      const nameCols = cells.map((c, n) => ([3, 7].includes(c.role) ? n : -1)).filter(n => n >= 0);
+      const posCol = cells.findIndex(c => c.role === 1 || c.role === 16);
+      for (let m = merged.length - 1; m >= 0; m--) {
+        const r = merged[m].cells;
+        const noName = nameCols.length && nameCols.every(n => !r[n].trim());
+        if (noName && posCol >= 0 && /^(ITEMS?|ASSEMBL|BOLTS?|TOTAL|SUM|TOPLAM|GESAMT|SUMME)/i.test(fold(r[posCol]).trim())) merged.splice(m, 1);
+      }
       const out = merged.map(r => r.cells.map((v, c) => ([3, 5, 7].includes(cells[c].role) ? stripRevTokens(v) : v)));
       // total line (e.g. "TOTAL 1032.4")
       let total = null;

@@ -2,6 +2,12 @@
 ==============================
 
 Değişenler:
+ - (v3.5) PDF ARTIK DOĞRUDAN EXCEL İÇİNDE OKUNUR (yeni modül: modPdfText, saf VBA).
+          Power Query ve PDF_BOM_Okuyucu.html GEREKMEZ. Makroda Eklemeye Başla / Liste Üstüne Ekle
+          ile PDF'leri doğrudan seçin. Tekla montaj çizimleri (ör. FA-F-A3C2P2) dahil: parça listesi ve
+          cıvata/somun/pul listesi okunur, üst üste basılmış revizyon değerleri ve toplam satırları ayıklanır.
+          Taranmış (resim) PDF'te yazı olmadığı için okunamaz -> AUDIT'e yazılır.
+          Şifreli / bozuk PDF'te eski Power Query yolu (90 sn zaman aşımı) denenir.
  - (v3.5) OGRENME sayfasında tanımsız parçalar için 4 VERİ girilir:
           MALZEME KODU, MALZEME CİNSİ, kg/m, YÜZEY ALAN (sarı sütunlar D-G).
           KÜTÜPHANE sütunu (PROFİL / CIVATA) nereye yazılacağını seçer:
@@ -11,6 +17,14 @@ Değişenler:
           Eksik verili satırlar aktarılmaz, DURUM sütununda eksik alan yazar.
           MALZEME CİNSİ değiştirilip listedeki adla eşleşmezse ham ad da aynı verilerle eklenir.
           Değişen modüller: modAudit, modMain, modState.
+ - (v3.5) PDF doğrudan seçildiğinde Excel'in boş "Tablo Tasarımı / Sorgu" penceresinde
+          donması giderildi: geçici kitap gizli açılır, okuma en fazla 90 sn beklenir
+          (modMotorPDF > PDF_TIMEOUT_SEC), ESC ile iptal edilebilir. Süre dolan PDF atlanır,
+          AUDIT'e yazılır; o dosyayı PDF_BOM_Okuyucu.html ile Excel'e çevirip seçin.
+          Değişen modül: modMotorPDF.
+ - (v3.5) PDF_BOM_Okuyucu.html: tabloya sonradan üst üste basılmış ikinci değer (ör. "121.6" üstünde
+          "115.7") artık tek değer okunur (tablonun kendi yazı boyundaki); "Doc.no." ayrı sütun olur;
+          listenin altındaki "Assemblies / Bolts spec. / Bolts" toplam satırları parça sayılmaz.
  - (v3.4) PDF'ler için PDF_BOM_Okuyucu.html aracı (aşağıya bakın). Tekla montaj çizimlerindeki
           küçük tablolar dahil tüm listeleri okur ve makronun işleyeceği Excel dosyaları üretir.
  - (v3.4) "No." başlıklı adet sütunu (Item No. varsa adet sayılır), Norveççe başlıklar.
@@ -36,7 +50,7 @@ GÜNCELLEME (dosyanın kopyasını alın)
  1) Güven Merkezi > Makro Ayarları > "VBA proje nesne modeline erişime güven" -> AÇ
  2) Alt+F11 > Ekle > Modül, adını "Kurulum" yapın, ModulleriYukle kodunu yapıştırın
     (önceki mesajdaki kod), F5 ile çalıştırıp bu klasörü seçin.
-    Makro eski modülleri siler, 12 yeni modülü yükler.
+    Makro eski modülleri siler, 13 modülü yükler (yeni: modPdfText).
  3) ThisWorkbook koduna dokunmayın, aynen kalabilir.
  4) Hata Ayıkla > VBAProject'i Derle.
  5) Kurulum modülünü silin, güven ayarını tekrar KAPATIN.
@@ -51,7 +65,8 @@ KÜTÜPHANE TEMİZLİĞİ (bir kez)
  Alt+F8 > Kutuphane_Temizle > Çalıştır. 221 YENI_EKLE + 160 TANIMSIZ satırı silinir,
  silinenler SILINEN_KAYITLAR sayfasında durur.
 
-PDF İŞ AKIŞI (önerilen)
+PDF İŞ AKIŞI
+ Makroda PDF'leri doğrudan seçin (v3.5). Aşağıdaki HTML aracı artık isteğe bağlıdır:
  1) PDF_BOM_Okuyucu.html dosyasını çift tıklayıp tarayıcıda açın (internet gerekir, kütüphaneler için).
  2) PDF'leri kutuya sürükleyin. Her dosya için okunan tabloyu "Okunan tabloyu göster" ile kontrol edin.
  3) "Tümünü Excel olarak indir (ZIP)" -> ZIP'i açın.
