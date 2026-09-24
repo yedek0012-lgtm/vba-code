@@ -807,15 +807,32 @@ Public Sub UpdateFileHeaders(ByVal wsS As Worksheet, ByVal wsA As Worksheet, ByV
     If Not wsB Is Nothing Then Call FitHeaderCells(wsB.Range(wsB.Cells(2, 6), wsB.Cells(2, 51)))
 End Sub
 
+' Dosya adý baþlýklarý (dikey yazý): yazý KÜÇÜLTÜLMEZ (þablonun yazý boyu kalýr, SUM'daki gibi);
+' en uzun ad sýðmýyorsa baþlýk satýrý (2) uzatýlýr. Önceki sürümün "sýðdýrmak için küçült" ayarý kaldýrýlýr.
 Private Sub FitHeaderCells(ByVal rng As Range)
-    Dim cel As Range
+    Dim cel As Range, maxLen As Long, fs As Double, need As Double, have As Double
     On Error Resume Next
     For Each cel In rng.Cells
         With cel.MergeArea
+            .ShrinkToFit = False
             .WrapText = False
-            .ShrinkToFit = True
         End With
+        If Len(cel.Text) > maxLen Then maxLen = Len(cel.Text)
     Next cel
+    If maxLen = 0 Then Exit Sub
+    fs = rng.Cells(1, 1).Font.Size
+    If fs <= 0 Then fs = 8
+    need = maxLen * fs * 0.62 + 10                  ' dikey yazý boyu (pt), kabaca
+    have = rng.Cells(1, 1).MergeArea.Height
+    If need > have Then
+        With rng.Worksheet.Rows(rng.Row)
+            If .RowHeight + (need - have) <= 409 Then
+                .RowHeight = .RowHeight + (need - have)
+            Else
+                .RowHeight = 409
+            End If
+        End With
+    End If
 End Sub
 
 Public Function FileNameTokens(ByVal s As String) As Variant
