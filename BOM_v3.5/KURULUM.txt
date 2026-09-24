@@ -1,0 +1,61 @@
+﻿BOM ÇEVİRİCİ v3.5 - GÜNCELLEME
+==============================
+
+Değişenler:
+ - (v3.5) OGRENME sayfasında tanımsız parçalar için 4 VERİ girilir:
+          MALZEME KODU, MALZEME CİNSİ, kg/m, YÜZEY ALAN (sarı sütunlar D-G).
+          KÜTÜPHANE sütunu (PROFİL / CIVATA) nereye yazılacağını seçer:
+            PROFİL -> L-U-I-O-Y-LIBRARY  (A kod, B cins, D kg/m, E yüzey alan)
+            CIVATA -> BOLT-LIBRARY       (A kod, B cins, C birim ağırlık, D 1000 adet ağırlığı;
+                                          ikisinden biri yazılırsa diğeri hesaplanır)
+          Eksik verili satırlar aktarılmaz, DURUM sütununda eksik alan yazar.
+          MALZEME CİNSİ değiştirilip listedeki adla eşleşmezse ham ad da aynı verilerle eklenir.
+          Değişen modüller: modAudit, modMain, modState.
+ - (v3.4) PDF'ler için PDF_BOM_Okuyucu.html aracı (aşağıya bakın). Tekla montaj çizimlerindeki
+          küçük tablolar dahil tüm listeleri okur ve makronun işleyeceği Excel dosyaları üretir.
+ - (v3.4) "No." başlıklı adet sütunu (Item No. varsa adet sayılır), Norveççe başlıklar.
+ - (v3.4) Poz sütunundaki "Nut / Wash / Bolt" ipucu ve isimdeki ISO/DIN numarasıyla somun-pul tanıma.
+ - (v3.4) MONTAJ ÇİFT SAYIM KORUMASI: montaj listesindeki bir poz (ör. FAC51410A) kendi parça
+          listesiyle birlikte işleniyorsa montaj satırı atlanır (AUDIT'te SKIPPED).
+ - (v3.4) "850 101.5" gibi iki sayılı hücreler artık 850101 okunmaz (FAC51410A'daki 9056 kg hatası).
+ - (v3.3) PDF malzeme listesi okuma (yeni modül: modMotorPDF). Excel 365 veya 2021 gerekir.
+          Dosya seçerken PDF'leri de seçebilirsiniz. Taranmış (resim) PDF okunamaz, AUDIT'e yazılır.
+ - (v3.3) PROFILE sütunu varsa isim olarak o kullanılır (DESCRIPTION'daki "PLATE" değil).
+ - (v3.3) D460 gibi yuvarlak kesit: boy < çap ise daire plaka (Ø x Ø kare pafta, kalınlık = boy),
+          değilse yuvarlak çubuk (kütüphane Y kodu).
+ - (v3.3) CHS / RHS boru kodları kütüphaneyle eşleşir (CHS508*20 -> CHS508x20, RHS60.3X4.0 -> CHS60,3x4).
+ - (v3.3) Tekla revizyon işaretleri (PL40*518 02 03) atılır.
+ - (v3.3) Kutuphane_Temizle makrosu: eski YENI_EKLE / TANIMSIZ satırlarını siler (önce yedekler).
+ - (v3.2) Düğmeler eski modül adıyla (Module6.xxx) atanmışsa açılışta otomatik düzeltilir.
+ - (v3.2) SUM I/J/K sütunlarında dosyası olmayan satırlardaki eski değerler temizlenir.
+ - Lisans sistemi tamamen kaldırıldı (modLicense modülü yok).
+ - ANGLE / PLATE / BOLTS başlıklarında dosya adının sadece farklı kısmı görünür
+   (ör: "Z175 ESH"). Kısa adlar SUM!K sütununda, tam adlar SUM!A'da.
+
+GÜNCELLEME (dosyanın kopyasını alın)
+ 1) Güven Merkezi > Makro Ayarları > "VBA proje nesne modeline erişime güven" -> AÇ
+ 2) Alt+F11 > Ekle > Modül, adını "Kurulum" yapın, ModulleriYukle kodunu yapıştırın
+    (önceki mesajdaki kod), F5 ile çalıştırıp bu klasörü seçin.
+    Makro eski modülleri siler, 12 yeni modülü yükler.
+ 3) ThisWorkbook koduna dokunmayın, aynen kalabilir.
+ 4) Hata Ayıkla > VBAProject'i Derle.
+ 5) Kurulum modülünü silin, güven ayarını tekrar KAPATIN.
+ 6) Başlıkların kısalması için listeyi bir kez yeniden işleyin
+    (Temizle > Eklemeye Başla veya Liste Üstüne Ekle).
+
+KORUMA (değişmedi)
+ - Formül hücreleri kilitli, GECMIS kilitli, sayfa silme / kopyalama kapalı.
+ - Parola: modProtect > PROTECT_PWD. Bakım için Yonetici_KorumayiKaldir.
+
+KÜTÜPHANE TEMİZLİĞİ (bir kez)
+ Alt+F8 > Kutuphane_Temizle > Çalıştır. 221 YENI_EKLE + 160 TANIMSIZ satırı silinir,
+ silinenler SILINEN_KAYITLAR sayfasında durur.
+
+PDF İŞ AKIŞI (önerilen)
+ 1) PDF_BOM_Okuyucu.html dosyasını çift tıklayıp tarayıcıda açın (internet gerekir, kütüphaneler için).
+ 2) PDF'leri kutuya sürükleyin. Her dosya için okunan tabloyu "Okunan tabloyu göster" ile kontrol edin.
+ 3) "Tümünü Excel olarak indir (ZIP)" -> ZIP'i açın.
+ 4) Makroda Eklemeye Başla / Liste Üstüne Ekle ile bu Excel dosyalarını (ve diğer listeleri) seçin.
+ Montaj çizimleri (FA-F-...) ile parça çizimlerini (FAC51410A...) AYNI anda seçin ya da parça
+ çizimleri SUM'da zaten olsun: çift sayım koruması ancak böyle çalışır.
+ PDF'i makroda doğrudan seçmek hâlâ mümkün (Power Query), ama montaj çizimlerinde güvenilir değil.
