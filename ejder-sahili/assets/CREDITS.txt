@@ -1,0 +1,51 @@
+Ejder Sahili - görsel kaynakları ve lisanslar
+==============================================
+
+Bu klasördeki PNG dosyaları aşağıdaki açık lisanslı Liberated Pixel Cup (LPC)
+sanat eserlerinden kırpılıp birleştirilerek (ve bazıları yeniden renklendirilerek)
+üretilmiştir. Oyunun kendi kodu bu lisanslara tabi değildir; görseller tabidir.
+
+
+1) Karakterler: char_*.png
+--------------------------
+Kaynak: Liberated Pixel Cup (LPC) Asset Repository
+        https://github.com/OpenGameArt/LiberatedPixelCup  (sprite/character)
+Lisans: CC BY-SA 3.0 ve GPL 3.0 (çift lisans)
+Sanatçılar: Stephen Challener (Redshrike) - gövde şablonu,
+            Manuel Riecke (MrBeast) - saç,
+            ve depodaki sprite/original/authors.md ile
+            sprite/derivative/authors.md dosyalarında listelenen katkıcılar.
+Değişiklik: gövde, saç, sakal, üst, alt, ayakkabı ve şapka katmanları tek sayfada
+            birleştirildi; oyuncu saçları element rengine boyandı.
+
+
+2) Canavarlar: mob_*.png
+------------------------
+Kaynak: aynı LPC deposu, sprite/original/CharlesGabriel
+Sanatçı: Charles Sanchez (CharlesGabriel)
+Lisans: CC BY-SA 3.0 ve GPL 3.0
+Değişiklik: mob_slime.png maviye boyandı.
+
+
+3) Arazi ve nesneler: terrain.png, objects.png
+----------------------------------------------
+Kaynak: LPC Revised - https://github.com/ElizaWy/LPC
+Lisans: OGA-BY 3.0 (CC BY 3.0 tabanlı)
+  - Arazi (terrain_summer): Lanea Zimmerman (Sharm), Eliza Wyatt (DeathsDarling)
+  - Ağaçlar: Lanea Zimmerman (Sharm), Eliza Wyatt (DeathsDarling)
+  - Bitkiler (tropik çalı, otlar): Lanea Zimmerman (Sharm), Eliza Wyatt (DeathsDarling), Hyptosis
+  - Kayalar: Eliza Wyatt (DeathsDarling)
+  - Kır çiçekleri: Lanea Zimmerman (Sharm), Hyptosis, Eliza Wyatt (DeathsDarling)
+  - Ev (Paneled House A): Lanea Zimmerman, Eliza Wyatt (DeathsDarling)
+  - Ahşap iskele (Wood Bridge A): Lanea Zimmerman (Sharm), Eliza Wyatt (DeathsDarling)
+  - Taş sütun (Stone Pillar A): Lanea Zimmerman (Sharm), Eliza Wyatt (DeathsDarling)
+  - Kamp ateşi: Lanea Zimmerman (Sharm), Eliza Wyatt (DeathsDarling)
+  - Fıçı: Lanea Zimmerman (Sharm), Eliza Wyatt (DeathsDarling)
+  - Sandık: Eliza Wyatt (DeathsDarling)
+Değişiklik: parçalar tek atlasta toplandı; palmiye, ağaç gövdesi ile tropik
+            çalı birleştirilerek üretildi.
+
+Lisans metinleri:
+  CC BY-SA 3.0 : https://creativecommons.org/licenses/by-sa/3.0/
+  GPL 3.0      : https://www.gnu.org/licenses/gpl-3.0.html
+  OGA-BY 3.0   : https://opengameart.org/content/oga-by-30-faq
