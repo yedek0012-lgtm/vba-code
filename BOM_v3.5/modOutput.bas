@@ -20,11 +20,29 @@ Public Sub SafeWrite(ws As Worksheet, rw As Long, col As Long, val As Variant, O
     
     On Error Resume Next
     If ws Is curWsAngleRef Then
-        If rw <= UBound(bufAngle, 1) And col <= UBound(bufAngle, 2) Then bufAngle(rw, col) = finalVal Else Call NoteOverflow(ws, rw)
+        If limitRowA > 5 And rw >= limitRowA Then
+            Call NoteOverflow(ws, rw)
+        ElseIf rw <= UBound(bufAngle, 1) And col <= UBound(bufAngle, 2) Then
+            bufAngle(rw, col) = finalVal
+        Else
+            Call NoteOverflow(ws, rw)
+        End If
     ElseIf ws Is curWsPlateRef Then
-        If rw <= UBound(bufPlate, 1) And col <= UBound(bufPlate, 2) Then bufPlate(rw, col) = finalVal Else Call NoteOverflow(ws, rw)
+        If limitRowP > 5 And rw >= limitRowP Then
+            Call NoteOverflow(ws, rw)
+        ElseIf rw <= UBound(bufPlate, 1) And col <= UBound(bufPlate, 2) Then
+            bufPlate(rw, col) = finalVal
+        Else
+            Call NoteOverflow(ws, rw)
+        End If
     ElseIf ws Is curWsBoltRef Then
-        If rw <= UBound(bufBolt, 1) And col <= UBound(bufBolt, 2) Then bufBolt(rw, col) = finalVal Else Call NoteOverflow(ws, rw)
+        If limitRowB > 5 And rw >= limitRowB Then
+            Call NoteOverflow(ws, rw)
+        ElseIf rw <= UBound(bufBolt, 1) And col <= UBound(bufBolt, 2) Then
+            bufBolt(rw, col) = finalVal
+        Else
+            Call NoteOverflow(ws, rw)
+        End If
     ElseIf ws Is curWsSumRef Then
         If rw <= UBound(bufSum, 1) And col <= UBound(bufSum, 2) Then bufSum(rw, col) = finalVal Else Call NoteOverflow(ws, rw)
     Else
@@ -79,6 +97,10 @@ Public Sub FlushAllBuffers(wsA As Worksheet, wsP As Worksheet, wsB As Worksheet,
                             ByVal lastRowA As Long, ByVal lastRowP As Long, ByVal lastRowB As Long, ByVal lastRowS As Long, _
                             ByVal colA As Long, ByVal colP As Long, ByVal colB As Long)
     On Error Resume Next
+    ' veri sýnýrýnýn altýna (þablonun formül / toplam satýrlarý) ASLA yazýlmaz
+    If limitRowA > 5 And lastRowA > limitRowA Then lastRowA = limitRowA
+    If limitRowP > 5 And lastRowP > limitRowP Then lastRowP = limitRowP
+    If limitRowB > 5 And lastRowB > limitRowB Then lastRowB = limitRowB
     ' 1. ANGLE Sheet Dump
     If Not wsA Is Nothing And lastRowA >= 5 Then
         Call FlushBufferBlock(wsA, bufAngle, 5, lastRowA - 1, 1, 3)      ' A = TYPE (dosya adý)
@@ -1025,26 +1047,6 @@ Public Function TotalsRowDamage(ByVal ws As Worksheet, ByVal totRow As Long, ByV
     End If
 End Function
 
-' Veri toplam satýrýna ulaþýyorsa (lastDataRow >= totRow) toplam satýrýnýn hemen üstüne formüllü satýrlar
-' eklenir: toplam / SUMPRODUCT aralýklarý ve SUM baðlantýlarý Excel tarafýndan kendiliðinden kaydýrýlýr.
-' Yeni toplam satýrý numarasýný döndürür.
-Public Function EnsureTemplateRows(ByVal ws As Worksheet, ByVal totRow As Long, ByVal lastDataRow As Long) As Long
-    Dim n As Long, insAt As Long
-    On Error Resume Next
-    EnsureTemplateRows = totRow
-    If ws Is Nothing Or totRow <= 6 Then Exit Function
-    If lastDataRow < totRow Then Exit Function
-    n = lastDataRow - totRow + 1 + 50                 ' eksik satýr + 50 yedek
-    insAt = totRow - 1                                ' son veri satýrýnýn önüne: aralýklarýn ÝÇÝNE eklenir
-    ws.Rows(insAt & ":" & (insAt + n - 1)).Insert Shift:=xlDown
-    ' formül ve biçim bir üstteki veri satýrýndan; kopyalanan sabit deðerler silinir
-    ws.Range(ws.Rows(insAt - 1), ws.Rows(insAt + n - 1)).FillDown
-    Call ClearConstants(ws.Range(ws.Rows(insAt), ws.Rows(insAt + n)))
-    EnsureTemplateRows = totRow + n
-    AuditRecord "", "SYSTEM", totRow, ws.Name, "Þablon büyütüldü", "SYSTEM", "WARNING", 90, _
-                n & " satýr eklendi; toplam satýrý " & totRow & " -> " & (totRow + n), _
-                "Veri þablonun toplam satýrýna ulaþýyordu; formüllü satýr eklendi (toplamlar ve SUM baðlantýlarý kendiliðinden güncellendi)."
-End Function
 
 ' Aralýktaki SABÝT deðerleri siler, formüllere dokunmaz. Excel'in SpecialCells'i 8192'den fazla ayrýk alan
 ' olunca HATA verir (daðýnýk adet sütunlarýnda olur); eski sürümde bu hata yutulduðu için temizlik HÝÇ
@@ -1112,29 +1114,72 @@ NextCol:
     End If
 End Sub
 
-' Adet sütunlarýnda (veri satýrlarý) formül olmamalý: makro buraya sadece sayý yazar. Eski bir sürümün ya da
-' elle girilmiþ formüller adetleri bozar (aðýrlýk katlanýr). SIFIRDAN iþlemde silinir.
-Public Sub ClearQtyFormulas(ByVal ws As Worksheet, ByVal totRow As Long, ByVal qFirst As Long, ByVal qLast As Long)
-    Dim c As Long, fr As Range, n As Long, lastR As Long
+' VERÝ SINIRI: adet sütununda (veri satýrlarýndan sonra) ilk formül olan satýr. Ýki bloklu þablonda (ANGLE:
+' 5-1503 adet, 1505-3003 satýr aðýrlýklarý, 3004 toplam) 1504/1505'tir; tek bloklu þablonda toplam satýrý.
+' Formül bulunamazsa (blok silinmiþ olabilir) ve toplam satýrý 1504'ten aþaðýdaysa þablonun özgün 1503 satýr
+' tasarýmý korunur. 0 = sýnýr yok.
+Public Function TemplateDataLimit(ByVal ws As Worksheet, ByVal totRow As Long, ByVal qtyCol As Long) As Long
+    Dim scanEnd As Long, f As Range, ar As Range, lim As Long
     On Error Resume Next
-    If ws Is Nothing Then Exit Sub
-    lastR = totRow - 1
-    If totRow <= 5 Then lastR = ws.Cells(ws.Rows.Count, qFirst).End(xlUp).Row
-    If lastR < 5 Then Exit Sub
-    For c = qFirst To qLast
-        Err.Clear
-        Set fr = Nothing
-        Set fr = ws.Range(ws.Cells(5, c), ws.Cells(lastR, c)).SpecialCells(xlCellTypeFormulas)
-        If Err.Number = 0 Then
-            If Not fr Is Nothing Then
-                n = n + fr.Count
-                fr.ClearContents
+    If ws Is Nothing Then Exit Function
+    lim = totRow
+    scanEnd = totRow - 1
+    If totRow <= 5 Then scanEnd = 6000
+    If scanEnd >= 5 Then
+        Set f = ws.Range(ws.Cells(5, qtyCol), ws.Cells(scanEnd, qtyCol)).SpecialCells(xlCellTypeFormulas)
+        If Not f Is Nothing Then
+            For Each ar In f.Areas
+                If lim = 0 Or ar.Row < lim Then lim = ar.Row
+            Next ar
+        End If
+    End If
+    Err.Clear
+    If lim > 1504 And (lim = totRow Or totRow <= 5) Then lim = 1504
+    If lim <= 5 Then lim = 0
+    TemplateDataLimit = lim
+End Function
+
+' Ýki bloklu þablonda satýr aðýrlýðý bloðu (veri sýnýrýnýn altý ile toplam satýrý arasý, adet sütunlarý) saðlam mý?
+' Eski sürümler bu bloða veri / deðer yazýp formülleri silmiþti. Bloðun formülü her satýrda aynýdýr (R1C1):
+' saðlam bir sütundan alýnýr, formülü eksik sütunlara yazýlýr. Hiç saðlam sütun yoksa uyarý metni döner.
+Public Function RepairWeightBlock(ByVal ws As Worksheet, ByVal limRow As Long, ByVal totRow As Long, _
+                                  ByVal qFirst As Long, ByVal qLast As Long) As String
+    Dim c As Long, r1 As Long, r2 As Long, pat As String, f As Range, nFix As Long, nRows As Long
+    On Error Resume Next
+    If ws Is Nothing Or limRow <= 5 Or totRow <= 5 Then Exit Function
+    r1 = limRow + 1                                   ' veri sýnýrý satýrý (1504) ara toplam olabilir; blok altý
+    r2 = totRow - 1
+    If r2 - r1 < 2 Then Exit Function                 ' tek bloklu þablon: aðýrlýk bloðu yok
+    nRows = r2 - r1 + 1
+    For c = qLast To qFirst Step -1
+        If ws.Cells(r1, c).HasFormula And ws.Cells(r2, c).HasFormula Then
+            If ws.Cells(r1, c).FormulaR1C1 = ws.Cells(r2, c).FormulaR1C1 Then
+                pat = ws.Cells(r1, c).FormulaR1C1
+                Exit For
             End If
         End If
     Next c
-    Err.Clear
-    If n > 0 Then
-        AuditRecord "", "SYSTEM", 0, ws.Name, "Adet sütunlarýndaki formüller silindi", "SYSTEM", "WARNING", 90, _
-                    n & " hücre", "Adet sütunlarýnda formül vardý (eski sürüm / elle giriþ); adetleri ve aðýrlýðý bozuyordu."
+    If pat = "" Then
+        RepairWeightBlock = "[" & ws.Name & "] " & r1 & "-" & r2 & ". satýrlardaki aðýrlýk formülleri silinmiþ (aðýrlýklar 0 çýkar). " & _
+                            "Alt+F8 > Yedekten_Geri_Yukle ile iþlem öncesi yedeðe dönün ya da temiz þablon kullanýn." & vbCrLf
+        Exit Function
     End If
-End Sub
+    For c = qFirst To qLast
+        Err.Clear
+        Set f = Nothing
+        Set f = ws.Range(ws.Cells(r1, c), ws.Cells(r2, c)).SpecialCells(xlCellTypeFormulas)
+        If f Is Nothing Or Err.Number <> 0 Then
+            ws.Range(ws.Cells(r1, c), ws.Cells(r2, c)).FormulaR1C1 = pat
+            nFix = nFix + 1
+        ElseIf f.Count <> nRows Then
+            ws.Range(ws.Cells(r1, c), ws.Cells(r2, c)).FormulaR1C1 = pat
+            nFix = nFix + 1
+        End If
+    Next c
+    Err.Clear
+    If nFix > 0 Then
+        AuditRecord "", "SYSTEM", r1, ws.Name, "Aðýrlýk bloðu onarýldý", "SYSTEM", "WARNING", 90, _
+                    nFix & " sütunda " & r1 & "-" & r2 & ". satýrlara formül geri yazýldý (" & pat & ")", _
+                    "Eski bir sürüm bu satýrlara veri yazýp formülleri silmiþti. Aðýrlýklarý kontrol edin."
+    End If
+End Function

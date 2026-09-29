@@ -123,3 +123,8 @@ Public dictUnkSrc As Object
 
 ' --- SUM K'ya elle yazýlan baþlýk adlarý (dosya adý -> ad), KISA_ADLAR sayfasýndan ---
 Public dictShortNames As Object
+
+' --- Þablon veri sýnýrý (bu satýr ve altýna yazýlmaz; 0 = sýnýr yok) ---
+Public limitRowA As Long
+Public limitRowP As Long
+Public limitRowB As Long

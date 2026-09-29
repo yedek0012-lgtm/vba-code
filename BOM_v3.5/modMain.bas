@@ -431,15 +431,19 @@ End If
             ' eski sürümün sildiði toplam formülleri onarýlýr (onarýlamazsa uyarý)
             capTxt = capTxt & TotalsRowDamage(curWsAngle, totA, 9, 54) & TotalsRowDamage(curWsPlate, totP, 8, 53) & _
                      TotalsRowDamage(curWsBolt, totB, 6, 51)
-            ' formül sütunlarý (kg/m, birim aðýrlýk...) toplam satýrýna kadar dolu olsun
-            ' SIFIRDAN: adet sütunlarýnda formül kalmasýn (aðýrlýðý katlýyordu)
-            If Not appendMode Or batchNum > 1 Then
-                Call ClearQtyFormulas(curWsAngle, totA, 9, 54)
-                Call ClearQtyFormulas(curWsPlate, totP, 8, 53)
-            End If
-            ' sadece þablonun kendi formül sütunlarý (kg/m, birim aðýrlýk...); makronun yazdýðý ve adet sütunlarý hariç
-            Call FillFormulaColumns(curWsAngle, totA, "|1|2|3|5|6|57|58|59|", 9, 54)
-            Call FillFormulaColumns(curWsPlate, totP, "|1|2|3|4|5|6|56|57|58|", 8, 53)
+        End If
+        ' VERÝ SINIRI: adet sütunundaki ilk formül satýrý (ANGLE: 5-1503 adet, 1505-3003 satýr aðýrlýklarý, 3004 toplam).
+        ' Makro bu satýra ve altýna ASLA yazmaz; aþan satýrlar kapasite uyarýsý olur.
+        limitRowA = TemplateDataLimit(curWsAngle, totA, 9)
+        limitRowP = TemplateDataLimit(curWsPlate, totP, 8)
+        limitRowB = TemplateDataLimit(curWsBolt, totB, 6)
+        If Not isDryRun Then
+            ' aðýrlýk bloðu (iki bloklu þablon) bozulmuþsa saðlam sütundan onarýlýr; onarýlamazsa uyarý
+            capTxt = capTxt & RepairWeightBlock(curWsAngle, limitRowA, totA, 9, 54) & RepairWeightBlock(curWsPlate, limitRowP, totP, 8, 53)
+            ' þablonun kendi formül sütunlarý (kg/m, birim aðýrlýk...) veri alanýnýn sonuna kadar;
+            ' makronun yazdýðý ve adet sütunlarý hariç
+            Call FillFormulaColumns(curWsAngle, limitRowA, "|1|2|3|5|6|57|58|59|", 9, 54)
+            Call FillFormulaColumns(curWsPlate, limitRowP, "|1|2|3|4|5|6|56|57|58|", 8, 53)
         End If
 
         ReDim bufAngle(1 To 5000, 1 To 70)
@@ -450,7 +454,7 @@ End If
         If appendMode And batchNum = 1 Then
             Dim rAInit As Long, rPInit As Long, vAInit As Variant, vPInit As Variant
             Dim rInit As Long, cInit As Long
-            rAInit = LastDataRow(curWsAngle, 2, totA)
+            rAInit = LastDataRow(curWsAngle, 2, limitRowA)
             If rAInit >= 5 Then
                 vAInit = curWsAngle.Range(curWsAngle.Cells(5, 1), curWsAngle.Cells(rAInit, 65)).Value2
                 For rInit = 1 To UBound(vAInit, 1)
@@ -460,7 +464,7 @@ End If
                 Next rInit
             End If
             
-            rPInit = LastDataRow(curWsPlate, 2, totP)
+            rPInit = LastDataRow(curWsPlate, 2, limitRowP)
             If rPInit >= 5 Then
                 vPInit = curWsPlate.Range(curWsPlate.Cells(5, 1), curWsPlate.Cells(rPInit, 65)).Value2
                 For rInit = 1 To UBound(vPInit, 1)
@@ -497,16 +501,16 @@ End If
             currentColAngle = 9 + existingFileCount
             currentColPlate = 8 + existingFileCount
             currentColBolt = 6 + existingFileCount
-            targetRowAngle = LastDataRow(curWsAngle, 2, totA) + 1
-            targetRowPlate = LastDataRow(curWsPlate, 2, totP) + 1
-            targetRowBolt = LastDataRow(curWsBolt, 2, totB) + 1
+            targetRowAngle = LastDataRow(curWsAngle, 2, limitRowA) + 1
+            targetRowPlate = LastDataRow(curWsPlate, 2, limitRowP) + 1
+            targetRowBolt = LastDataRow(curWsBolt, 2, limitRowB) + 1
             If targetRowAngle < 5 Then targetRowAngle = 5
             If targetRowPlate < 5 Then targetRowPlate = 5
             If targetRowBolt < 5 Then targetRowBolt = 5
             sumRow = GetNextOutputRow(curWsSum, 1, 5)
             ' CIVATA LÝSTESÝ TEK PARÇA: mevcut cývatalar okunur, liste yeni dosyalarla birlikte baþtan dizilir
             If Not isDryRun Then
-                Call ImportExistingBolts(curWsBolt, currentColBolt - 1, totB)
+                Call ImportExistingBolts(curWsBolt, currentColBolt - 1, limitRowB)
                 ' sayfa burada DEÐÝL, dosyalar iþlendikten sonra (diziliþ öncesi) temizlenir:
                 ' iþlem yarýda kalýrsa mevcut cývata listesi yerinde kalsýn
                 boltSheetPending = True
@@ -749,12 +753,6 @@ End If
             Next bKey
 End If
         
-        ' Veri toplam satýrýna ulaþýyorsa þablon, toplam satýrýnýn üstüne formüllü satýr eklenerek büyütülür
-        If Not isDryRun Then
-            totA = EnsureTemplateRows(curWsAngle, totA, targetRowAngle - 1)
-            totP = EnsureTemplateRows(curWsPlate, totP, targetRowPlate - 1)
-            totB = EnsureTemplateRows(curWsBolt, totB, targetRowBolt - 1)
-        End If
         Call FlushAllBuffers(curWsAngle, curWsPlate, curWsBolt, curWsSum, targetRowAngle, targetRowPlate, targetRowBolt, sumRow, currentColAngle, currentColPlate, currentColBolt)
         If Not isDryRun Then
             ' þablon kapasitesi: ANGLE H (UNIT WEIGHT), PLATE G (UNIT WEIGHT) formülleri yeterli mi?
@@ -1448,4 +1446,35 @@ Sub Gecmisi_Goster()
     ws.Visible = xlSheetVisible
     ws.Activate
     Call ProtectAfterMacro
+End Sub
+
+' YEDEKTEN GERÝ YÜKLE: ANGLE / PLATE / BOLTS&WASHER / SUM seçilen yedekten (YEDEK klasörü) geri alýnýr.
+' Þablon bozulduysa (formüller silindi, adetler karýþtý) iþlem öncesi otomatik yedeðe dönmek için.
+Sub Yedekten_Geri_Yukle()
+    Dim fd As Object, p As String, folder As String, ok As Boolean
+    On Error Resume Next
+    Call LoadParameters
+    folder = prmBackupFolder
+    If folder = "" Then
+        If ThisWorkbook.Path <> "" Then folder = ThisWorkbook.Path & "\YEDEK" Else folder = Environ$("USERPROFILE") & "\Documents\BOM_YEDEK"
+    End If
+    Set fd = Application.FileDialog(3)            ' msoFileDialogFilePicker
+    fd.Title = "Geri yüklenecek YEDEK dosyasýný seçin (dosya adýndaki tarih = iþlemden önceki an)"
+    fd.InitialFileName = folder & "\"
+    fd.AllowMultiSelect = False
+    If fd.Show <> -1 Then Exit Sub
+    p = fd.SelectedItems(1)
+    On Error GoTo 0
+    If MsgBox("ANGLE / PLATE / BOLTS&WASHER / SUM þu yedekten geri yüklenecek:" & vbCrLf & p & vbCrLf & vbCrLf & _
+              "Bu sayfalardaki þimdiki içerik kaybolur. Devam edilsin mi?", vbYesNo + vbExclamation, "Yedekten geri yükle") = vbNo Then Exit Sub
+    Application.ScreenUpdating = False
+    Call UnprotectForMacro
+    ok = RestoreOutputsFromBackup(p)
+    Call ProtectAfterMacro
+    Application.ScreenUpdating = True
+    If ok Then
+        MsgBox "Geri yüklendi. Listeyi 'Eklemeye Baþla' ile yeniden iþleyebilirsiniz.", vbInformation
+    Else
+        MsgBox "Yedek geri yüklenemedi: " & p, vbCritical
+    End If
 End Sub
