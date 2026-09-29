@@ -994,13 +994,34 @@ Public Function LastDataRow(ByVal ws As Worksheet, ByVal keyCol As Long, ByVal t
     LastDataRow = r
 End Function
 
-' Toplam satýrýnda formül kalmamýþsa (önceki bir çalýþtýrma üzerine yazmýþ) uyarý metni
-Public Function TotalsRowDamage(ByVal ws As Worksheet, ByVal totRow As Long, ByVal qtyCol As Long) As String
+' Toplam satýrý onarýmý: eski sürüm (Liste Üstüne Ekle) toplam satýrýný veri sanýp üzerine deðer yazýyordu.
+' Ayný satýrda formülü saðlam kalan bir adet sütunu (henüz dosya yazýlmamýþ saðdaki sütunlar) varsa onun formülü
+' (R1C1, sütuna göre göreli) formülü silinmiþ hücrelere yazýlýr. Onarýlamazsa uyarý metni döner.
+Public Function TotalsRowDamage(ByVal ws As Worksheet, ByVal totRow As Long, ByVal qFirst As Long, ByVal qLast As Long) As String
+    Dim c As Long, pat As String, n As Long
     On Error Resume Next
-    If totRow <= 5 Then Exit Function
-    If Not ws.Cells(totRow, qtyCol).HasFormula Then
-        TotalsRowDamage = "[" & ws.Name & "] " & totRow & ". satýrdaki TOPLAM formülleri silinmiþ (SUM aðýrlýklarý 0 çýkar). " & _
+    If ws Is Nothing Or totRow <= 5 Then Exit Function
+    For c = qLast To qFirst Step -1
+        If ws.Cells(totRow, c).HasFormula Then
+            pat = ws.Cells(totRow, c).FormulaR1C1
+            Exit For
+        End If
+    Next c
+    If pat = "" Then
+        TotalsRowDamage = "[" & ws.Name & "] " & totRow & ". satýrdaki TOPLAM formülleri silinmiþ ve onarýlamadý (SUM aðýrlýklarý 0 çýkar). " & _
                           "Bu sayfayý temiz þablondan (BOS BOM) yeniden alýn." & vbCrLf
+        Exit Function
+    End If
+    For c = qFirst To qLast
+        If Not ws.Cells(totRow, c).HasFormula Then
+            ws.Cells(totRow, c).FormulaR1C1 = pat
+            n = n + 1
+        End If
+    Next c
+    If n > 0 Then
+        AuditRecord "", "SYSTEM", totRow, ws.Name, "Toplam satýrý onarýldý", "SYSTEM", "WARNING", 90, _
+                    n & " hücreye toplam formülü geri yazýldý (" & pat & ")", _
+                    "Önceki bir çalýþtýrma toplam satýrýnýn üzerine yazmýþtý; ayný satýrdaki saðlam formül kopyalandý. Aðýrlýklarý kontrol edin."
     End If
 End Function
 
