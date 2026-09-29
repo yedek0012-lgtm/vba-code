@@ -64,6 +64,15 @@ Public Sub UnprotectForMacro()
     On Error GoTo 0
 End Sub
 
+' Tek çýktý sayfasýný (hücre kilitlerine dokunmadan) yeniden korur - Filtre_Ac_Kapa için
+Public Sub ReprotectOutputSheet(ByVal ws As Worksheet)
+    On Error Resume Next
+    ws.Protect Password:=Pwd(), DrawingObjects:=True, Contents:=True, Scenarios:=True, _
+               UserInterfaceOnly:=True, AllowFormattingCells:=True, AllowFormattingColumns:=True, _
+               AllowFormattingRows:=True, AllowFiltering:=True
+    ws.EnableSelection = xlNoRestrictions
+End Sub
+
 Public Sub ProtectAfterMacro()
     Dim ws As Worksheet, fr As Range, p As String
     On Error Resume Next

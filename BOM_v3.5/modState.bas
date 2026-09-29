@@ -117,3 +117,9 @@ Public dictPanel As Object         ' "SAYFA|satýr" -> dosya sonuçlarý
 Public pnlBoltFallback As Long     ' BOLT-LIBRARY'de olmayan cývata/somun/pul (makro aðýrlýðý)
 Public pnlAngleZero As Long        ' ANGLE'da aðýrlýðý 0 hesaplanan satýr
 Public curInputWb As Workbook      ' Excel motorunun açtýðý kaynak kitap (hata olursa kapatýlýr)
+
+' --- OGRENME kaynaklarý: parça adý -> Array(geçtiði yer sayýsý, yer listesi, ilk dosya yolu, ilk sayfa!hücre) ---
+Public dictUnkSrc As Object
+
+' --- SUM K'ya elle yazýlan baþlýk adlarý (dosya adý -> ad), KISA_ADLAR sayfasýndan ---
+Public dictShortNames As Object

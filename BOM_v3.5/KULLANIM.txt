@@ -7,7 +7,7 @@ sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro for
  - SUM sayfasındaki düğmeler:
      Eklemeye Başla     : şablonu temizler, seçilen listeleri SIFIRDAN işler.
      Liste Üstüne Ekle  : mevcut sonuçların üstüne yeni listeleri ekler (yeni dosya sütunları açılır).
-     Temizle            : sonuçları ve AUDIT / FEEDBACK / OGRENME sayfalarını temizler (formüller korunur).
+     Temizle            : sonuçları ve AUDIT / OGRENME / SONUC sayfalarını temizler (formüller korunur).
  - Açılan pencerede ek yüzde (cıvata fire) ve "birleştir" (aynı poz farklı dosyalarda tek satır) seçilir.
  - Dosya seçme penceresinde birden fazla dosya seçebilirsiniz: .xlsx .xls .xlsm .xlsb .csv .xsr .txt .pdf
  - PDF: metin tabanlı (Tekla / CAD çıktısı) PDF'ler doğrudan okunur. Taranmış (resim) PDF okunamaz.
@@ -30,15 +30,24 @@ sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro for
    MATERIAL (C) ve UNIT WEIGHT (E) şablon formülüyle BOLT-LIBRARY'den gelir; makro bu formüllere dokunmaz.
    KIRMIZI KALIN yazı = kod BOLT-LIBRARY'de yok (veya formülün aralığı dışında); değeri makro yazdı
    (ağırlıksa tahmin). Kodu kütüphaneye ekleyin; sonraki SIFIRDAN çalıştırmada formül geri gelir.
+ - BAŞLIKLAR (ANGLE / PLATE / BOLTS 2. satır): SUM A'daki dosya adı. Farklı bir ad isterseniz SUM K'ya yazın
+   (başlık hücresine değil; o formül ve korumalı). K'ya yazılan ad sonraki çalıştırmalarda da korunur;
+   K'yı silerseniz başlık tekrar dosya adı olur.
  - SUM: her dosyanın şablon ağırlığı (C+D), listedeki ağırlık (H) ve farkı (J). Tolerans dışı fark kırmızıdır
    ve işlem sonunda mesajda listelenir.
    L = ADET FARKI (Excel / CSV / PDF): kaynaktaki parça adedi - (şablona yazılan + cıvata + somun/pul seti
    + tanınmayan). 0 olmalı. Kırmızı = adet eksik/fazla ya da bazı satırlarda adet okunamadı (mesajda ve AUDIT'te).
+ - FİLTRE: sayfalar formüller için korumalı; açılır listelerle filtreleme çalışır. Filtreyi açıp kapatmak için
+   Ctrl+Shift+L (ya da Alt+F8 > Filtre_Ac_Kapa). Kısayol için ThisWorkbook kodunun güncel olması gerekir.
+ - GECMIS: her işlemin kaydı (tarih, kullanıcı, dosyalar, REV, yedek yolu). Sekmelerde gizlidir;
+   görmek için Alt+F8 > Gecmisi_Goster. Eski FEEDBACK sayfası kaldırıldı (boştu).
  - AUDIT: her satırın nasıl okunduğu (EXACT / WARNING / ERROR / SKIPPED). Satır numarası müşteri dosyasındaki
    satıra götürür. Sorun ararken ilk bakılacak yer.
 
 3) TANINMAYAN PARÇALAR (OGRENME sayfası)
- Makro tanımadığı parçaları OGRENME sayfasında listeler. Her satır için:
+ Makro tanımadığı parçaları OGRENME sayfasında listeler. NEREDE (B) sütunu parçanın geçtiği her yeri
+ gösterir (dosya / sayfa / satır / poz; birden çok yerdeyse "[5 yerde]"). Hücreye tıklayınca kaynak dosya
+ ilk geçtiği satırda açılır. Her satır için:
   a) TÜR seçin:
        ANGLE         profil / köşebent   -> MALZEME KODU, MALZEME CİNSİ, kg/m, YÜZEY ALAN
        PLATE         plaka / ızgara       -> KALINLIK (mm), GENİŞLİK (mm)  (boy listeden okunur)

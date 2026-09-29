@@ -6,3 +6,19 @@ Private Sub Workbook_Open()
     On Error Resume Next
     Application.Run "BOM_OnOpen"
 End Sub
+
+' Ctrl+Shift+L: korumalı sayfalarda filtreyi aç / kapat (sadece bu kitap etkinken)
+Private Sub Workbook_Activate()
+    On Error Resume Next
+    Application.Run "BOM_KeysOn"
+End Sub
+
+Private Sub Workbook_Deactivate()
+    On Error Resume Next
+    Application.Run "BOM_KeysOff"
+End Sub
+
+Private Sub Workbook_BeforeClose(Cancel As Boolean)
+    On Error Resume Next
+    Application.Run "BOM_KeysOff"
+End Sub

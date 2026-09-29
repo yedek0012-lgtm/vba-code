@@ -31,7 +31,7 @@ Option Explicit
 ' 16) Parametreler AYARLAR!F:H bloðunda (kod açmadan deðiþtirilir).
 ' 17) Ýþlem öncesi otomatik yedek, REV/DATE otomatik, GECMIS sayfasý, AUDIT çalýþma bilgisi.
 ' 18) AUDIT satýr numarasý = köprü (müþteri dosyasýnda ilgili satýra gider).
-' 19) Temizle düðmesi AUDIT, FEEDBACK, OGRENME sayfalarýný da temizler.
+' 19) Temizle düðmesi AUDIT, OGRENME, SONUC sayfalarýný da temizler.
 ' 20) Üstüne ekle modunda SUM/BOLTS eski satýrlarý korunur.
 ' 12) FUBL (Futterblech, ör: "FUBL 18X10") Futterring gibi özel bölüme yazýlýr.
 ' =========================================================================
@@ -231,9 +231,11 @@ End If
     dictProfileLib.CompareMode = 1
     dictSelectedFiles.CompareMode = 1
     dictFeedback.CompareMode = 1
+    Set dictUnkSrc = Nothing
     Call LoadLearnedItems
     Set dictQtyCheck = Nothing
     Call PanelReset
+    Call CaptureShortNames          ' SUM K'daki elle yazýlmýþ baþlýk adlarý (temizlikten önce)
     
     If Not wsBoltLib Is Nothing Then
         For rLib = 3 To wsBoltLib.Cells(wsBoltLib.Rows.Count, 1).End(xlUp).Row
@@ -681,6 +683,9 @@ End If
             If reconPrev = 0 And reconRow > 0 Then reconSheet = curWsSum.Name
             qtyTxt = qtyTxt & CollectQtyCheck(curWsSum, qtyBadN)
             Call UpdateFileHeaders(curWsSum, curWsAngle, curWsPlate, curWsBolt)
+            ' þablonda satýr satýr farklý biçim olabilir: yazýlan sütunlar tek tip yazý tipine getirilir
+            Call NormalizeDataFonts(curWsAngle, targetRowAngle - 1, Array(1, 2, 3, 5, 6, 57), 9, currentColAngle - 1)
+            Call NormalizeDataFonts(curWsPlate, targetRowPlate - 1, Array(1, 2, 3, 4, 5, 6, 56), 8, currentColPlate - 1)
             Call CheckLibraryHealth(curWsAngle, targetRowAngle - 1)
         End If
         batchNum = batchNum + 1
@@ -699,14 +704,16 @@ End If
     logText = logText & "Baþarýyla Ýþlenen Dosya: " & vfCount & vbCrLf
     logText = logText & "Þablona Ýþlenen Toplam Poz: " & totalProcessed & vbCrLf
     
+    ' Eski sürümden kalan boþ FEEDBACK sayfasý (hiçbir þey yazýlmýyordu; yerini SONUC ve OGRENME aldý) silinir
     On Error Resume Next
     Set wsFeed = ThisWorkbook.Sheets("FEEDBACK")
-    On Error GoTo 0
-    If wsFeed Is Nothing Then
-        Set wsFeed = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
-        wsFeed.Name = "FEEDBACK"
+    If Not wsFeed Is Nothing Then
+        Application.DisplayAlerts = False
+        wsFeed.Delete
+        Application.DisplayAlerts = True
     End If
-    wsFeed.Cells.Clear
+    Set wsFeed = Nothing
+    On Error GoTo 0
     
     If isDryRun Then
         finalMsg = "TEST (DRY-RUN) BAÞARIYLA TAMAMLANDI!" & vbCrLf & vbCrLf & _
@@ -899,11 +906,12 @@ Sub Can_Temizleyici()
     
     If wsAngle Is Nothing Or wsPlate Is Nothing Or wsBolt Is Nothing Or wsSum Is Nothing Then Exit Sub
     If MsgBox("Gömülü formülleriniz ve AZ sütunu korunarak veriler temizlenecek." & vbCrLf & _
-              "AUDIT, FEEDBACK, OGRENME ve SONUC sayfalarý da temizlenecek. Onaylýyor musunuz?", vbYesNo + vbQuestion, "Can Temizleyici") = vbNo Then Exit Sub
+              "AUDIT, OGRENME ve SONUC sayfalarý da temizlenecek. Onaylýyor musunuz?", vbYesNo + vbQuestion, "Can Temizleyici") = vbNo Then Exit Sub
     
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     Call UnprotectForMacro
+    Call CaptureShortNames          ' elle yazýlan baþlýk adlarý temizlikte kaybolmasýn
     Call CleanTemplateRanges(wsAngle, wsPlate, wsBolt, wsSum)
     Call ClearReportSheets
     ' REV / DATE sýfýrla
@@ -915,7 +923,7 @@ Sub Can_Temizleyici()
     
     wsSum.Activate
     wsSum.Range("A5").Select
-    MsgBox "Temizlik tamamlandý! AUDIT, FEEDBACK ve OGRENME sayfalarý da temizlendi, REV sýfýrlandý." & vbCrLf & _
+    MsgBox "Temizlik tamamlandý! AUDIT, OGRENME ve SONUC sayfalarý da temizlendi, REV sýfýrlandý." & vbCrLf & _
            "AZ sütunundaki formülünüz ve þablon formülleriniz korundu.", vbInformation, "Can Temizleyici"
 End Sub
 
@@ -1225,6 +1233,45 @@ Public Sub BOM_OnOpen()
     Call ProtectAfterMacro
 End Sub
 
+' Ctrl+Shift+L (Excel'in filtre kýsayolu) sadece BU kitap etkinken Filtre_Ac_Kapa'ya baðlanýr;
+' ThisWorkbook > Workbook_Activate / Workbook_Deactivate çaðýrýr (ThisWorkbook_kodu.txt).
+Public Sub BOM_KeysOn()
+    On Error Resume Next
+    Application.OnKey "^+l", "'" & ThisWorkbook.Name & "'!Filtre_Ac_Kapa"
+End Sub
+
+Public Sub BOM_KeysOff()
+    On Error Resume Next
+    Application.OnKey "^+l"
+End Sub
+
+' FÝLTRE AÇ / KAPAT (Ctrl+Shift+L ya da Alt+F8). Çýktý sayfalarý formüller için korumalý olduðundan
+' Excel filtreyi açýp kapatmaya izin vermez (açýlýr listeler çalýþýr). Bu makro korumayý kýsa süre açar,
+' 4. satýrdaki baþlýklardan filtreyi açar / kapatýr ve sayfayý tekrar korur.
+' Baþka bir çalýþma kitabýnda Excel'in normal filtre davranýþý uygulanýr.
+Sub Filtre_Ac_Kapa()
+    Dim ws As Worksheet, lastR As Long, lastC As Long
+    On Error Resume Next
+    Set ws = ActiveSheet
+    If ws Is Nothing Then Exit Sub
+    If Not (ActiveWorkbook Is ThisWorkbook) Or Not IsOutputSheet(ws.Name) Then
+        If ws.AutoFilterMode Then ws.AutoFilterMode = False Else Selection.AutoFilter
+        Exit Sub
+    End If
+    Call UnprotectSheet(ws)
+    If ws.AutoFilterMode Then
+        ws.AutoFilterMode = False                      ' filtre kalkar, gizli satýrlar görünür
+    Else
+        lastR = ws.Cells(ws.Rows.Count, 2).End(xlUp).Row
+        If ws.Cells(ws.Rows.Count, 1).End(xlUp).Row > lastR Then lastR = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+        If lastR < 5 Then lastR = 5
+        lastC = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
+        If lastC < 2 Then lastC = 2
+        ws.Range(ws.Cells(4, 1), ws.Cells(lastR, lastC)).AutoFilter
+    End If
+    Call ReprotectOutputSheet(ws)
+End Sub
+
 ' Düðmeler "Module6.Can_Temizleyici" gibi ESKÝ modül adýyla atanmýþsa,
 ' modül adýný atýp makroyu yeniden baðlar (dosya her açýldýðýnda kontrol edilir).
 Public Sub FixButtonMacros()
@@ -1299,3 +1346,18 @@ Sub Kutuphane_Temizle()
     MsgBox n & " satýr silindi ve SILINEN_KAYITLAR sayfasýna yedeklendi.", vbInformation, "Kütüphane Temizle"
 End Sub
 
+' GECMIS (çalýþtýrma kaydý) sekmelerde gizli tutulur; görmek için Alt+F8 > Gecmisi_Goster
+Sub Gecmisi_Goster()
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("GECMIS")
+    On Error GoTo 0
+    If ws Is Nothing Then
+        MsgBox "Henüz kayýt yok (GECMIS sayfasý ilk iþlemde oluþur).", vbInformation
+        Exit Sub
+    End If
+    Call UnprotectForMacro
+    ws.Visible = xlSheetVisible
+    ws.Activate
+    Call ProtectAfterMacro
+End Sub

@@ -740,61 +740,28 @@ End Function
 
 ' =========================================================================
 ' DOSYA BAÞLIKLARI (ANGLE / PLATE / BOLTS 2. satýr)
-' Dar dikey sütunlara uzun dosya adý sýðmýyor. Tüm dosyalarda ORTAK olan parçalar
-' atýlýr, sadece farklý kýsým gösterilir:
-'   "P-0641482-A-23-Z175 --- D-2-E-2017.2_PC_WA160WAZ-42,0-30,0 ESH"  ->  "Z175 ESH"
-' Kýsa adlar SUM!K sütununa yazýlýr; tam ad SUM!A'da kalýr.
+' Baþlýk = SUM!K doluysa K (kullanýcýnýn yazdýðý ad), boþsa SUM!A (tam dosya adý).
+' K'ya elle yazýlan adlar KISA_ADLAR'da saklanýr ve sonraki çalýþtýrmalarda geri yazýlýr.
 ' =========================================================================
 Public Sub UpdateFileHeaders(ByVal wsS As Worksheet, ByVal wsA As Worksheet, ByVal wsP As Worksheet, ByVal wsB As Worksheet)
-    Dim lastR As Long, n As Long, i As Long, c As Long, k As Long
-    Dim names() As String, toks() As Variant, cnt As Object, seen As Object, used As Object, t As Variant
-    Dim shortNm As String, sumRef As String
+    ' Baþlýk adý: SUM K boþsa SUM A'daki tam dosya adý; K'ya elle yazýlan ad korunur (KISA_ADLAR).
+    ' (Eskiden makro K'ya otomatik kýsaltma yazýyordu; kýsaltma adlarý bozduðu için kaldýrýldý.)
+    Dim lastR As Long, r As Long, c As Long, k As Long, nm As String, sumRef As String
     On Error Resume Next
     lastR = wsS.Cells(wsS.Rows.Count, 1).End(xlUp).Row
-    If lastR < 5 Then Exit Sub
-    n = lastR - 4
-    ReDim names(1 To n)
-    ReDim toks(1 To n)
-    Set cnt = CreateObject("Scripting.Dictionary")
-    cnt.CompareMode = 1
-
-    For i = 1 To n
-        names(i) = Trim$(wsS.Cells(i + 4, 1).Text)
-        toks(i) = FileNameTokens(names(i))
-        Set seen = CreateObject("Scripting.Dictionary")
-        seen.CompareMode = 1
-        For Each t In toks(i)
-            If Not seen.Exists(t) Then
-                seen.Add t, 1
-                cnt(t) = cnt(t) + 1
-            End If
-        Next t
-    Next i
-
-    Set used = CreateObject("Scripting.Dictionary")
-    used.CompareMode = 1
-    wsS.Range("K4").Value = "Kýsa Ad (baþlýk)"
+    wsS.Range("K4").Value = "Baþlýk adý (boþ = dosya adý)"
     wsS.Range("K4").Font.Bold = True
     wsS.Range("K4").HorizontalAlignment = xlCenter
-    For i = 1 To n
-        shortNm = ""
-        If names(i) <> "" Then
-            If n >= 2 Then
-                For Each t In toks(i)
-                    If cnt(t) < n Then
-                        If shortNm <> "" Then shortNm = shortNm & " "
-                        shortNm = shortNm & t
-                    End If
-                Next t
+    If lastR >= 5 Then
+        For r = 5 To lastR
+            nm = Trim$(wsS.Cells(r, 1).Text)
+            wsS.Cells(r, 11).Value = ""
+            If nm <> "" And Not dictShortNames Is Nothing Then
+                If dictShortNames.Exists(nm) Then wsS.Cells(r, 11).Value = dictShortNames(nm)
             End If
-            If shortNm = "" Then shortNm = names(i)
-            If Len(shortNm) > 30 Then shortNm = Left$(shortNm, 30)
-            If used.Exists(shortNm) Then shortNm = shortNm & " #" & i
-            used(shortNm) = 1
-        End If
-        wsS.Cells(i + 4, 11).Value = shortNm
-    Next i
-    wsS.Range("K5:K" & lastR).HorizontalAlignment = xlCenter
+        Next r
+        wsS.Range("K5:K" & lastR).HorizontalAlignment = xlCenter
+    End If
 
     ' ANGLE 2. satýr: kýsa ad varsa onu göster (PLATE ve BOLTS zaten ANGLE'a baðlý)
     sumRef = "'" & Replace(wsS.Name, "'", "''") & "'!"
@@ -807,15 +774,71 @@ Public Sub UpdateFileHeaders(ByVal wsS As Worksheet, ByVal wsA As Worksheet, ByV
     If Not wsB Is Nothing Then Call FitHeaderCells(wsB.Range(wsB.Cells(2, 6), wsB.Cells(2, 51)))
 End Sub
 
+' Veri satýrlarýnýn yazý tipini sütun sütun tek tipe getirir (þablonda satýrlar farklý biçimlenmiþ olabilir).
+' Her sütunda ilk 100 satýrda en çok kullanýlan yazý tipi / boy / kalýnlýk bütün veri satýrlarýna uygulanýr;
+' adet sütunlarý (qFirst..qLast) ilk adet sütununun biçimini alýr. Renklere ve formüllü sütunlara dokunulmaz.
+Public Sub NormalizeDataFonts(ByVal ws As Worksheet, ByVal lastRow As Long, ByVal cols As Variant, _
+                              ByVal qFirst As Long, ByVal qLast As Long)
+    Dim i As Long
+    On Error Resume Next
+    If ws Is Nothing Or lastRow < 5 Then Exit Sub
+    For i = LBound(cols) To UBound(cols)
+        Call ApplyColumnFontMode(ws, CLng(cols(i)), CLng(cols(i)), CLng(cols(i)), lastRow)
+    Next i
+    If qLast >= qFirst Then Call ApplyColumnFontMode(ws, qFirst, qFirst, qLast, lastRow)
+End Sub
+
+Private Sub ApplyColumnFontMode(ByVal ws As Worksheet, ByVal sampleCol As Long, ByVal c1 As Long, ByVal c2 As Long, ByVal lastRow As Long)
+    Dim r As Long, rEnd As Long, key As String, best As String, cnt As Object, k As Variant, pr As Variant
+    On Error Resume Next
+    Set cnt = CreateObject("Scripting.Dictionary")
+    rEnd = lastRow
+    If rEnd > 104 Then rEnd = 104
+    For r = 5 To rEnd
+        With ws.Cells(r, sampleCol).Font
+            key = .Name & "|" & .Size & "|" & CStr(.Bold)
+        End With
+        cnt(key) = cnt(key) + 1
+    Next r
+    For Each k In cnt.Keys
+        If best = "" Then best = CStr(k)
+        If cnt(k) > cnt(best) Then best = CStr(k)
+    Next k
+    pr = Split(best, "|")
+    If UBound(pr) <> 2 Then Exit Sub
+    With ws.Range(ws.Cells(5, c1), ws.Cells(lastRow, c2)).Font
+        .Name = pr(0)
+        .Size = CDbl(pr(1))
+        .Bold = (pr(2) = "True")
+    End With
+End Sub
+
 ' Dosya adý baþlýklarý (dikey yazý): yazý KÜÇÜLTÜLMEZ (þablonun yazý boyu kalýr, SUM'daki gibi);
 ' en uzun ad sýðmýyorsa baþlýk satýrý (2) uzatýlýr. Önceki sürümün "sýðdýrmak için küçült" ayarý kaldýrýlýr.
 Private Sub FitHeaderCells(ByVal rng As Range)
     Dim cel As Range, maxLen As Long, fs As Double, need As Double, have As Double
     On Error Resume Next
+    Dim key As String, best As String, cnt As Object, k As Variant, pr As Variant
+    ' Baþlýklar tek tip: bu satýrda en çok kullanýlan yazý tipi / boyu / kalýnlýk hepsine uygulanýr
+    Set cnt = CreateObject("Scripting.Dictionary")
+    For Each cel In rng.Cells
+        key = cel.Font.Name & "|" & cel.Font.Size & "|" & CStr(cel.Font.Bold)
+        cnt(key) = cnt(key) + 1
+    Next cel
+    For Each k In cnt.Keys
+        If best = "" Then best = CStr(k)
+        If cnt(k) > cnt(best) Then best = CStr(k)
+    Next k
+    pr = Split(best, "|")
     For Each cel In rng.Cells
         With cel.MergeArea
             .ShrinkToFit = False
             .WrapText = False
+            If UBound(pr) = 2 Then
+                .Font.Name = pr(0)
+                .Font.Size = CDbl(pr(1))
+                .Font.Bold = (pr(2) = "True")
+            End If
         End With
         If Len(cel.Text) > maxLen Then maxLen = Len(cel.Text)
     Next cel
@@ -835,16 +858,6 @@ Private Sub FitHeaderCells(ByVal rng As Range)
     End If
 End Sub
 
-Public Function FileNameTokens(ByVal s As String) As Variant
-    Dim t As String
-    t = s
-    t = Replace(t, "_", " ")
-    t = Replace(t, "-", " ")
-    t = Replace(t, "(", " ")
-    t = Replace(t, ")", " ")
-    t = Application.WorksheetFunction.Trim(t)
-    FileNameTokens = Split(t, " ")
-End Function
 
 ' Birleþtirilmiþ hücre yüzünden toplu temizleme hata verirse hücre hücre temizler
 Public Sub SafeClear(ByVal rng As Range)
@@ -863,3 +876,51 @@ Public Sub SafeClear(ByVal rng As Range)
     Next cel
 End Sub
 
+' SUM K'ya elle yazýlan baþlýk adlarýný (dosya adý -> ad) kalýcý saklar: çok gizli KISA_ADLAR sayfasý.
+' Her çalýþtýrmanýn BAÞINDA (temizlikten önce) çaðrýlýr. K boþaltýlan dosyanýn kaydý silinir.
+' Sayfa ilk kez oluþturuluyorsa K'daki deðerler eski sürümün otomatik kýsaltmalarýdýr: alýnmaz.
+Public Sub CaptureShortNames()
+    Dim ws As Worksheet, st As Worksheet, r As Long, lastR As Long, nm As String, kv As String
+    Dim firstTime As Boolean, k As Variant
+    On Error Resume Next
+    Set dictShortNames = CreateObject("Scripting.Dictionary")
+    dictShortNames.CompareMode = 1
+    Set st = ThisWorkbook.Sheets("KISA_ADLAR")
+    If st Is Nothing Then
+        firstTime = True
+        Set st = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        If st Is Nothing Then Exit Sub
+        st.Name = "KISA_ADLAR"
+        st.Visible = xlSheetVeryHidden
+    End If
+    lastR = st.Cells(st.Rows.Count, 1).End(xlUp).Row
+    For r = 1 To lastR
+        nm = Trim$(st.Cells(r, 1).Text)
+        If nm <> "" Then dictShortNames(nm) = CStr(st.Cells(r, 2).Value)
+    Next r
+    If Not firstTime Then
+        For Each ws In ThisWorkbook.Worksheets
+            If UCase$(ws.Name) = "SUM" Or UCase$(ws.Name) Like "SUM_P#*" Then
+                lastR = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+                For r = 5 To lastR
+                    nm = Trim$(ws.Cells(r, 1).Text)
+                    kv = Trim$(ws.Cells(r, 11).Text)
+                    If nm <> "" Then
+                        If kv <> "" And kv <> nm Then
+                            dictShortNames(nm) = kv
+                        ElseIf dictShortNames.Exists(nm) Then
+                            dictShortNames.Remove nm
+                        End If
+                    End If
+                Next r
+            End If
+        Next ws
+    End If
+    st.Cells.ClearContents
+    r = 0
+    For Each k In dictShortNames.Keys
+        r = r + 1
+        st.Cells(r, 1).Value = "'" & CStr(k)
+        st.Cells(r, 2).Value = "'" & dictShortNames(k)
+    Next k
+End Sub
