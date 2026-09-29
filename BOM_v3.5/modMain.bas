@@ -234,6 +234,7 @@ End If
     dictFeedback.CompareMode = 1
     Set dictUnkSrc = Nothing
     Call LoadLearnedItems
+    Call FixLibraryRanges           ' þablonun kütüphane aralýklarý kütüphane büyüdükçe kendiliðinden geniþler
     Set dictQtyCheck = Nothing
     Call PanelReset
     Call CaptureShortNames          ' SUM K'daki elle yazýlmýþ baþlýk adlarý (temizlikten önce)
@@ -1261,6 +1262,7 @@ End Function
 Public Sub BOM_OnOpen()
     On Error Resume Next
     Call UnprotectForMacro
+    Call FixLibraryRanges
     Call RemoveProgress          ' yarýda kalan (hata / Reset) bir çalýþtýrmadan kalan ilerleme kutusu
     Call FixButtonMacros
     Call ProtectAfterMacro

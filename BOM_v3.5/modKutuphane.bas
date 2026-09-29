@@ -270,3 +270,80 @@ Public Sub RunLibraryCheck()
            "Ayrýntý: KUTUPHANE_KONTROL sayfasý (SATIR numarasýna týklayýnca kütüphanedeki satýra gider)." & vbCrLf & _
            "Kütüphanelerde hiçbir þey deðiþtirilmedi.", IIf(nErr > 0, vbExclamation, vbInformation), "Kütüphane Kontrol"
 End Sub
+
+' =========================================================================
+' KÜTÜPHANE ARALIKLARI KENDÝLÝÐÝNDEN GENÝÞLER
+' Þablon formülleri kütüphaneye sabit aralýkla bakar (ör. 'BOLT-LIBRARY'!$A$3:$D$3156). Kütüphane bu
+' satýrý geçince yeni eklenen kodlar formülde bulunamaz (aðýrlýk 0 / ad boþ). Her çalýþtýrmanýn baþýnda:
+'   - aralýðýn sonu kütüphanenin son satýrýna 500 satýrdan fazla yaklaþmýþsa aralýk büyütülür,
+'   - aralýðýn baþý kütüphanenin ilk veri satýrýný atlýyorsa ($A$4 gibi) o satýra çekilir.
+' Sadece mutlak ($) aralýklar deðiþtirilir; tüm sütun (A:D) aralýklarýna dokunulmaz. Rapor yok, AUDIT'e not.
+' =========================================================================
+Public Sub FixLibraryRanges()
+    Dim libs As Variant, firsts As Variant, i As Long, wsL As Worksheet, lastLib As Long
+    On Error Resume Next
+    libs = Array("BOLT-LIBRARY", "L-U-I-O-Y-LIBRARY")
+    firsts = Array(3, 2)                       ' kütüphanelerin ilk veri satýrý (makro da buradan okur)
+    For i = 0 To UBound(libs)
+        Set wsL = Nothing
+        Set wsL = ThisWorkbook.Sheets(CStr(libs(i)))
+        If Not wsL Is Nothing Then
+            lastLib = wsL.Cells(wsL.Rows.Count, 1).End(xlUp).Row
+            If wsL.Cells(wsL.Rows.Count, 2).End(xlUp).Row > lastLib Then lastLib = wsL.Cells(wsL.Rows.Count, 2).End(xlUp).Row
+            Call FixOneLibraryRange(CStr(libs(i)), CLng(firsts(i)), lastLib)
+        End If
+    Next i
+End Sub
+
+Private Sub FixOneLibraryRange(ByVal libName As String, ByVal firstRow As Long, ByVal lastLib As Long)
+    Dim ws As Worksheet, rx As Object, mc As Object, m As Object, f As Variant, r As Long, c As Long
+    Dim seen As Object, k As Variant, oldRef As String, newRef As String, sr As Long, er As Long, newEnd As Long
+    Dim blk As Variant, lastC As Long
+    On Error Resume Next
+    Set rx = CreateObject("VBScript.RegExp")
+    rx.Global = True
+    rx.IgnoreCase = True
+    rx.Pattern = "'" & libName & "'!\$([A-Z]{1,3})\$(\d+):\$([A-Z]{1,3})\$(\d+)"
+    Set seen = CreateObject("Scripting.Dictionary")
+    seen.CompareMode = 1
+    newEnd = ((lastLib + 5000) \ 1000 + 1) * 1000         ' en az 5000 satýr pay, 1000'e yuvarlanýr
+    For Each ws In ThisWorkbook.Worksheets
+        If IsOutputSheet(ws.Name) Then
+            ' formül kalýbý her satýrda ayný: ilk satýrlar ve toplam satýrý çevresi yeterli örnek
+            lastC = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
+            If lastC > 80 Then lastC = 80
+            blk = ws.Range(ws.Cells(1, 1), ws.Cells(12, lastC)).Formula
+            For r = 1 To UBound(blk, 1)
+                For c = 1 To UBound(blk, 2)
+                    f = blk(r, c)
+                    If Left$(CStr(f), 1) = "=" And InStr(1, CStr(f), libName, vbTextCompare) > 0 Then
+                        Set mc = rx.Execute(CStr(f))
+                        For Each m In mc
+                            sr = CLng(m.SubMatches(1))
+                            er = CLng(m.SubMatches(3))
+                            If er < lastLib + 500 Or sr > firstRow Then
+                                If sr > firstRow Then sr = firstRow
+                                If er < newEnd Then er = newEnd
+                                seen(m.Value) = "'" & libName & "'!$" & m.SubMatches(0) & "$" & sr & ":$" & m.SubMatches(2) & "$" & er
+                            End If
+                        Next m
+                    End If
+                Next c
+            Next r
+        End If
+    Next ws
+    If seen.Count = 0 Then Exit Sub
+    For Each ws In ThisWorkbook.Worksheets
+        If IsOutputSheet(ws.Name) Then
+            For Each k In seen.Keys
+                ws.UsedRange.Replace What:=CStr(k), Replacement:=CStr(seen(k)), LookAt:=xlPart, _
+                                     SearchOrder:=xlByRows, MatchCase:=False
+            Next k
+        End If
+    Next ws
+    For Each k In seen.Keys
+        AuditRecord "", "SYSTEM", 0, libName, "Kütüphane aralýðý geniþletildi", "SYSTEM", "WARNING", 95, _
+                    CStr(k) & " -> " & CStr(seen(k)), _
+                    "Kütüphane (" & lastLib & " satýr) formül aralýðýnýn sonuna yaklaþmýþtý; yeni kodlar bulunamayacaktý."
+    Next k
+End Sub
