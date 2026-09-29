@@ -1074,13 +1074,16 @@ End Sub
 ' Veri alanýndaki formül sütunlarýný (ilk veri satýrlarýnda formül olanlar: kg/m, birim aðýrlýk, toplam...)
 ' toplam satýrýnýn bir üstüne kadar doldurur. Þablonda formül erken bitmiþse (ör. PLATE G 979'da) o satýrlarýn
 ' aðýrlýðý hesaplanmýyordu. Sadece BOÞ hücrelere yazýlýr.
-Public Sub FillFormulaColumns(ByVal ws As Worksheet, ByVal totRow As Long)
+' skipCols: makronun kendi yazdýðý sütunlar ("|1|2|3|") ve adet sütunlarý (qFirst..qLast) ASLA doldurulmaz
+Public Sub FillFormulaColumns(ByVal ws As Worksheet, ByVal totRow As Long, ByVal skipCols As String, _
+                              ByVal qFirst As Long, ByVal qLast As Long)
     Dim c As Long, lastC As Long, r0 As Long, pat As String, blanks As Range, n As Long
     On Error Resume Next
     If ws Is Nothing Or totRow <= 9 Then Exit Sub
     lastC = ws.Cells(4, ws.Columns.Count).End(xlToLeft).Column
     If lastC < 60 Then lastC = 60
     For c = 1 To lastC
+        If (c >= qFirst And c <= qLast) Or InStr(skipCols, "|" & c & "|") > 0 Then GoTo NextCol
         pat = ""
         For r0 = 5 To 8
             If ws.Cells(r0, c).HasFormula Then
@@ -1100,10 +1103,38 @@ Public Sub FillFormulaColumns(ByVal ws As Worksheet, ByVal totRow As Long)
             End If
             Err.Clear
         End If
+NextCol:
     Next c
     If n > 0 Then
         AuditRecord "", "SYSTEM", 0, ws.Name, "Þablon formülleri tamamlandý", "SYSTEM", "WARNING", 90, _
                     n & " boþ hücreye formül yazýldý (toplam satýrý " & totRow & ")", _
                     "Þablonda formüller veri alanýnýn sonuna kadar gitmiyordu; o satýrlarýn aðýrlýðý hesaplanmýyordu."
+    End If
+End Sub
+
+' Adet sütunlarýnda (veri satýrlarý) formül olmamalý: makro buraya sadece sayý yazar. Eski bir sürümün ya da
+' elle girilmiþ formüller adetleri bozar (aðýrlýk katlanýr). SIFIRDAN iþlemde silinir.
+Public Sub ClearQtyFormulas(ByVal ws As Worksheet, ByVal totRow As Long, ByVal qFirst As Long, ByVal qLast As Long)
+    Dim c As Long, fr As Range, n As Long, lastR As Long
+    On Error Resume Next
+    If ws Is Nothing Then Exit Sub
+    lastR = totRow - 1
+    If totRow <= 5 Then lastR = ws.Cells(ws.Rows.Count, qFirst).End(xlUp).Row
+    If lastR < 5 Then Exit Sub
+    For c = qFirst To qLast
+        Err.Clear
+        Set fr = Nothing
+        Set fr = ws.Range(ws.Cells(5, c), ws.Cells(lastR, c)).SpecialCells(xlCellTypeFormulas)
+        If Err.Number = 0 Then
+            If Not fr Is Nothing Then
+                n = n + fr.Count
+                fr.ClearContents
+            End If
+        End If
+    Next c
+    Err.Clear
+    If n > 0 Then
+        AuditRecord "", "SYSTEM", 0, ws.Name, "Adet sütunlarýndaki formüller silindi", "SYSTEM", "WARNING", 90, _
+                    n & " hücre", "Adet sütunlarýnda formül vardý (eski sürüm / elle giriþ); adetleri ve aðýrlýðý bozuyordu."
     End If
 End Sub

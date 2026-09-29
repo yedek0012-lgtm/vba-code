@@ -432,8 +432,14 @@ End If
             capTxt = capTxt & TotalsRowDamage(curWsAngle, totA, 9, 54) & TotalsRowDamage(curWsPlate, totP, 8, 53) & _
                      TotalsRowDamage(curWsBolt, totB, 6, 51)
             ' formül sütunlarý (kg/m, birim aðýrlýk...) toplam satýrýna kadar dolu olsun
-            Call FillFormulaColumns(curWsAngle, totA)
-            Call FillFormulaColumns(curWsPlate, totP)
+            ' SIFIRDAN: adet sütunlarýnda formül kalmasýn (aðýrlýðý katlýyordu)
+            If Not appendMode Or batchNum > 1 Then
+                Call ClearQtyFormulas(curWsAngle, totA, 9, 54)
+                Call ClearQtyFormulas(curWsPlate, totP, 8, 53)
+            End If
+            ' sadece þablonun kendi formül sütunlarý (kg/m, birim aðýrlýk...); makronun yazdýðý ve adet sütunlarý hariç
+            Call FillFormulaColumns(curWsAngle, totA, "|1|2|3|5|6|57|58|59|", 9, 54)
+            Call FillFormulaColumns(curWsPlate, totP, "|1|2|3|4|5|6|56|57|58|", 8, 53)
         End If
 
         ReDim bufAngle(1 To 5000, 1 To 70)
