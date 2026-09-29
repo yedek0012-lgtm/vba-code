@@ -30,6 +30,21 @@ for f in mods:
         if re.match(r'End (Sub|Function|Property)\b',t,re.I): inproc=False; continue
         if seen and not inproc and t and not t.startswith("'"):
             print("FAIL",os.path.basename(f)[:-4],": satır",i,"prosedürler arasında bildirim (Excel derlemez):",t)
+# Başka modüldeki Private Sub/Function çağrısı (LibreOffice modülleri ayrı derlediği için yakalamaz;
+# Excel'de "Sub or Function not defined")
+_src={os.path.basename(f)[:-4]:open(f,encoding='cp1254').read() for f in mods}
+_priv={}; _pub=set()
+for _m,_s in _src.items():
+    for _mm in re.finditer(r'^[ \t]*(Private[ \t]+)?(?:Public[ \t]+|Friend[ \t]+)?(?:Sub|Function)[ \t]+(\w+)',_s,re.M|re.I):
+        if _mm.group(1): _priv.setdefault(_mm.group(2).lower(),[]).append(_m)
+        else: _pub.add(_mm.group(2).lower())
+for _m,_s in _src.items():
+    _code=re.sub(r"'.*","",_s)
+    for _n,_own in _priv.items():
+        if _m in _own or _n in _pub: continue
+        _hit=re.search(r'\b'+_n+r'\b',_code,re.I)
+        if _hit:
+            print("FAIL",_m,": satır",_code[:_hit.start()].count('\n')+1,"başka modüldeki Private çağrılıyor:",_n,"(",",".join(_own),")")
 names=[]
 for f in mods:
     src=open(f,encoding='cp1254').read().replace('\r\n','\n')

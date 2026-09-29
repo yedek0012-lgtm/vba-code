@@ -41,7 +41,7 @@ Private Function Pwd() As String
 End Function
 
 ' Önce geçerli, olmazsa eski parola ile sayfa korumasýný açar
-Private Sub UnprotectSheet(ByVal ws As Worksheet)
+Public Sub UnprotectSheet(ByVal ws As Worksheet)
     On Error Resume Next
     ws.Unprotect Pwd()
     If ws.ProtectContents Then ws.Unprotect LEGACY_PWD
