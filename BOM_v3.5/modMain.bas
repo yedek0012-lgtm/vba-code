@@ -1220,7 +1220,7 @@ NextUnk:
            IIf(nWarned > 0, nWarned & " parçanýn kg/m / yüzey alaný ölçüden hesaplanandan çok farklý (DURUM'da sarý)." & vbCrLf, "") & _
            IIf(nMissing > 0, nMissing & " parça EKSÝK veri nedeniyle aktarýlmadý (DURUM sütununa bakýn)." & vbCrLf, ""), _
            IIf(nMissing > 0, vbExclamation, vbInformation), "Öðrenen Kütüphane"
-    If nLearned > 0 Then Call Son_Islemi_Yenile
+    If nLearned > 0 Then Call SonIslemiYenile(False)     ' aktar = yenile: tekrar sorulmaz
 End Sub
 
 ' Kütüphane saðlýðý: iki kütüphaneyi tarar, sorunlarý KUTUPHANE_KONTROL sayfasýna yazar (deðiþtirmez)
@@ -1230,7 +1230,12 @@ End Sub
 
 ' Son iþlemi (ayný dosyalar, ayný mod) dosya seçmeden yeniden yapar.
 ' ÜSTÜNE EKLE modunda önce son iþlemden önceki yedek geri yüklenir (aksi halde adetler iki kez eklenirdi).
+' Alt+F8'den elle çalýþtýrýlýnca onay sorar; KÜTÜPHANEYE AKTAR'dan sonra sormadan yeniler
 Sub Son_Islemi_Yenile()
+    Call SonIslemiYenile(True)
+End Sub
+
+Private Sub SonIslemiYenile(ByVal askUser As Boolean)
     Dim ws As Worksheet, r As Long, n As Long, files() As String, nMiss As Long, missTxt As String
     Dim md As String, bkp As String, msg As String, fso2 As Object, p As String
     On Error Resume Next
@@ -1274,7 +1279,9 @@ Sub Son_Islemi_Yenile()
         msg = msg & vbCrLf & "ANGLE / PLATE / BOLTS&WASHER / SUM, son iþlemden önceki yedekten geri yüklenecek:" & vbCrLf & _
               "  " & bkp & vbCrLf & "(o iþlemden sonra bu sayfalarda elle yaptýðýnýz deðiþiklikler kaybolur)"
     End If
-    If MsgBox(msg, vbYesNo + vbQuestion, "Son Ýþlemi Yenile") = vbNo Then Exit Sub
+    If askUser Or nMiss > 0 Then
+        If MsgBox(msg, vbYesNo + vbQuestion, "Son Ýþlemi Yenile") = vbNo Then Exit Sub
+    End If
 
     If md = "USTUNE" Then
         Application.ScreenUpdating = False
