@@ -135,6 +135,7 @@ Sub Evrensel_BOM_Cevirici_Core()
     Dim partParsed As String
     Dim rawQty As Long, fireliQty As Long
     Dim reconTxt As String, reconOut As Long, reconNoRef As Long, reconRow As Long, reconSheet As String, reconPrev As Long
+    Dim totA As Long, totP As Long, totB As Long
     Dim qtyTxt As String, qtyBadN As Long, pnlOkN As Long, pnlChkN As Long, pnlBadN As Long
     Dim capTxt As String
 
@@ -380,6 +381,14 @@ End If
         Set curWsBoltRef = curWsBolt
         Set curWsSumRef = curWsSum
 
+        ' Þablonun TOPLAM satýrlarý (SUM aðýrlýklarý buradan okur): veri bu satýrlara asla yazýlmaz
+        totA = TemplateTotalsRow(curWsAngle, curWsSum, 3, 9)
+        totP = TemplateTotalsRow(curWsPlate, curWsSum, 4, 8)
+        totB = TemplateTotalsRow(curWsBolt, curWsSum, 5, 6)
+        If Not isDryRun Then
+            capTxt = capTxt & TotalsRowDamage(curWsAngle, totA, 9) & TotalsRowDamage(curWsPlate, totP, 8)
+        End If
+
         ReDim bufAngle(1 To 5000, 1 To 70)
         ReDim bufPlate(1 To 5000, 1 To 70)
         ReDim bufBolt(1 To 2000, 1 To 70)
@@ -388,7 +397,7 @@ End If
         If appendMode And batchNum = 1 Then
             Dim rAInit As Long, rPInit As Long, vAInit As Variant, vPInit As Variant
             Dim rInit As Long, cInit As Long
-            rAInit = curWsAngle.Cells(curWsAngle.Rows.Count, 2).End(xlUp).Row
+            rAInit = LastDataRow(curWsAngle, 2, totA)
             If rAInit >= 5 Then
                 vAInit = curWsAngle.Range(curWsAngle.Cells(5, 1), curWsAngle.Cells(rAInit, 65)).Value2
                 For rInit = 1 To UBound(vAInit, 1)
@@ -398,7 +407,7 @@ End If
                 Next rInit
             End If
             
-            rPInit = curWsPlate.Cells(curWsPlate.Rows.Count, 2).End(xlUp).Row
+            rPInit = LastDataRow(curWsPlate, 2, totP)
             If rPInit >= 5 Then
                 vPInit = curWsPlate.Range(curWsPlate.Cells(5, 1), curWsPlate.Cells(rPInit, 65)).Value2
                 For rInit = 1 To UBound(vPInit, 1)
@@ -435,13 +444,16 @@ End If
             currentColAngle = 9 + existingFileCount
             currentColPlate = 8 + existingFileCount
             currentColBolt = 6 + existingFileCount
-            targetRowAngle = GetNextOutputRow(curWsAngle, 2, 5)
-            targetRowPlate = GetNextOutputRow(curWsPlate, 2, 5)
-            targetRowBolt = GetNextOutputRow(curWsBolt, 2, 5)
+            targetRowAngle = LastDataRow(curWsAngle, 2, totA) + 1
+            targetRowPlate = LastDataRow(curWsPlate, 2, totP) + 1
+            targetRowBolt = LastDataRow(curWsBolt, 2, totB) + 1
+            If targetRowAngle < 5 Then targetRowAngle = 5
+            If targetRowPlate < 5 Then targetRowPlate = 5
+            If targetRowBolt < 5 Then targetRowBolt = 5
             sumRow = GetNextOutputRow(curWsSum, 1, 5)
             ' CIVATA LÝSTESÝ TEK PARÇA: mevcut cývatalar okunur, liste yeni dosyalarla birlikte baþtan dizilir
             If Not isDryRun Then
-                Call ImportExistingBolts(curWsBolt, currentColBolt - 1)
+                Call ImportExistingBolts(curWsBolt, currentColBolt - 1, totB)
                 Call CleanBoltSheet(curWsBolt)
                 ReDim bufBolt(1 To 2000, 1 To 70)
                 targetRowBolt = 5
@@ -678,6 +690,12 @@ End If
             Next bKey
 End If
         
+        ' Veri toplam satýrýna ulaþýyorsa þablon, toplam satýrýnýn üstüne formüllü satýr eklenerek büyütülür
+        If Not isDryRun Then
+            totA = EnsureTemplateRows(curWsAngle, totA, targetRowAngle - 1)
+            totP = EnsureTemplateRows(curWsPlate, totP, targetRowPlate - 1)
+            totB = EnsureTemplateRows(curWsBolt, totB, targetRowBolt - 1)
+        End If
         Call FlushAllBuffers(curWsAngle, curWsPlate, curWsBolt, curWsSum, targetRowAngle, targetRowPlate, targetRowBolt, sumRow, currentColAngle, currentColPlate, currentColBolt)
         If Not isDryRun Then
             ' þablon kapasitesi: ANGLE H (UNIT WEIGHT), PLATE G (UNIT WEIGHT) formülleri yeterli mi?

@@ -335,7 +335,7 @@ End Function
 ' onlar yeniden hesaplanýr) ve yeni dosyalarla birlikte liste baþtan dizilir: ayný kod tek satýr,
 ' her dosyanýn adedi kendi sütununda.
 ' =========================================================================
-Public Sub ImportExistingBolts(ByVal ws As Worksheet, ByVal colEnd As Long)
+Public Sub ImportExistingBolts(ByVal ws As Worksheet, ByVal colEnd As Long, Optional ByVal totRow As Long = 0)
     Dim auto As Object, dd As Variant, r As Long, lastR As Long, c As Long, q As Double, lastAuto As Long
     Dim code As String, nm As String, qual As String, note As String, key As String
     Dim d As Long, l As Long, hwC As String, hwN As String, isFu As Boolean, bn As String, qo As String
@@ -351,6 +351,7 @@ Public Sub ImportExistingBolts(ByVal ws As Worksheet, ByVal colEnd As Long)
     Set dictImportedBolts = CreateObject("Scripting.Dictionary")
     dictImportedBolts.CompareMode = 1
     lastR = ws.Cells(ws.Rows.Count, 2).End(xlUp).Row
+    If totRow > 5 And lastR >= totRow Then lastR = totRow - 1       ' þablonun toplam satýrý ve altý okunmaz
     ' Diziliþ: her çap için cývatalar + 3 otomatik satýr, en sonda ÖZEL bölüm (öðrenilen / futterring).
     ' Son otomatik satýrdan sonraki satýrlar özel bölümdür.
     For r = 5 To lastR

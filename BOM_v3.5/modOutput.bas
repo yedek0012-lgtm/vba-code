@@ -929,3 +929,98 @@ Public Sub CaptureShortNames()
         st.Cells(r, 2).Value = "'" & dictShortNames(k)
     Next k
 End Sub
+
+' =========================================================================
+' ÞABLON TOPLAM SATIRI ve KAPASÝTE
+' ANGLE / PLATE / BOLTS'ta veri satýrlarýnýn altýnda her dosyanýn toplam aðýrlýk formülleri olan bir satýr
+' vardýr (ör. 1504); SUM C / D / E bu satýrý gösterir (=ANGLE!I1504). Veri bu satýra yazýlýrsa formüller
+' silinir ve SUM aðýrlýklarý 0 olur. Toplam satýrý SUM'daki formülden bulunur; bulunamazsa ilk adet
+' sütununda formül olan ilk satýr alýnýr. 0 = bulunamadý (sýnýr yok).
+' =========================================================================
+Public Function TemplateTotalsRow(ByVal ws As Worksheet, ByVal wsSum As Worksheet, ByVal sumCol As Long, ByVal qtyCol As Long) As Long
+    Dim f As String, rx As Object, mc As Object, r As Long, lastR As Long
+    On Error Resume Next
+    If ws Is Nothing Then Exit Function
+    If Not wsSum Is Nothing Then
+        f = CStr(wsSum.Cells(5, sumCol).Formula)
+        Set rx = CreateObject("VBScript.RegExp")
+        rx.IgnoreCase = True
+        rx.Pattern = "'?" & RxEscapeText(ws.Name) & "'?!\$?[A-Z]{1,3}\$?(\d+)"
+        Set mc = rx.Execute(f)
+        If Not mc Is Nothing Then
+            If mc.Count > 0 Then
+                r = CLng(mc(0).SubMatches(0))
+                If r > 5 Then
+                    TemplateTotalsRow = r
+                    Exit Function
+                End If
+            End If
+        End If
+    End If
+    lastR = ws.Cells(ws.Rows.Count, qtyCol).End(xlUp).Row
+    If lastR > 6000 Then lastR = 6000
+    For r = 5 To lastR
+        If ws.Cells(r, qtyCol).HasFormula Then
+            TemplateTotalsRow = r
+            Exit Function
+        End If
+    Next r
+End Function
+
+Private Function RxEscapeText(ByVal s As String) As String
+    Dim i As Long, ch As String, out As String
+    For i = 1 To Len(s)
+        ch = Mid$(s, i, 1)
+        If InStr(".^$*+?()[]{}|\", ch) > 0 Then out = out & "\"
+        out = out & ch
+    Next i
+    RxEscapeText = out
+End Function
+
+' Veri alanýndaki son dolu satýr (toplam satýrý ve altý hariç); veri yoksa 4
+Public Function LastDataRow(ByVal ws As Worksheet, ByVal keyCol As Long, ByVal totRow As Long) As Long
+    Dim r As Long
+    On Error Resume Next
+    If totRow > 5 Then
+        If Trim$(ws.Cells(totRow - 1, keyCol).Text) <> "" Then
+            r = totRow - 1
+        Else
+            r = ws.Cells(totRow - 1, keyCol).End(xlUp).Row
+        End If
+    Else
+        r = ws.Cells(ws.Rows.Count, keyCol).End(xlUp).Row
+    End If
+    If r < 5 Then r = 4
+    LastDataRow = r
+End Function
+
+' Toplam satýrýnda formül kalmamýþsa (önceki bir çalýþtýrma üzerine yazmýþ) uyarý metni
+Public Function TotalsRowDamage(ByVal ws As Worksheet, ByVal totRow As Long, ByVal qtyCol As Long) As String
+    On Error Resume Next
+    If totRow <= 5 Then Exit Function
+    If Not ws.Cells(totRow, qtyCol).HasFormula Then
+        TotalsRowDamage = "[" & ws.Name & "] " & totRow & ". satýrdaki TOPLAM formülleri silinmiþ (SUM aðýrlýklarý 0 çýkar). " & _
+                          "Bu sayfayý temiz þablondan (BOS BOM) yeniden alýn." & vbCrLf
+    End If
+End Function
+
+' Veri toplam satýrýna ulaþýyorsa (lastDataRow >= totRow) toplam satýrýnýn hemen üstüne formüllü satýrlar
+' eklenir: toplam / SUMPRODUCT aralýklarý ve SUM baðlantýlarý Excel tarafýndan kendiliðinden kaydýrýlýr.
+' Yeni toplam satýrý numarasýný döndürür.
+Public Function EnsureTemplateRows(ByVal ws As Worksheet, ByVal totRow As Long, ByVal lastDataRow As Long) As Long
+    Dim n As Long, insAt As Long
+    On Error Resume Next
+    EnsureTemplateRows = totRow
+    If ws Is Nothing Or totRow <= 6 Then Exit Function
+    If lastDataRow < totRow Then Exit Function
+    n = lastDataRow - totRow + 1 + 50                 ' eksik satýr + 50 yedek
+    insAt = totRow - 1                                ' son veri satýrýnýn önüne: aralýklarýn ÝÇÝNE eklenir
+    ws.Rows(insAt & ":" & (insAt + n - 1)).Insert Shift:=xlDown
+    ' formül ve biçim bir üstteki veri satýrýndan; kopyalanan sabit deðerler silinir
+    ws.Range(ws.Rows(insAt - 1), ws.Rows(insAt + n - 1)).FillDown
+    ws.Range(ws.Rows(insAt), ws.Rows(insAt + n)).SpecialCells(xlCellTypeConstants).ClearContents
+    EnsureTemplateRows = totRow + n
+    AuditRecord "", "SYSTEM", totRow, ws.Name, "Þablon büyütüldü", "SYSTEM", "WARNING", 90, _
+                n & " satýr eklendi; toplam satýrý " & totRow & " -> " & (totRow + n), _
+                "Veri þablonun toplam satýrýna ulaþýyordu; formüllü satýr eklendi (toplamlar ve SUM baðlantýlarý kendiliðinden güncellendi)."
+End Function
