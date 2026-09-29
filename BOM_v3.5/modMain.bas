@@ -386,7 +386,9 @@ End If
         totP = TemplateTotalsRow(curWsPlate, curWsSum, 4, 8)
         totB = TemplateTotalsRow(curWsBolt, curWsSum, 5, 6)
         If Not isDryRun Then
-            capTxt = capTxt & TotalsRowDamage(curWsAngle, totA, 9) & TotalsRowDamage(curWsPlate, totP, 8)
+            ' eski sürümün sildiði toplam formülleri onarýlýr (onarýlamazsa uyarý)
+            capTxt = capTxt & TotalsRowDamage(curWsAngle, totA, 9, 54) & TotalsRowDamage(curWsPlate, totP, 8, 53) & _
+                     TotalsRowDamage(curWsBolt, totB, 6, 51)
         End If
 
         ReDim bufAngle(1 To 5000, 1 To 70)
