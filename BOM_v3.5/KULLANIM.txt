@@ -27,6 +27,8 @@ sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro for
  - ANGLE / PLATE: TYPE (A) = kaynak dosya adı. Aynı poz no farklı kesit / ölçü / boyla gelirse ayrı satırdır.
    Boylar mm yazılır; listede metre ise (başlıkta [m] ya da değerler metre gibiyse) otomatik x1000 yapılır.
  - BOLTS&WASHER: cıvatalar çapa göre dizilir, her çap için somun / pul / yaylı rondela (yeşil) otomatik eklenir.
+   Liste hep TEK PARÇA: aynı kod tek satır, her dosyanın adedi kendi sütununda. "Liste Üstüne Ekle"de mevcut
+   cıvatalar yeniden okunur ve liste yeni dosyalarla birlikte baştan dizilir (somun / pul adetleri yeniden hesaplanır).
    MATERIAL (C) ve UNIT WEIGHT (E) şablon formülüyle BOLT-LIBRARY'den gelir; makro bu formüllere dokunmaz.
    KIRMIZI KALIN yazı = kod BOLT-LIBRARY'de yok (veya formülün aralığı dışında); değeri makro yazdı
    (ağırlıksa tahmin). Kodu kütüphaneye ekleyin; sonraki SIFIRDAN çalıştırmada formül geri gelir.

@@ -439,6 +439,13 @@ End If
             targetRowPlate = GetNextOutputRow(curWsPlate, 2, 5)
             targetRowBolt = GetNextOutputRow(curWsBolt, 2, 5)
             sumRow = GetNextOutputRow(curWsSum, 1, 5)
+            ' CIVATA LÝSTESÝ TEK PARÇA: mevcut cývatalar okunur, liste yeni dosyalarla birlikte baþtan dizilir
+            If Not isDryRun Then
+                Call ImportExistingBolts(curWsBolt, currentColBolt - 1)
+                Call CleanBoltSheet(curWsBolt)
+                ReDim bufBolt(1 To 2000, 1 To 70)
+                targetRowBolt = 5
+            End If
             If isMerge Then
                 Call LoadExistingPositionDictionaries(curWsAngle, curWsPlate, dictPosAngle, dictPosPlate)
 End If
@@ -516,6 +523,7 @@ End If
         ' -------------------------------------------------------------------------
         ' PAKET CIVATA VE YEÞÝL 3'LÜ SET DÝZÝMÝ
         ' -------------------------------------------------------------------------
+        If Not isDryRun Then Call MergeBoltKeysByCode      ' ayný kod + kalite tek satýr
         If dictDiameters.Count > 0 And Not isDryRun Then
             Call ShowProgress(1, "Cývatalar listeye diziliyor...")
             

@@ -207,24 +207,7 @@ End If
         wsP.Range("BD5:BF" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
 End If
     
-    If Not wsB Is Nothing Then
-        lastRow = wsB.Cells(wsB.Rows.Count, "F").End(xlUp).Row
-        If wsB.Cells(wsB.Rows.Count, "B").End(xlUp).Row > lastRow Then lastRow = wsB.Cells(wsB.Rows.Count, "B").End(xlUp).Row
-        If lastRow < 502 Then lastRow = 502
-        wsB.Range("B5:E" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
-        ' makronun deðer yazdýðý C/E hücrelerine þablon formülünü geri koy
-        Call RestoreColumnFormula(wsB, 3, lastRow)
-        Call RestoreColumnFormula(wsB, 5, lastRow)
-        wsB.Range("F4:AY" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
-        wsB.Range("BB5:BG" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
-        
-        ' Sadece makronun boyadýðý B ve D (yeþil somun/pul satýrý) sýfýrlanýr;
-        ' turuncu formüllü C ve E'nin dolgu rengine dokunulmaz (yazý rengi/kalýnlýk sýfýrlanýr)
-        wsB.Range("B5:B" & lastRow).Interior.ColorIndex = xlNone
-        wsB.Range("D5:D" & lastRow).Interior.ColorIndex = xlNone
-        wsB.Range("B5:E" & lastRow).Font.ColorIndex = xlAutomatic
-        wsB.Range("B5:E" & lastRow).Font.Bold = False
-End If
+    If Not wsB Is Nothing Then Call CleanBoltSheet(wsB)
     
     If Not wsS Is Nothing Then
         lastRow = wsS.Cells(wsS.Rows.Count, "A").End(xlUp).Row
@@ -243,6 +226,28 @@ End If
         wsS.Range("I4:L" & lastRow).Font.Bold = False
 End If
     On Error GoTo 0
+End Sub
+
+' BOLTS&WASHER veri alanýný temizler (formüller korunur / geri konur); SIFIRDAN ve ekleme modunda liste baþtan dizilirken
+Public Sub CleanBoltSheet(ByVal wsB As Worksheet)
+    Dim lastRow As Long
+    On Error Resume Next
+        lastRow = wsB.Cells(wsB.Rows.Count, "F").End(xlUp).Row
+        If wsB.Cells(wsB.Rows.Count, "B").End(xlUp).Row > lastRow Then lastRow = wsB.Cells(wsB.Rows.Count, "B").End(xlUp).Row
+        If lastRow < 502 Then lastRow = 502
+        wsB.Range("B5:E" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        ' makronun deðer yazdýðý C/E hücrelerine þablon formülünü geri koy
+        Call RestoreColumnFormula(wsB, 3, lastRow)
+        Call RestoreColumnFormula(wsB, 5, lastRow)
+        wsB.Range("F4:AY" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        wsB.Range("BB5:BG" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        
+        ' Sadece makronun boyadýðý B ve D (yeþil somun/pul satýrý) sýfýrlanýr;
+        ' turuncu formüllü C ve E'nin dolgu rengine dokunulmaz (yazý rengi/kalýnlýk sýfýrlanýr)
+        wsB.Range("B5:B" & lastRow).Interior.ColorIndex = xlNone
+        wsB.Range("D5:D" & lastRow).Interior.ColorIndex = xlNone
+        wsB.Range("B5:E" & lastRow).Font.ColorIndex = xlAutomatic
+        wsB.Range("B5:E" & lastRow).Font.Bold = False
 End Sub
 
 Public Function CountExistingOutputFiles(ByVal wsS As Worksheet) As Long
