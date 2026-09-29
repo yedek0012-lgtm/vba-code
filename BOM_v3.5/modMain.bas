@@ -1237,6 +1237,7 @@ End Function
 Public Sub BOM_OnOpen()
     On Error Resume Next
     Call UnprotectForMacro
+    Call RemoveProgress          ' yarýda kalan (hata / Reset) bir çalýþtýrmadan kalan ilerleme kutusu
     Call FixButtonMacros
     Call ProtectAfterMacro
 End Sub
