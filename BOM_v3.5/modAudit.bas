@@ -165,8 +165,39 @@ End Sub
 ' türe göre 4 veri girilir. KÜTÜPHANEYE AKTAR: kütüphaneye yazar + türü OGRENILEN sayfasýna kaydeder
 ' (bir sonraki iþlemde parça adýndan tanýnýr, doðru sayfaya gider) + son iþlemi yeniden yapar.
 ' =========================================================================
+' Tanýnmayan parça: OGRENME listesine eklenir; geçtiði HER yer (dosya / sayfa / satýr / poz) kaydedilir
+Public Sub NoteUnknown(ByVal key As String, ByVal rowNo As Long, ByVal posNo As String)
+    Dim loc As String, subAddr As String, a As Variant
+    On Error Resume Next
+    loc = fileName
+    If pdfTempWb Is Nothing Then
+        If auditCurrentSheet <> "" Then loc = loc & " / " & auditCurrentSheet
+        If rowNo > 0 Then loc = loc & " / satýr " & rowNo
+    End If
+    If Trim$(posNo) <> "" Then loc = loc & " (Poz " & Trim$(posNo) & ")"
+    If Not dictFeedback.Exists(key) Then dictFeedback.Add key, loc
+
+    If dictUnkSrc Is Nothing Then
+        Set dictUnkSrc = CreateObject("Scripting.Dictionary")
+        dictUnkSrc.CompareMode = 1
+    End If
+    subAddr = ""
+    If auditCurrentSheet <> "" And rowNo > 0 And pdfTempWb Is Nothing Then
+        subAddr = "'" & Replace(auditCurrentSheet, "'", "''") & "'!A" & rowNo
+    End If
+    If dictUnkSrc.Exists(key) Then
+        a = dictUnkSrc(key)
+        a(0) = a(0) + 1
+        If a(0) <= 8 Then a(1) = a(1) & vbLf & loc
+        dictUnkSrc(key) = a
+    Else
+        dictUnkSrc.Add key, Array(1, loc, auditCurrentPath, subAddr)
+    End If
+End Sub
+
 Public Sub WriteUnknownsSheet(ByVal dictUnk As Object)
     Dim ws As Worksheet, k As Variant, r As Long, out() As Variant, btn As Object
+    Dim src As Variant, srcTxt As String, i As Long
     On Error Resume Next
     Set ws = ThisWorkbook.Sheets("OGRENME")
     On Error GoTo 0
@@ -181,7 +212,7 @@ Public Sub WriteUnknownsSheet(ByVal dictUnk As Object)
     On Error GoTo 0
     ws.Cells.Clear
 
-    ws.Range("A1:H1").Value = Array("TANINMAYAN PARÇA", "KAYNAK (Dosya / Poz)", "TÜR", _
+    ws.Range("A1:H1").Value = Array("TANINMAYAN PARÇA", "NEREDE (Dosya / Sayfa / Satýr)" & vbLf & "týkla: ilk yeri açar", "TÜR", _
                                     "MALZEME KODU", "MALZEME CÝNSÝ", _
                                     "DEÐER 1" & vbLf & "ANGLE: kg/m" & vbLf & "PLATE: KALINLIK mm" & vbLf & "BOLT: BÝRÝM AÐIRLIK kg", _
                                     "DEÐER 2" & vbLf & "ANGLE: YÜZEY ALAN" & vbLf & "PLATE: GENÝÞLÝK mm" & vbLf & "BOLT: 1000 ADET kg", _
@@ -211,6 +242,30 @@ Public Sub WriteUnknownsSheet(ByVal dictUnk As Object)
     ws.Range("F2").Resize(r, 2).NumberFormat = "0.000#"
     ws.Range("C2").Resize(r, 5).Interior.Color = RGB(255, 242, 204)
     ws.Range("A1").Resize(r + 1, 8).Borders.LineStyle = 1
+
+    ' NEREDE: parçanýn geçtiði tüm yerler (en çok 8 satýr + "... N yerde daha"); týklayýnca ilk yer açýlýr
+    On Error Resume Next
+    ws.Range("B2").Resize(r, 1).WrapText = True
+    ws.Range("A2").Resize(r, 8).VerticalAlignment = xlTop
+    If Not dictUnkSrc Is Nothing Then
+        i = 1
+        For Each k In dictUnk.keys
+            i = i + 1
+            If dictUnkSrc.Exists(CStr(k)) Then
+                src = dictUnkSrc(CStr(k))
+                srcTxt = CStr(src(1))
+                If src(0) > 8 Then srcTxt = srcTxt & vbLf & "... " & (src(0) - 8) & " yerde daha (AUDIT)"
+                If src(0) > 1 Then srcTxt = "[" & src(0) & " yerde] " & srcTxt
+                If CStr(src(2)) <> "" Then
+                    ws.Hyperlinks.Add Anchor:=ws.Cells(i, 2), Address:=CStr(src(2)), SubAddress:=CStr(src(3)), _
+                                      ScreenTip:="Ýlk geçtiði yeri aç", TextToDisplay:=Left$(srcTxt, 250)
+                End If
+                ws.Cells(i, 2).Value = srcTxt
+            End If
+        Next k
+    End If
+    ws.Range("A2").Resize(r, 1).EntireRow.AutoFit
+    On Error GoTo 0
 
     ' Açýlýr liste seçenekleri gizli Z sütununda (virgül / noktalý virgül bölge ayarýndan baðýmsýz)
     ws.Range("Z1").Value = "ANGLE"

@@ -265,7 +265,7 @@ Public Sub ProcessExcelFile()
                         Else
                             AuditRecord fileName, "EXCEL", r, wsIn.Name, rawName, "BOLT", "ERROR", 20, "", "Cývata çapý/boyu çözülemedi."
                             qtyUnk = qtyUnk + quantVal
-                            If Not dictFeedback.Exists(rawNameUpper) Then dictFeedback.Add rawNameUpper, fileName & " (Satýr: " & r & ")"
+                            Call NoteUnknown(rawNameUpper, r, posNo)
                         End If
 
                     ' ---------- ÖÐRENÝLEN CIVATA / PUL / BAÐLANTI PARÇASI ----------
@@ -394,10 +394,7 @@ Public Sub ProcessExcelFile()
                         If mbLrnKind <> "ANGLE" And Not ProfileKnown(rawNameUpper, dictProfileLib) Then
                             mbIssue = "Profil kütüphanede yok."
                             pnlBad = pnlBad + 1
-                            If Not dictFeedback.Exists(rawNameUpper) Then
-                                dictFeedback.Add rawNameUpper, fileName
-                                ' (kütüphaneye ekleme artýk OGRENME sayfasýndan yapýlýr)
-                            End If
+                            Call NoteUnknown(rawNameUpper, r, posNo)
                         End If
 
                         matCodeStrE = GetProfileMaterialCode(rawName, dictProfileLib)
@@ -443,10 +440,7 @@ Public Sub ProcessExcelFile()
                     Case Else
                         If quantVal > 0 Then
                             qtyUnk = qtyUnk + quantVal
-                            If Not dictFeedback.Exists(rawNameUpper) Then
-                                dictFeedback.Add rawNameUpper, fileName & " (Poz: " & posNo & ")"
-                                ' (kütüphaneye ekleme artýk OGRENME sayfasýndan yapýlýr)
-                            End If
+                            Call NoteUnknown(rawNameUpper, r, posNo)
                             Call AuditRecord(fileName, "EXCEL", r, wsIn.Name, rawName & " | Poz: " & posNo, "UNMATCHED", "UNMATCHED", 0, "", _
                                              "Köþebent/Profil, Plaka veya Cývata olarak sýnýflandýrýlamadý.")
                         End If

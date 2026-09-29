@@ -307,10 +307,7 @@ End If
                         cleanNoSpace = Replace(rawTypeUpper, " ", "")
                         If Not ProfileKnown(rawTypeUpper, dictProfileLib) Then
                             pnlBad = pnlBad + 1
-                            If Not dictFeedback.Exists(rawTypeUpper) Then
-                                dictFeedback.Add rawTypeUpper, fileName
-                                ' (kütüphaneye ekleme artýk OGRENME sayfasýndan yapýlýr)
-End If
+                            Call NoteUnknown(rawTypeUpper, sourceLineNo, "")
                         End If
                         
                         matCodeStr = GetProfileMaterialCode(parts(0), dictProfileLib)

@@ -38,7 +38,9 @@ sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro for
    satıra götürür. Sorun ararken ilk bakılacak yer.
 
 3) TANINMAYAN PARÇALAR (OGRENME sayfası)
- Makro tanımadığı parçaları OGRENME sayfasında listeler. Her satır için:
+ Makro tanımadığı parçaları OGRENME sayfasında listeler. NEREDE (B) sütunu parçanın geçtiği her yeri
+ gösterir (dosya / sayfa / satır / poz; birden çok yerdeyse "[5 yerde]"). Hücreye tıklayınca kaynak dosya
+ ilk geçtiği satırda açılır. Her satır için:
   a) TÜR seçin:
        ANGLE         profil / köşebent   -> MALZEME KODU, MALZEME CİNSİ, kg/m, YÜZEY ALAN
        PLATE         plaka / ızgara       -> KALINLIK (mm), GENİŞLİK (mm)  (boy listeden okunur)

@@ -231,6 +231,7 @@ End If
     dictProfileLib.CompareMode = 1
     dictSelectedFiles.CompareMode = 1
     dictFeedback.CompareMode = 1
+    Set dictUnkSrc = Nothing
     Call LoadLearnedItems
     Set dictQtyCheck = Nothing
     Call PanelReset
