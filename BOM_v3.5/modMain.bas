@@ -135,7 +135,7 @@ Sub Evrensel_BOM_Cevirici_Core()
     Dim partParsed As String
     Dim rawQty As Long, fireliQty As Long
     Dim reconTxt As String, reconOut As Long, reconNoRef As Long, reconRow As Long, reconSheet As String, reconPrev As Long
-    Dim totA As Long, totP As Long, totB As Long
+    Dim totA As Long, totP As Long, totB As Long, boltSheetPending As Boolean
     Dim qtyTxt As String, qtyBadN As Long, pnlOkN As Long, pnlChkN As Long, pnlBadN As Long
     Dim capTxt As String
 
@@ -305,6 +305,47 @@ Else
 End If
     Next sfI
     
+    ' LÝSTE ÜSTÜNE EKLE: SUM'da zaten olan dosya tekrar eklenirse adetleri iki kez sayýlýr -> sor
+    If appendMode And Not isDryRun And Not runQuiet And vfCount > 0 Then
+        Dim dictInSum As Object, wsSx As Worksheet, rSx As Long, dupTxt As String, nDup As Long, keepN As Long
+        Set dictInSum = CreateObject("Scripting.Dictionary")
+        dictInSum.CompareMode = 1
+        For Each wsSx In ThisWorkbook.Worksheets
+            If UCase$(wsSx.Name) = "SUM" Or UCase$(wsSx.Name) Like "SUM_P#*" Then
+                For rSx = 5 To wsSx.Cells(wsSx.Rows.Count, 1).End(xlUp).Row
+                    If Trim$(wsSx.Cells(rSx, 1).Text) <> "" Then dictInSum(Trim$(wsSx.Cells(rSx, 1).Text)) = 1
+                Next rSx
+            End If
+        Next wsSx
+        For sfI = 1 To vfCount
+            If dictInSum.Exists(fso.GetBaseName(validFiles(sfI))) Then
+                nDup = nDup + 1
+                If nDup <= 10 Then dupTxt = dupTxt & "  - " & fso.GetBaseName(validFiles(sfI)) & vbCrLf
+            End If
+        Next sfI
+        If nDup > 0 Then
+            Select Case MsgBox(nDup & " dosya listede ZATEN VAR (adetleri iki kez sayýlýr):" & vbCrLf & dupTxt & _
+                               IIf(nDup > 10, "  ..." & vbCrLf, "") & vbCrLf & _
+                               "EVET  = bu dosyalarý atla, diðerlerini ekle (önerilen)" & vbCrLf & _
+                               "HAYIR = yine de ekle" & vbCrLf & "ÝPTAL = iþlemi durdur", _
+                               vbYesNoCancel + vbExclamation, "Mükerrer dosya")
+                Case vbCancel
+                    GoTo Cikis
+                Case vbYes
+                    keepN = 0
+                    For sfI = 1 To vfCount
+                        If Not dictInSum.Exists(fso.GetBaseName(validFiles(sfI))) Then
+                            keepN = keepN + 1
+                            validFiles(keepN) = validFiles(sfI)
+                        Else
+                            logText = logText & "- ATLANDI (listede zaten var): " & fso.GetBaseName(validFiles(sfI)) & vbCrLf
+                        End If
+                    Next sfI
+                    vfCount = keepN
+            End Select
+        End If
+    End If
+
     If vfCount = 0 Then
         MsgBox "Geçerli yeni bir dosya seçilmedi.", vbExclamation
         GoTo Cikis
@@ -460,7 +501,9 @@ End If
             ' CIVATA LÝSTESÝ TEK PARÇA: mevcut cývatalar okunur, liste yeni dosyalarla birlikte baþtan dizilir
             If Not isDryRun Then
                 Call ImportExistingBolts(curWsBolt, currentColBolt - 1, totB)
-                Call CleanBoltSheet(curWsBolt)
+                ' sayfa burada DEÐÝL, dosyalar iþlendikten sonra (diziliþ öncesi) temizlenir:
+                ' iþlem yarýda kalýrsa mevcut cývata listesi yerinde kalsýn
+                boltSheetPending = True
                 ReDim bufBolt(1 To 2000, 1 To 70)
                 targetRowBolt = 5
             End If
@@ -542,6 +585,10 @@ End If
         ' PAKET CIVATA VE YEÞÝL 3'LÜ SET DÝZÝMÝ
         ' -------------------------------------------------------------------------
         If Not isDryRun Then Call MergeBoltKeysByCode      ' ayný kod + kalite tek satýr
+        If boltSheetPending Then
+            Call CleanBoltSheet(curWsBolt)                  ' ekleme modu: liste baþtan dizilecek
+            boltSheetPending = False
+        End If
         If dictDiameters.Count > 0 And Not isDryRun Then
             Call ShowProgress(1, "Cývatalar listeye diziliyor...")
             
