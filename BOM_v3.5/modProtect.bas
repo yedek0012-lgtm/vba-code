@@ -73,6 +73,29 @@ Public Sub ReprotectOutputSheet(ByVal ws As Worksheet)
     ws.EnableSelection = xlNoRestrictions
 End Sub
 
+' Formül hücrelerini kilitler. SpecialCells 8192'den fazla ayrýk alanda hata verir (hata yutulunca formüller
+' kilitsiz kalýyordu); o durumda sütun sütun kilitlenir.
+Private Sub LockFormulaCells(ByVal ws As Worksheet)
+    Dim ur As Range, fr As Range, i As Long
+    On Error Resume Next
+    Set ur = ws.UsedRange
+    Err.Clear
+    Set fr = ur.SpecialCells(xlCellTypeFormulas)
+    If Err.Number = 0 Then
+        If Not fr Is Nothing Then fr.Locked = True
+        If Err.Number = 0 Then Exit Sub
+    End If
+    For i = 1 To ur.Columns.Count
+        Err.Clear
+        Set fr = Nothing
+        Set fr = ur.Columns(i).SpecialCells(xlCellTypeFormulas)
+        If Err.Number = 0 Then
+            If Not fr Is Nothing Then fr.Locked = True
+        End If
+    Next i
+    Err.Clear
+End Sub
+
 Public Sub ProtectAfterMacro()
     Dim ws As Worksheet, fr As Range, p As String
     On Error Resume Next
@@ -81,9 +104,7 @@ Public Sub ProtectAfterMacro()
         If IsOutputSheet(ws.Name) Then
             Call UnprotectSheet(ws)
             ws.Cells.Locked = False
-            Set fr = Nothing
-            Set fr = ws.UsedRange.SpecialCells(xlCellTypeFormulas)
-            If Not fr Is Nothing Then fr.Locked = True
+            Call LockFormulaCells(ws)
             ws.Protect Password:=p, DrawingObjects:=True, Contents:=True, Scenarios:=True, _
                        UserInterfaceOnly:=True, AllowFormattingCells:=True, AllowFormattingColumns:=True, _
                        AllowFormattingRows:=True, AllowFiltering:=True

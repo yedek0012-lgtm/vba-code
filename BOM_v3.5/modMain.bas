@@ -878,6 +878,7 @@ ErrorHandler:
 
 SafeExit:
     On Error Resume Next
+    Call FinalizeAuditSheet          ' yarýda kalsa da o ana kadarki AUDIT kayýtlarý yazýlsýn
     Call RemoveProgress
     Call ProtectAfterMacro
     Call ResetExcelState
