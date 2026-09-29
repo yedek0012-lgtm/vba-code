@@ -519,12 +519,6 @@ Public Sub ClearReportSheets()
         ws.Tab.ColorIndex = xlColorIndexNone
     End If
     Set ws = Nothing
-    Set ws = ThisWorkbook.Sheets("FEEDBACK")
-    If Not ws Is Nothing Then
-        ws.Cells.Clear
-        ws.Tab.ColorIndex = xlColorIndexNone
-    End If
-    Set ws = Nothing
     Set ws = ThisWorkbook.Sheets("OGRENME")
     If Not ws Is Nothing Then
         ws.Buttons.Delete
@@ -603,6 +597,8 @@ Public Sub AppendRunHistory(ByRef files() As String, ByVal fileCount As Long, By
     ws.Cells(r, 8).Value = CODE_VERSION
     ws.Cells(r, 9).Value = IIf(runBackupPath = "", "-", runBackupPath)
     ws.Cells(r, 10).Value = Left$(fl, 32000)
+    ' Kayýt tutulur ama sekmelerde görünmez (Alt+F8 > Gecmisi_Goster)
+    If ws.Visible = xlSheetVisible And Not ActiveSheet Is ws Then ws.Visible = xlSheetHidden
 Done:
 End Sub
 

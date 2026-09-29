@@ -31,7 +31,7 @@ Option Explicit
 ' 16) Parametreler AYARLAR!F:H bloðunda (kod açmadan deðiþtirilir).
 ' 17) Ýþlem öncesi otomatik yedek, REV/DATE otomatik, GECMIS sayfasý, AUDIT çalýþma bilgisi.
 ' 18) AUDIT satýr numarasý = köprü (müþteri dosyasýnda ilgili satýra gider).
-' 19) Temizle düðmesi AUDIT, FEEDBACK, OGRENME sayfalarýný da temizler.
+' 19) Temizle düðmesi AUDIT, OGRENME, SONUC sayfalarýný da temizler.
 ' 20) Üstüne ekle modunda SUM/BOLTS eski satýrlarý korunur.
 ' 12) FUBL (Futterblech, ör: "FUBL 18X10") Futterring gibi özel bölüme yazýlýr.
 ' =========================================================================
@@ -700,14 +700,16 @@ End If
     logText = logText & "Baþarýyla Ýþlenen Dosya: " & vfCount & vbCrLf
     logText = logText & "Þablona Ýþlenen Toplam Poz: " & totalProcessed & vbCrLf
     
+    ' Eski sürümden kalan boþ FEEDBACK sayfasý (hiçbir þey yazýlmýyordu; yerini SONUC ve OGRENME aldý) silinir
     On Error Resume Next
     Set wsFeed = ThisWorkbook.Sheets("FEEDBACK")
-    On Error GoTo 0
-    If wsFeed Is Nothing Then
-        Set wsFeed = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
-        wsFeed.Name = "FEEDBACK"
+    If Not wsFeed Is Nothing Then
+        Application.DisplayAlerts = False
+        wsFeed.Delete
+        Application.DisplayAlerts = True
     End If
-    wsFeed.Cells.Clear
+    Set wsFeed = Nothing
+    On Error GoTo 0
     
     If isDryRun Then
         finalMsg = "TEST (DRY-RUN) BAÞARIYLA TAMAMLANDI!" & vbCrLf & vbCrLf & _
@@ -900,7 +902,7 @@ Sub Can_Temizleyici()
     
     If wsAngle Is Nothing Or wsPlate Is Nothing Or wsBolt Is Nothing Or wsSum Is Nothing Then Exit Sub
     If MsgBox("Gömülü formülleriniz ve AZ sütunu korunarak veriler temizlenecek." & vbCrLf & _
-              "AUDIT, FEEDBACK, OGRENME ve SONUC sayfalarý da temizlenecek. Onaylýyor musunuz?", vbYesNo + vbQuestion, "Can Temizleyici") = vbNo Then Exit Sub
+              "AUDIT, OGRENME ve SONUC sayfalarý da temizlenecek. Onaylýyor musunuz?", vbYesNo + vbQuestion, "Can Temizleyici") = vbNo Then Exit Sub
     
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
@@ -916,7 +918,7 @@ Sub Can_Temizleyici()
     
     wsSum.Activate
     wsSum.Range("A5").Select
-    MsgBox "Temizlik tamamlandý! AUDIT, FEEDBACK ve OGRENME sayfalarý da temizlendi, REV sýfýrlandý." & vbCrLf & _
+    MsgBox "Temizlik tamamlandý! AUDIT, OGRENME ve SONUC sayfalarý da temizlendi, REV sýfýrlandý." & vbCrLf & _
            "AZ sütunundaki formülünüz ve þablon formülleriniz korundu.", vbInformation, "Can Temizleyici"
 End Sub
 
@@ -1300,3 +1302,18 @@ Sub Kutuphane_Temizle()
     MsgBox n & " satýr silindi ve SILINEN_KAYITLAR sayfasýna yedeklendi.", vbInformation, "Kütüphane Temizle"
 End Sub
 
+' GECMIS (çalýþtýrma kaydý) sekmelerde gizli tutulur; görmek için Alt+F8 > Gecmisi_Goster
+Sub Gecmisi_Goster()
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("GECMIS")
+    On Error GoTo 0
+    If ws Is Nothing Then
+        MsgBox "Henüz kayýt yok (GECMIS sayfasý ilk iþlemde oluþur).", vbInformation
+        Exit Sub
+    End If
+    Call UnprotectForMacro
+    ws.Visible = xlSheetVisible
+    ws.Activate
+    Call ProtectAfterMacro
+End Sub

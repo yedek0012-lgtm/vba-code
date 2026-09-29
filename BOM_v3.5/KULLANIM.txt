@@ -7,7 +7,7 @@ sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro for
  - SUM sayfasındaki düğmeler:
      Eklemeye Başla     : şablonu temizler, seçilen listeleri SIFIRDAN işler.
      Liste Üstüne Ekle  : mevcut sonuçların üstüne yeni listeleri ekler (yeni dosya sütunları açılır).
-     Temizle            : sonuçları ve AUDIT / FEEDBACK / OGRENME sayfalarını temizler (formüller korunur).
+     Temizle            : sonuçları ve AUDIT / OGRENME / SONUC sayfalarını temizler (formüller korunur).
  - Açılan pencerede ek yüzde (cıvata fire) ve "birleştir" (aynı poz farklı dosyalarda tek satır) seçilir.
  - Dosya seçme penceresinde birden fazla dosya seçebilirsiniz: .xlsx .xls .xlsm .xlsb .csv .xsr .txt .pdf
  - PDF: metin tabanlı (Tekla / CAD çıktısı) PDF'ler doğrudan okunur. Taranmış (resim) PDF okunamaz.
@@ -34,6 +34,8 @@ sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro for
    ve işlem sonunda mesajda listelenir.
    L = ADET FARKI (Excel / CSV / PDF): kaynaktaki parça adedi - (şablona yazılan + cıvata + somun/pul seti
    + tanınmayan). 0 olmalı. Kırmızı = adet eksik/fazla ya da bazı satırlarda adet okunamadı (mesajda ve AUDIT'te).
+ - GECMIS: her işlemin kaydı (tarih, kullanıcı, dosyalar, REV, yedek yolu). Sekmelerde gizlidir;
+   görmek için Alt+F8 > Gecmisi_Goster. Eski FEEDBACK sayfası kaldırıldı (boştu).
  - AUDIT: her satırın nasıl okunduğu (EXACT / WARNING / ERROR / SKIPPED). Satır numarası müşteri dosyasındaki
    satıra götürür. Sorun ararken ilk bakılacak yer.
 
