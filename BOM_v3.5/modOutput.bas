@@ -191,20 +191,20 @@ Public Sub CleanTemplateRanges(wsA As Worksheet, wsP As Worksheet, wsB As Worksh
     If Not wsA Is Nothing Then
         lastRow = wsA.Cells(wsA.Rows.Count, "I").End(xlUp).Row
         If lastRow < 1503 Then lastRow = 1503
-        wsA.Range("A5:C" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
-        wsA.Range("E5:F" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
-        wsA.Range("I4:BA" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        Call ClearConstants(wsA.Range("A5:C" & lastRow))
+        Call ClearConstants(wsA.Range("E5:F" & lastRow))
+        Call ClearConstants(wsA.Range("I4:BA" & lastRow))
         ' D, G, H, BC, BD (turuncu, formüllü) sütunlarýna dokunulmaz; not sütunu BE
-        wsA.Range("BE5:BG" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        Call ClearConstants(wsA.Range("BE5:BG" & lastRow))
 End If
     
     If Not wsP Is Nothing Then
         lastRow = wsP.Cells(wsP.Rows.Count, "H").End(xlUp).Row
         If lastRow < 1503 Then lastRow = 1503
-        wsP.Range("A5:F" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
-        wsP.Range("H4:BA" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        Call ClearConstants(wsP.Range("A5:F" & lastRow))
+        Call ClearConstants(wsP.Range("H4:BA" & lastRow))
         ' G, BB, BC (turuncu, formüllü) sütunlarýna dokunulmaz; not sütunu BD
-        wsP.Range("BD5:BF" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        Call ClearConstants(wsP.Range("BD5:BF" & lastRow))
 End If
     
     If Not wsB Is Nothing Then Call CleanBoltSheet(wsB)
@@ -212,8 +212,8 @@ End If
     If Not wsS Is Nothing Then
         lastRow = wsS.Cells(wsS.Rows.Count, "A").End(xlUp).Row
         If lastRow < 5000 Then lastRow = 5000
-        wsS.Range("A5:B" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
-        wsS.Range("H5:H" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        Call ClearConstants(wsS.Range("A5:B" & lastRow))
+        Call ClearConstants(wsS.Range("H5:H" & lastRow))
         wsS.Range("B5:B" & lastRow).Interior.ColorIndex = xlNone
         wsS.Cells(4, 8).Value = "Total Angle+Plate weight"
         wsS.Cells(4, 8).Font.Bold = True
@@ -235,12 +235,12 @@ Public Sub CleanBoltSheet(ByVal wsB As Worksheet)
         lastRow = wsB.Cells(wsB.Rows.Count, "F").End(xlUp).Row
         If wsB.Cells(wsB.Rows.Count, "B").End(xlUp).Row > lastRow Then lastRow = wsB.Cells(wsB.Rows.Count, "B").End(xlUp).Row
         If lastRow < 502 Then lastRow = 502
-        wsB.Range("B5:E" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        Call ClearConstants(wsB.Range("B5:E" & lastRow))
         ' makronun deðer yazdýðý C/E hücrelerine þablon formülünü geri koy
         Call RestoreColumnFormula(wsB, 3, lastRow)
         Call RestoreColumnFormula(wsB, 5, lastRow)
-        wsB.Range("F4:AY" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
-        wsB.Range("BB5:BG" & lastRow).SpecialCells(xlCellTypeConstants).ClearContents
+        Call ClearConstants(wsB.Range("F4:AY" & lastRow))
+        Call ClearConstants(wsB.Range("BB5:BG" & lastRow))
         
         ' Sadece makronun boyadýðý B ve D (yeþil somun/pul satýrý) sýfýrlanýr;
         ' turuncu formüllü C ve E'nin dolgu rengine dokunulmaz (yazý rengi/kalýnlýk sýfýrlanýr)
@@ -1039,9 +1039,71 @@ Public Function EnsureTemplateRows(ByVal ws As Worksheet, ByVal totRow As Long, 
     ws.Rows(insAt & ":" & (insAt + n - 1)).Insert Shift:=xlDown
     ' formül ve biçim bir üstteki veri satýrýndan; kopyalanan sabit deðerler silinir
     ws.Range(ws.Rows(insAt - 1), ws.Rows(insAt + n - 1)).FillDown
-    ws.Range(ws.Rows(insAt), ws.Rows(insAt + n)).SpecialCells(xlCellTypeConstants).ClearContents
+    Call ClearConstants(ws.Range(ws.Rows(insAt), ws.Rows(insAt + n)))
     EnsureTemplateRows = totRow + n
     AuditRecord "", "SYSTEM", totRow, ws.Name, "Þablon büyütüldü", "SYSTEM", "WARNING", 90, _
                 n & " satýr eklendi; toplam satýrý " & totRow & " -> " & (totRow + n), _
                 "Veri þablonun toplam satýrýna ulaþýyordu; formüllü satýr eklendi (toplamlar ve SUM baðlantýlarý kendiliðinden güncellendi)."
 End Function
+
+' Aralýktaki SABÝT deðerleri siler, formüllere dokunmaz. Excel'in SpecialCells'i 8192'den fazla ayrýk alan
+' olunca HATA verir (daðýnýk adet sütunlarýnda olur); eski sürümde bu hata yutulduðu için temizlik HÝÇ
+' yapýlmýyordu ve önceki çalýþtýrmanýn adetleri kalýp yeni adetlere ekleniyordu. Hata olursa sütun sütun silinir.
+Public Sub ClearConstants(ByVal rng As Range)
+    Dim i As Long, c As Range
+    If rng Is Nothing Then Exit Sub
+    On Error Resume Next
+    Err.Clear
+    Set c = rng.SpecialCells(xlCellTypeConstants)
+    If Err.Number = 0 Then
+        If Not c Is Nothing Then c.ClearContents
+        If Err.Number = 0 Then Exit Sub
+    End If
+    ' ("hücre bulunamadý" da buraya düþer; sütun sütun denemek zararsýz)
+    For i = 1 To rng.Columns.Count
+        Err.Clear
+        Set c = Nothing
+        Set c = rng.Columns(i).SpecialCells(xlCellTypeConstants)
+        If Err.Number = 0 Then
+            If Not c Is Nothing Then c.ClearContents
+        End If
+    Next i
+    Err.Clear
+End Sub
+
+' Veri alanýndaki formül sütunlarýný (ilk veri satýrlarýnda formül olanlar: kg/m, birim aðýrlýk, toplam...)
+' toplam satýrýnýn bir üstüne kadar doldurur. Þablonda formül erken bitmiþse (ör. PLATE G 979'da) o satýrlarýn
+' aðýrlýðý hesaplanmýyordu. Sadece BOÞ hücrelere yazýlýr.
+Public Sub FillFormulaColumns(ByVal ws As Worksheet, ByVal totRow As Long)
+    Dim c As Long, lastC As Long, r0 As Long, pat As String, blanks As Range, n As Long
+    On Error Resume Next
+    If ws Is Nothing Or totRow <= 9 Then Exit Sub
+    lastC = ws.Cells(4, ws.Columns.Count).End(xlToLeft).Column
+    If lastC < 60 Then lastC = 60
+    For c = 1 To lastC
+        pat = ""
+        For r0 = 5 To 8
+            If ws.Cells(r0, c).HasFormula Then
+                pat = ws.Cells(r0, c).FormulaR1C1
+                Exit For
+            End If
+        Next r0
+        If pat <> "" Then
+            Err.Clear
+            Set blanks = Nothing
+            Set blanks = ws.Range(ws.Cells(r0 + 1, c), ws.Cells(totRow - 1, c)).SpecialCells(xlCellTypeBlanks)
+            If Err.Number = 0 Then
+                If Not blanks Is Nothing Then
+                    n = n + blanks.Count
+                    blanks.FormulaR1C1 = pat
+                End If
+            End If
+            Err.Clear
+        End If
+    Next c
+    If n > 0 Then
+        AuditRecord "", "SYSTEM", 0, ws.Name, "Þablon formülleri tamamlandý", "SYSTEM", "WARNING", 90, _
+                    n & " boþ hücreye formül yazýldý (toplam satýrý " & totRow & ")", _
+                    "Þablonda formüller veri alanýnýn sonuna kadar gitmiyordu; o satýrlarýn aðýrlýðý hesaplanmýyordu."
+    End If
+End Sub

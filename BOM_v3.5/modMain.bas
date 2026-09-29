@@ -389,6 +389,9 @@ End If
             ' eski sürümün sildiði toplam formülleri onarýlýr (onarýlamazsa uyarý)
             capTxt = capTxt & TotalsRowDamage(curWsAngle, totA, 9, 54) & TotalsRowDamage(curWsPlate, totP, 8, 53) & _
                      TotalsRowDamage(curWsBolt, totB, 6, 51)
+            ' formül sütunlarý (kg/m, birim aðýrlýk...) toplam satýrýna kadar dolu olsun
+            Call FillFormulaColumns(curWsAngle, totA)
+            Call FillFormulaColumns(curWsPlate, totP)
         End If
 
         ReDim bufAngle(1 To 5000, 1 To 70)
