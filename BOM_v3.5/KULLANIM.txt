@@ -30,6 +30,9 @@ sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro for
    MATERIAL (C) ve UNIT WEIGHT (E) şablon formülüyle BOLT-LIBRARY'den gelir; makro bu formüllere dokunmaz.
    KIRMIZI KALIN yazı = kod BOLT-LIBRARY'de yok (veya formülün aralığı dışında); değeri makro yazdı
    (ağırlıksa tahmin). Kodu kütüphaneye ekleyin; sonraki SIFIRDAN çalıştırmada formül geri gelir.
+ - BAŞLIKLAR (ANGLE / PLATE / BOLTS 2. satır): SUM A'daki dosya adı. Farklı bir ad isterseniz SUM K'ya yazın
+   (başlık hücresine değil; o formül ve korumalı). K'ya yazılan ad sonraki çalıştırmalarda da korunur;
+   K'yı silerseniz başlık tekrar dosya adı olur.
  - SUM: her dosyanın şablon ağırlığı (C+D), listedeki ağırlık (H) ve farkı (J). Tolerans dışı fark kırmızıdır
    ve işlem sonunda mesajda listelenir.
    L = ADET FARKI (Excel / CSV / PDF): kaynaktaki parça adedi - (şablona yazılan + cıvata + somun/pul seti

@@ -120,3 +120,6 @@ Public curInputWb As Workbook      ' Excel motorunun açtýðý kaynak kitap (hata o
 
 ' --- OGRENME kaynaklarý: parça adý -> Array(geçtiði yer sayýsý, yer listesi, ilk dosya yolu, ilk sayfa!hücre) ---
 Public dictUnkSrc As Object
+
+' --- SUM K'ya elle yazýlan baþlýk adlarý (dosya adý -> ad), KISA_ADLAR sayfasýndan ---
+Public dictShortNames As Object

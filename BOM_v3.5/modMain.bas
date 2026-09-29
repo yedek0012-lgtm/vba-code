@@ -235,6 +235,7 @@ End If
     Call LoadLearnedItems
     Set dictQtyCheck = Nothing
     Call PanelReset
+    Call CaptureShortNames          ' SUM K'daki elle yazýlmýþ baþlýk adlarý (temizlikten önce)
     
     If Not wsBoltLib Is Nothing Then
         For rLib = 3 To wsBoltLib.Cells(wsBoltLib.Rows.Count, 1).End(xlUp).Row
@@ -910,6 +911,7 @@ Sub Can_Temizleyici()
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     Call UnprotectForMacro
+    Call CaptureShortNames          ' elle yazýlan baþlýk adlarý temizlikte kaybolmasýn
     Call CleanTemplateRanges(wsAngle, wsPlate, wsBolt, wsSum)
     Call ClearReportSheets
     ' REV / DATE sýfýrla
