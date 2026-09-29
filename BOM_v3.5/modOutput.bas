@@ -807,15 +807,71 @@ Public Sub UpdateFileHeaders(ByVal wsS As Worksheet, ByVal wsA As Worksheet, ByV
     If Not wsB Is Nothing Then Call FitHeaderCells(wsB.Range(wsB.Cells(2, 6), wsB.Cells(2, 51)))
 End Sub
 
+' Veri satýrlarýnýn yazý tipini sütun sütun tek tipe getirir (þablonda satýrlar farklý biçimlenmiþ olabilir).
+' Her sütunda ilk 100 satýrda en çok kullanýlan yazý tipi / boy / kalýnlýk bütün veri satýrlarýna uygulanýr;
+' adet sütunlarý (qFirst..qLast) ilk adet sütununun biçimini alýr. Renklere ve formüllü sütunlara dokunulmaz.
+Public Sub NormalizeDataFonts(ByVal ws As Worksheet, ByVal lastRow As Long, ByVal cols As Variant, _
+                              ByVal qFirst As Long, ByVal qLast As Long)
+    Dim i As Long
+    On Error Resume Next
+    If ws Is Nothing Or lastRow < 5 Then Exit Sub
+    For i = LBound(cols) To UBound(cols)
+        Call ApplyColumnFontMode(ws, CLng(cols(i)), CLng(cols(i)), CLng(cols(i)), lastRow)
+    Next i
+    If qLast >= qFirst Then Call ApplyColumnFontMode(ws, qFirst, qFirst, qLast, lastRow)
+End Sub
+
+Private Sub ApplyColumnFontMode(ByVal ws As Worksheet, ByVal sampleCol As Long, ByVal c1 As Long, ByVal c2 As Long, ByVal lastRow As Long)
+    Dim r As Long, rEnd As Long, key As String, best As String, cnt As Object, k As Variant, pr As Variant
+    On Error Resume Next
+    Set cnt = CreateObject("Scripting.Dictionary")
+    rEnd = lastRow
+    If rEnd > 104 Then rEnd = 104
+    For r = 5 To rEnd
+        With ws.Cells(r, sampleCol).Font
+            key = .Name & "|" & .Size & "|" & CStr(.Bold)
+        End With
+        cnt(key) = cnt(key) + 1
+    Next r
+    For Each k In cnt.Keys
+        If best = "" Then best = CStr(k)
+        If cnt(k) > cnt(best) Then best = CStr(k)
+    Next k
+    pr = Split(best, "|")
+    If UBound(pr) <> 2 Then Exit Sub
+    With ws.Range(ws.Cells(5, c1), ws.Cells(lastRow, c2)).Font
+        .Name = pr(0)
+        .Size = CDbl(pr(1))
+        .Bold = (pr(2) = "True")
+    End With
+End Sub
+
 ' Dosya adý baþlýklarý (dikey yazý): yazý KÜÇÜLTÜLMEZ (þablonun yazý boyu kalýr, SUM'daki gibi);
 ' en uzun ad sýðmýyorsa baþlýk satýrý (2) uzatýlýr. Önceki sürümün "sýðdýrmak için küçült" ayarý kaldýrýlýr.
 Private Sub FitHeaderCells(ByVal rng As Range)
     Dim cel As Range, maxLen As Long, fs As Double, need As Double, have As Double
     On Error Resume Next
+    Dim key As String, best As String, cnt As Object, k As Variant, pr As Variant
+    ' Baþlýklar tek tip: bu satýrda en çok kullanýlan yazý tipi / boyu / kalýnlýk hepsine uygulanýr
+    Set cnt = CreateObject("Scripting.Dictionary")
+    For Each cel In rng.Cells
+        key = cel.Font.Name & "|" & cel.Font.Size & "|" & CStr(cel.Font.Bold)
+        cnt(key) = cnt(key) + 1
+    Next cel
+    For Each k In cnt.Keys
+        If best = "" Then best = CStr(k)
+        If cnt(k) > cnt(best) Then best = CStr(k)
+    Next k
+    pr = Split(best, "|")
     For Each cel In rng.Cells
         With cel.MergeArea
             .ShrinkToFit = False
             .WrapText = False
+            If UBound(pr) = 2 Then
+                .Font.Name = pr(0)
+                .Font.Size = CDbl(pr(1))
+                .Font.Bold = (pr(2) = "True")
+            End If
         End With
         If Len(cel.Text) > maxLen Then maxLen = Len(cel.Text)
     Next cel

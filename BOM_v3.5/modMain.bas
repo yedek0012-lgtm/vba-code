@@ -682,6 +682,9 @@ End If
             If reconPrev = 0 And reconRow > 0 Then reconSheet = curWsSum.Name
             qtyTxt = qtyTxt & CollectQtyCheck(curWsSum, qtyBadN)
             Call UpdateFileHeaders(curWsSum, curWsAngle, curWsPlate, curWsBolt)
+            ' þablonda satýr satýr farklý biçim olabilir: yazýlan sütunlar tek tip yazý tipine getirilir
+            Call NormalizeDataFonts(curWsAngle, targetRowAngle - 1, Array(1, 2, 3, 5, 6, 57), 9, currentColAngle - 1)
+            Call NormalizeDataFonts(curWsPlate, targetRowPlate - 1, Array(1, 2, 3, 4, 5, 6, 56), 8, currentColPlate - 1)
             Call CheckLibraryHealth(curWsAngle, targetRowAngle - 1)
         End If
         batchNum = batchNum + 1
@@ -1226,6 +1229,45 @@ Public Sub BOM_OnOpen()
     Call UnprotectForMacro
     Call FixButtonMacros
     Call ProtectAfterMacro
+End Sub
+
+' Ctrl+Shift+L (Excel'in filtre kýsayolu) sadece BU kitap etkinken Filtre_Ac_Kapa'ya baðlanýr;
+' ThisWorkbook > Workbook_Activate / Workbook_Deactivate çaðýrýr (ThisWorkbook_kodu.txt).
+Public Sub BOM_KeysOn()
+    On Error Resume Next
+    Application.OnKey "^+l", "'" & ThisWorkbook.Name & "'!Filtre_Ac_Kapa"
+End Sub
+
+Public Sub BOM_KeysOff()
+    On Error Resume Next
+    Application.OnKey "^+l"
+End Sub
+
+' FÝLTRE AÇ / KAPAT (Ctrl+Shift+L ya da Alt+F8). Çýktý sayfalarý formüller için korumalý olduðundan
+' Excel filtreyi açýp kapatmaya izin vermez (açýlýr listeler çalýþýr). Bu makro korumayý kýsa süre açar,
+' 4. satýrdaki baþlýklardan filtreyi açar / kapatýr ve sayfayý tekrar korur.
+' Baþka bir çalýþma kitabýnda Excel'in normal filtre davranýþý uygulanýr.
+Sub Filtre_Ac_Kapa()
+    Dim ws As Worksheet, lastR As Long, lastC As Long
+    On Error Resume Next
+    Set ws = ActiveSheet
+    If ws Is Nothing Then Exit Sub
+    If Not (ActiveWorkbook Is ThisWorkbook) Or Not IsOutputSheet(ws.Name) Then
+        If ws.AutoFilterMode Then ws.AutoFilterMode = False Else Selection.AutoFilter
+        Exit Sub
+    End If
+    Call UnprotectSheet(ws)
+    If ws.AutoFilterMode Then
+        ws.AutoFilterMode = False                      ' filtre kalkar, gizli satýrlar görünür
+    Else
+        lastR = ws.Cells(ws.Rows.Count, 2).End(xlUp).Row
+        If ws.Cells(ws.Rows.Count, 1).End(xlUp).Row > lastR Then lastR = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+        If lastR < 5 Then lastR = 5
+        lastC = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
+        If lastC < 2 Then lastC = 2
+        ws.Range(ws.Cells(4, 1), ws.Cells(lastR, lastC)).AutoFilter
+    End If
+    Call ReprotectOutputSheet(ws)
 End Sub
 
 ' Düðmeler "Module6.Can_Temizleyici" gibi ESKÝ modül adýyla atanmýþsa,

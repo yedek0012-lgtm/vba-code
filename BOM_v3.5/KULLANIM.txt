@@ -34,6 +34,8 @@ sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro for
    ve işlem sonunda mesajda listelenir.
    L = ADET FARKI (Excel / CSV / PDF): kaynaktaki parça adedi - (şablona yazılan + cıvata + somun/pul seti
    + tanınmayan). 0 olmalı. Kırmızı = adet eksik/fazla ya da bazı satırlarda adet okunamadı (mesajda ve AUDIT'te).
+ - FİLTRE: sayfalar formüller için korumalı; açılır listelerle filtreleme çalışır. Filtreyi açıp kapatmak için
+   Ctrl+Shift+L (ya da Alt+F8 > Filtre_Ac_Kapa). Kısayol için ThisWorkbook kodunun güncel olması gerekir.
  - GECMIS: her işlemin kaydı (tarih, kullanıcı, dosyalar, REV, yedek yolu). Sekmelerde gizlidir;
    görmek için Alt+F8 > Gecmisi_Goster. Eski FEEDBACK sayfası kaldırıldı (boştu).
  - AUDIT: her satırın nasıl okunduğu (EXACT / WARNING / ERROR / SKIPPED). Satır numarası müşteri dosyasındaki
