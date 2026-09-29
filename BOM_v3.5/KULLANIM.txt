@@ -62,6 +62,8 @@ sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro for
  - Bir kez öğretilen parça sonraki bütün listelerde otomatik tanınır.
 
 4) SORUN GİDERME
+ - Şablon bozulduysa (ağırlıklar 0 / katlanmış, formüller silinmiş): Alt+F8 > Yedekten_Geri_Yukle ile işlem öncesi
+   otomatik yedeği (YEDEK klasörü, dosya adında tarih) seçin; sonra listeyi Eklemeye Başla ile yeniden işleyin.
  - Ağırlık farkı (SUM J kırmızı): AUDIT'te o dosyanın ERROR / WARNING satırlarına bakın; OGRENME'de bekleyen
    parça var mı; Alt+F8 > Kutuphane_Kontrol ile kütüphanede boş / şüpheli kg/m var mı.
  - Adet farkı (SUM L kırmızı): AUDIT'te o dosyada "Adet okunamadı" satırlarını arayın. PDF'te genellikle
