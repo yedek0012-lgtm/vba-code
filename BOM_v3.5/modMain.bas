@@ -1456,7 +1456,12 @@ Sub Yedekten_Geri_Yukle()
     Call LoadParameters
     folder = prmBackupFolder
     If folder = "" Then
-        If ThisWorkbook.Path <> "" Then folder = ThisWorkbook.Path & "\YEDEK" Else folder = Environ$("USERPROFILE") & "\Documents\BOM_YEDEK"
+        ' MakeBackup ile ayný: OneDrive/SharePoint (https://...) ya da kaydedilmemiþ dosyada Belgeler\BOM_YEDEK
+        If ThisWorkbook.Path <> "" And LCase$(Left$(ThisWorkbook.Path, 4)) <> "http" Then
+            folder = ThisWorkbook.Path & "\YEDEK"
+        Else
+            folder = Environ$("USERPROFILE") & "\Documents\BOM_YEDEK"
+        End If
     End If
     Set fd = Application.FileDialog(3)            ' msoFileDialogFilePicker
     fd.Title = "Geri yüklenecek YEDEK dosyasýný seçin (dosya adýndaki tarih = iþlemden önceki an)"
