@@ -325,3 +325,123 @@ Public Function LibraryContainsBoltCode(ByVal code As String, ByRef dictLib As O
 Fail:
     LibraryContainsBoltCode = False
 End Function
+
+' =========================================================================
+' CIVATA LÝSTESÝ HER ZAMAN TEK PARÇA
+' "Liste Üstüne Ekle"de mevcut cývata satýrlarý okunur (otomatik somun / pul / rondela satýrlarý hariç,
+' onlar yeniden hesaplanýr) ve yeni dosyalarla birlikte liste baþtan dizilir: ayný kod tek satýr,
+' her dosyanýn adedi kendi sütununda.
+' =========================================================================
+' Sayfadan okunan anahtarlar (birleþtirmede bu çalýþtýrmanýn anahtarý tercih edilir)
+Private dictImportedBolts As Object
+
+Public Sub ImportExistingBolts(ByVal ws As Worksheet, ByVal colEnd As Long)
+    Dim auto As Object, dd As Variant, r As Long, lastR As Long, c As Long, q As Double, lastAuto As Long
+    Dim code As String, nm As String, qual As String, note As String, key As String
+    Dim d As Long, l As Long, hwC As String, hwN As String, isFu As Boolean, bn As String, qo As String
+    On Error Resume Next
+    If ws Is Nothing Then Exit Sub
+    Set auto = CreateObject("Scripting.Dictionary")
+    auto.CompareMode = 1
+    For Each dd In Array(6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 27, 30, 33, 36, 39, 42, 45, 48, 52, 56, 60, 64)
+        auto(GetNutCode(CLng(dd))) = 1
+        auto(GetPWCode(CLng(dd))) = 1
+        auto(GetSWCode(CLng(dd))) = 1
+    Next dd
+    Set dictImportedBolts = CreateObject("Scripting.Dictionary")
+    dictImportedBolts.CompareMode = 1
+    lastR = ws.Cells(ws.Rows.Count, 2).End(xlUp).Row
+    ' Diziliþ: her çap için cývatalar + 3 otomatik satýr, en sonda ÖZEL bölüm (öðrenilen / futterring).
+    ' Son otomatik satýrdan sonraki satýrlar özel bölümdür.
+    For r = 5 To lastR
+        If auto.Exists(Trim$(ws.Cells(r, 2).Text)) Then lastAuto = r
+    Next r
+    For r = 5 To lastR
+        code = Trim$(ws.Cells(r, 2).Text)
+        If code <> "" And Not auto.Exists(code) Then
+            nm = Trim$(ws.Cells(r, 3).Text)
+            If nm = "" Then nm = code
+            qual = Trim$(ws.Cells(r, 4).Text)
+            note = Trim$(CStr(ws.Cells(r, 54).Value))
+            d = 0: l = 0: isFu = False
+            Call ParseBoltSpecs(nm, d, l, hwC, hwN, isFu, bn, qual, qo)
+            ' özel bölüm satýrý ya da çapý çözülemeyen: özel (somun/pul üretilmez)
+            If (lastAuto > 0 And r > lastAuto) Or d <= 0 Then
+                d = 99
+                l = 0
+                isFu = True
+            End If
+            If d = 99 Then
+                key = "99|0000|" & code & "|" & qual
+            Else
+                key = Format(d, "00") & "|" & Format(l, "0000") & "|" & code & "|" & qual
+            End If
+            dictImportedBolts(key) = 1
+            If Not dictBoltList.Exists(key) Then
+                dictBoltList.Add key, d & "^" & l & "^" & code & "^" & nm & "^" & qual & "^" & CStr(isFu) & "^" & note
+            End If
+            If Not dictDiameters.Exists(CStr(d)) Then dictDiameters.Add CStr(d), d
+            For c = 6 To colEnd
+                q = CellNumber(ws.Cells(r, c))
+                If q > 0 Then dictBoltQty(key & "|" & c) = dictBoltQty(key & "|" & c) + q
+            Next c
+        End If
+    Next r
+End Sub
+
+' Ayný KOD + KALÝTE birden çok anahtarla geldiyse (farklý yazým, önceki çalýþtýrma) tek satýrda birleþtirir.
+' Çapý çözülmüþ (99 olmayan) anahtar tercih edilir; adetler o anahtara taþýnýr. Çap listesi yeniden kurulur.
+Public Sub MergeBoltKeysByCode()
+    Dim canon As Object, k As Variant, p As Variant, id As String, cur As Variant, qk As Variant
+    Dim pre As String, tgt As String, colPart As String, moved As Object
+    On Error Resume Next
+    If dictBoltList Is Nothing Then Exit Sub
+    Set canon = CreateObject("Scripting.Dictionary")
+    canon.CompareMode = 1
+    For Each k In dictBoltList.Keys
+        p = Split(dictBoltList(k), "^")
+        id = UCase$(Trim$(p(2))) & "|" & UCase$(Trim$(p(4)))
+        If Not canon.Exists(id) Then
+            canon.Add id, CStr(k)
+        Else
+            ' bu çalýþtýrmanýn anahtarý sayfadan okunana tercih edilir; ayný kaynaktan ise çapý çözülmüþ olan
+            If IsImportedBolt(canon(id)) And Not IsImportedBolt(CStr(k)) Then
+                canon(id) = CStr(k)
+            ElseIf IsImportedBolt(canon(id)) = IsImportedBolt(CStr(k)) Then
+                cur = Split(dictBoltList(canon(id)), "^")
+                If CLng(Val(cur(0))) = 99 And CLng(Val(p(0))) <> 99 Then canon(id) = CStr(k)
+            End If
+        End If
+    Next k
+    Set moved = CreateObject("Scripting.Dictionary")
+    For Each k In dictBoltList.Keys
+        p = Split(dictBoltList(k), "^")
+        id = UCase$(Trim$(p(2))) & "|" & UCase$(Trim$(p(4)))
+        tgt = canon(id)
+        If CStr(k) <> tgt Then moved.Add CStr(k), tgt
+    Next k
+    For Each k In moved.Keys
+        pre = CStr(k) & "|"
+        tgt = moved(k)
+        For Each qk In dictBoltQty.Keys
+            If Left$(CStr(qk), Len(pre)) = pre Then
+                colPart = Mid$(CStr(qk), Len(pre) + 1)
+                If InStr(colPart, "|") = 0 Then
+                    dictBoltQty(tgt & "|" & colPart) = dictBoltQty(tgt & "|" & colPart) + dictBoltQty(qk)
+                    dictBoltQty.Remove qk
+                End If
+            End If
+        Next qk
+        dictBoltList.Remove k
+    Next k
+    dictDiameters.RemoveAll
+    For Each k In dictBoltList.Keys
+        p = Split(dictBoltList(k), "^")
+        If Not dictDiameters.Exists(CStr(CLng(Val(p(0))))) Then dictDiameters.Add CStr(CLng(Val(p(0)))), CLng(Val(p(0)))
+    Next k
+End Sub
+
+Private Function IsImportedBolt(ByVal key As String) As Boolean
+    If dictImportedBolts Is Nothing Then Exit Function
+    IsImportedBolt = dictImportedBolts.Exists(key)
+End Function
