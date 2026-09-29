@@ -2,6 +2,15 @@ Attribute VB_Name = "modAudit"
 Option Explicit
 Option Private Module
 
+' AUDIT hýzlý yazým: iþlem sýrasýnda kayýtlar bellekte toplanýr, 2000'lik bloklar hâlinde tek seferde yazýlýr
+' (eskiden her kayýt 11 hücre + renk + köprü = ~15 ayrý Excel iþlemiydi). Renk koþullu biçimlendirmeyle,
+' SATIR köprüsü HYPERLINK formülüyle verilir.
+Private Const AUDIT_BLOCK As Long = 2000
+Private auditBuf() As Variant
+Private auditBufN As Long
+Private auditBufStart As Long
+Private auditBuffering As Boolean
+
 ' =========================================================================
 ' RAPOR: AUDIT, OGRENME, GECMIS, yedek, REV/DATE
 ' =========================================================================
@@ -46,10 +55,79 @@ End If
     auditWs.Range("A1:K1").Interior.Color = RGB(0, 51, 102)
     auditWs.Range("A1:K1").Font.Color = RGB(255, 255, 255)
     auditWs.Range("A1:K1").AutoFilter
+    Call SetAuditStatusFormats
+    ReDim auditBuf(1 To AUDIT_BLOCK, 1 To 11)
+    auditBufN = 0
+    auditBufStart = 2
+    auditBuffering = True
     Exit Sub
 AuditFail:
     Set auditWs = Nothing
+    auditBuffering = False
 End Sub
+
+' DURUM (H) rengi: EXACT yeþil, WARNING turuncu, diðerleri kýrmýzý (fonksiyon adý yok: Türkçe Excel'de de çalýþýr)
+Private Sub SetAuditStatusFormats()
+    Dim rng As Range, fc As Object
+    On Error Resume Next
+    Set rng = auditWs.Range("H2:H200000")
+    rng.FormatConditions.Delete
+    Set fc = rng.FormatConditions.Add(Type:=xlCellValue, Operator:=xlEqual, Formula1:="=""EXACT""")
+    fc.Interior.Color = RGB(0, 153, 76)
+    fc.Font.Color = RGB(255, 255, 255)
+    fc.StopIfTrue = True
+    Set fc = rng.FormatConditions.Add(Type:=xlCellValue, Operator:=xlEqual, Formula1:="=""WARNING""")
+    fc.Interior.Color = RGB(255, 192, 0)
+    fc.StopIfTrue = True
+    Set fc = rng.FormatConditions.Add(Type:=xlExpression, Formula1:="=$H2<>""""")
+    fc.Interior.Color = RGB(192, 0, 0)
+    fc.Font.Color = RGB(255, 255, 255)
+End Sub
+
+' Bellekteki AUDIT kayýtlarýný sayfaya yazar
+Public Sub FlushAuditBuffer()
+    Dim outArr() As Variant, r As Long, c As Long
+    On Error Resume Next
+    If Not auditBuffering Or auditWs Is Nothing Then Exit Sub
+    If auditBufN > 0 Then
+        ReDim outArr(1 To auditBufN, 1 To 11)
+        For r = 1 To auditBufN
+            For c = 1 To 11
+                outArr(r, c) = auditBuf(r, c)
+            Next c
+        Next r
+        auditWs.Cells(auditBufStart, 1).Resize(auditBufN, 11).Value = outArr
+    End If
+    auditBufStart = auditBufStart + auditBufN
+    auditBufN = 0
+    ReDim auditBuf(1 To AUDIT_BLOCK, 1 To 11)
+End Sub
+
+' SATIR sütunu: kaynaða giden HYPERLINK formülü (çok uzun yolda sadece sayý)
+Private Function AuditLinkCell(ByVal sourceType As String, ByVal sourceRow As Long, ByVal sectionName As String) As Variant
+    Dim tgt As String
+    AuditLinkCell = sourceRow
+    If sourceRow <= 0 Then Exit Function
+    If UCase$(sourceType) = "LIBRARY" Then
+        tgt = "#'" & Replace(sectionName, "'", "''") & "'!A" & sourceRow
+    ElseIf auditCurrentPath <> "" Then
+        tgt = auditCurrentPath
+        If auditCurrentSheet <> "" Then tgt = tgt & "#'" & Replace(auditCurrentSheet, "'", "''") & "'!A" & sourceRow
+    Else
+        Exit Function
+    End If
+    If Len(tgt) > 250 Then Exit Function
+    AuditLinkCell = "=HYPERLINK(""" & Replace(tgt, """", """""") & """," & sourceRow & ")"
+End Function
+
+' Metin hücresi: 500 karakter; "=" "+" "-" "@" ile baþlayan metin formül sanýlmasýn
+Private Function AuditText(ByVal t As String) As String
+    t = Left$(t, 500)
+    If Len(t) > 0 Then
+        If InStr("=+-@", Left$(t, 1)) > 0 Then t = "'" & t
+    End If
+    AuditText = t
+End Function
 
 Public Sub AuditRecord(ByVal fileName As String, ByVal sourceType As String, ByVal sourceRow As Long, ByVal sectionName As String, ByVal rawText As String, ByVal itemType As String, ByVal status As String, ByVal confidence As Long, ByVal parsedText As String, ByVal issueText As String)
     On Error GoTo AuditExit
@@ -67,51 +145,45 @@ Public Sub AuditRecord(ByVal fileName As String, ByVal sourceType As String, ByV
     End If
 
     If auditWs Is Nothing Then Exit Sub
-    auditWs.Cells(auditNextRow, 1).Value = Now
-    auditWs.Cells(auditNextRow, 2).Value = fileName
-    auditWs.Cells(auditNextRow, 3).Value = sourceType
-    auditWs.Cells(auditNextRow, 4).Value = sourceRow
-    auditWs.Cells(auditNextRow, 5).Value = sectionName
-    auditWs.Cells(auditNextRow, 6).Value = Left$(rawText, 500)
-    auditWs.Cells(auditNextRow, 7).Value = itemType
-    auditWs.Cells(auditNextRow, 8).Value = status
-    auditWs.Cells(auditNextRow, 9).Value = confidence
-    auditWs.Cells(auditNextRow, 10).Value = Left$(parsedText, 500)
-    auditWs.Cells(auditNextRow, 11).Value = Left$(issueText, 500)
-
-    Select Case UCase$(status)
-        Case "EXACT"
-            auditWs.Cells(auditNextRow, 8).Interior.Color = RGB(0, 153, 76)
-            auditWs.Cells(auditNextRow, 8).Font.Color = RGB(255, 255, 255)
-        Case "WARNING"
-            auditWs.Cells(auditNextRow, 8).Interior.Color = RGB(255, 192, 0)
-        Case Else
-            auditWs.Cells(auditNextRow, 8).Interior.Color = RGB(192, 0, 0)
-            auditWs.Cells(auditNextRow, 8).Font.Color = RGB(255, 255, 255)
-    End Select
-    auditNextRow = auditNextRow + 1
-
-    ' Köprü: SATIR hücresine týklayýnca kaynaða git
-    On Error Resume Next
-    Dim linkRow As Long, subAddr As String
-    linkRow = auditNextRow - 1
-    If sourceRow > 0 Then
-        If UCase$(sourceType) = "LIBRARY" Then
-            subAddr = "'" & Replace(sectionName, "'", "''") & "'!A" & sourceRow
-            auditWs.Hyperlinks.Add Anchor:=auditWs.Cells(linkRow, 4), Address:="", SubAddress:=subAddr, TextToDisplay:=CStr(sourceRow)
-        ElseIf auditCurrentPath <> "" Then
-            subAddr = ""
-            If auditCurrentSheet <> "" Then subAddr = "'" & Replace(auditCurrentSheet, "'", "''") & "'!A" & sourceRow
-            auditWs.Hyperlinks.Add Anchor:=auditWs.Cells(linkRow, 4), Address:=auditCurrentPath, SubAddress:=subAddr, TextToDisplay:=CStr(sourceRow)
-        End If
+    If auditBuffering Then
+        If auditBufN >= AUDIT_BLOCK Then Call FlushAuditBuffer
+        auditBufN = auditBufN + 1
+        auditBuf(auditBufN, 1) = Now
+        auditBuf(auditBufN, 2) = fileName
+        auditBuf(auditBufN, 3) = sourceType
+        auditBuf(auditBufN, 4) = AuditLinkCell(sourceType, sourceRow, sectionName)
+        auditBuf(auditBufN, 5) = sectionName
+        auditBuf(auditBufN, 6) = AuditText(rawText)
+        auditBuf(auditBufN, 7) = itemType
+        auditBuf(auditBufN, 8) = status
+        auditBuf(auditBufN, 9) = confidence
+        auditBuf(auditBufN, 10) = AuditText(parsedText)
+        auditBuf(auditBufN, 11) = AuditText(issueText)
+    Else
+        ' iþlem dýþýnda (tek tük kayýt): doðrudan yazýlýr
+        With auditWs
+            .Cells(auditNextRow, 1).Value = Now
+            .Cells(auditNextRow, 2).Value = fileName
+            .Cells(auditNextRow, 3).Value = sourceType
+            .Cells(auditNextRow, 4).Value = AuditLinkCell(sourceType, sourceRow, sectionName)
+            .Cells(auditNextRow, 5).Value = sectionName
+            .Cells(auditNextRow, 6).Value = AuditText(rawText)
+            .Cells(auditNextRow, 7).Value = itemType
+            .Cells(auditNextRow, 8).Value = status
+            .Cells(auditNextRow, 9).Value = confidence
+            .Cells(auditNextRow, 10).Value = AuditText(parsedText)
+            .Cells(auditNextRow, 11).Value = AuditText(issueText)
+        End With
     End If
-    On Error GoTo 0
+    auditNextRow = auditNextRow + 1
 AuditExit:
 End Sub
 
 Public Sub FinalizeAuditSheet()
     On Error GoTo AuditFail
-    If auditWs Is Nothing Then Exit Sub
+    If auditWs Is Nothing Or Not auditBuffering Then Exit Sub     ' sadece açýk bir iþlem için (iki kez çaðrýlabilir)
+    Call FlushAuditBuffer
+    auditBuffering = False
     With auditWs
         .Rows(1).AutoFilter
         .Columns("A:K").EntireColumn.AutoFit
