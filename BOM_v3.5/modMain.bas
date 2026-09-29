@@ -753,6 +753,13 @@ End If
             Next bKey
 End If
         
+        ' Veri þablonun toplam satýrýna ulaþýyorsa þablon büyütülür (toplam satýrýnýn üstüne formüllü satýr).
+        ' Sadece veri alaný toplam satýrýna kadar uzanýyorsa (sýnýr = toplam satýrý).
+        If Not isDryRun Then
+            If limitRowA > 5 And limitRowA = totA Then totA = EnsureTemplateRows(curWsAngle, totA, targetRowAngle - 1): limitRowA = totA
+            If limitRowP > 5 And limitRowP = totP Then totP = EnsureTemplateRows(curWsPlate, totP, targetRowPlate - 1): limitRowP = totP
+            If limitRowB > 5 And limitRowB = totB Then totB = EnsureTemplateRows(curWsBolt, totB, targetRowBolt - 1): limitRowB = totB
+        End If
         Call FlushAllBuffers(curWsAngle, curWsPlate, curWsBolt, curWsSum, targetRowAngle, targetRowPlate, targetRowBolt, sumRow, currentColAngle, currentColPlate, currentColBolt)
         If Not isDryRun Then
             ' þablon kapasitesi: ANGLE H (UNIT WEIGHT), PLATE G (UNIT WEIGHT) formülleri yeterli mi?

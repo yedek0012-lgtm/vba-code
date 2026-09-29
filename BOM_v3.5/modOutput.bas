@@ -20,25 +20,19 @@ Public Sub SafeWrite(ws As Worksheet, rw As Long, col As Long, val As Variant, O
     
     On Error Resume Next
     If ws Is curWsAngleRef Then
-        If limitRowA > 5 And rw >= limitRowA Then
-            Call NoteOverflow(ws, rw)
-        ElseIf rw <= UBound(bufAngle, 1) And col <= UBound(bufAngle, 2) Then
+        If rw <= UBound(bufAngle, 1) And col <= UBound(bufAngle, 2) Then
             bufAngle(rw, col) = finalVal
         Else
             Call NoteOverflow(ws, rw)
         End If
     ElseIf ws Is curWsPlateRef Then
-        If limitRowP > 5 And rw >= limitRowP Then
-            Call NoteOverflow(ws, rw)
-        ElseIf rw <= UBound(bufPlate, 1) And col <= UBound(bufPlate, 2) Then
+        If rw <= UBound(bufPlate, 1) And col <= UBound(bufPlate, 2) Then
             bufPlate(rw, col) = finalVal
         Else
             Call NoteOverflow(ws, rw)
         End If
     ElseIf ws Is curWsBoltRef Then
-        If limitRowB > 5 And rw >= limitRowB Then
-            Call NoteOverflow(ws, rw)
-        ElseIf rw <= UBound(bufBolt, 1) And col <= UBound(bufBolt, 2) Then
+        If rw <= UBound(bufBolt, 1) And col <= UBound(bufBolt, 2) Then
             bufBolt(rw, col) = finalVal
         Else
             Call NoteOverflow(ws, rw)
@@ -98,9 +92,10 @@ Public Sub FlushAllBuffers(wsA As Worksheet, wsP As Worksheet, wsB As Worksheet,
                             ByVal colA As Long, ByVal colP As Long, ByVal colB As Long)
     On Error Resume Next
     ' veri sýnýrýnýn altýna (þablonun formül / toplam satýrlarý) ASLA yazýlmaz
-    If limitRowA > 5 And lastRowA > limitRowA Then lastRowA = limitRowA
-    If limitRowP > 5 And lastRowP > limitRowP Then lastRowP = limitRowP
-    If limitRowB > 5 And lastRowB > limitRowB Then lastRowB = limitRowB
+    ' (þablon önceden büyütülür; yine de sýðmazsa taþan satýrlar yazýlmaz ve kapasite uyarýsý verilir)
+    If limitRowA > 5 And lastRowA > limitRowA Then Call NoteOverflow(wsA, limitRowA): lastRowA = limitRowA
+    If limitRowP > 5 And lastRowP > limitRowP Then Call NoteOverflow(wsP, limitRowP): lastRowP = limitRowP
+    If limitRowB > 5 And lastRowB > limitRowB Then Call NoteOverflow(wsB, limitRowB): lastRowB = limitRowB
     ' 1. ANGLE Sheet Dump
     If Not wsA Is Nothing And lastRowA >= 5 Then
         Call FlushBufferBlock(wsA, bufAngle, 5, lastRowA - 1, 1, 3)      ' A = TYPE (dosya adý)
@@ -1114,10 +1109,9 @@ NextCol:
     End If
 End Sub
 
-' VERÝ SINIRI: adet sütununda (veri satýrlarýndan sonra) ilk formül olan satýr. Ýki bloklu þablonda (ANGLE:
-' 5-1503 adet, 1505-3003 satýr aðýrlýklarý, 3004 toplam) 1504/1505'tir; tek bloklu þablonda toplam satýrý.
-' Formül bulunamazsa (blok silinmiþ olabilir) ve toplam satýrý 1504'ten aþaðýdaysa þablonun özgün 1503 satýr
-' tasarýmý korunur. 0 = sýnýr yok.
+' VERÝ SINIRI: adet sütununda veri satýrlarýndan sonraki ilk formül satýrý; normalde TOPLAM satýrý
+' (ANGLE: 5-3003 veri, 3004 toplam). Veri bu satýra ve altýna yazýlmaz; sýðmazsa þablon büyütülür
+' (EnsureTemplateRows). 0 = sýnýr yok.
 Public Function TemplateDataLimit(ByVal ws As Worksheet, ByVal totRow As Long, ByVal qtyCol As Long) As Long
     Dim scanEnd As Long, f As Range, ar As Range, lim As Long
     On Error Resume Next
@@ -1134,7 +1128,6 @@ Public Function TemplateDataLimit(ByVal ws As Worksheet, ByVal totRow As Long, B
         End If
     End If
     Err.Clear
-    If lim > 1504 And (lim = totRow Or totRow <= 5) Then lim = 1504
     If lim <= 5 Then lim = 0
     TemplateDataLimit = lim
 End Function
@@ -1182,4 +1175,27 @@ Public Function RepairWeightBlock(ByVal ws As Worksheet, ByVal limRow As Long, B
                     nFix & " sütunda " & r1 & "-" & r2 & ". satýrlara formül geri yazýldý (" & pat & ")", _
                     "Eski bir sürüm bu satýrlara veri yazýp formülleri silmiþti. Aðýrlýklarý kontrol edin."
     End If
+End Function
+
+' Veri toplam satýrýna ulaþýyorsa (lastDataRow >= totRow) toplam satýrýnýn hemen üstüne formüllü satýrlar
+' eklenir: toplam / SUMPRODUCT aralýklarý ve SUM baðlantýlarý Excel tarafýndan kendiliðinden kaydýrýlýr.
+' Yeni toplam satýrý numarasýný döndürür. (Sadece veri alaný toplam satýrýna kadar uzanan þablonda çaðrýlýr.)
+Public Function EnsureTemplateRows(ByVal ws As Worksheet, ByVal totRow As Long, ByVal lastDataRow As Long) As Long
+    Dim n As Long, insAt As Long
+    On Error Resume Next
+    EnsureTemplateRows = totRow
+    If ws Is Nothing Or totRow <= 6 Then Exit Function
+    If lastDataRow < totRow Then Exit Function
+    n = lastDataRow - totRow + 1 + 50                 ' eksik satýr + 50 yedek
+    insAt = totRow - 1                                ' son veri satýrýnýn önüne: aralýklarýn ÝÇÝNE eklenir
+    Err.Clear
+    ws.Rows(insAt & ":" & (insAt + n - 1)).Insert Shift:=xlDown
+    If Err.Number <> 0 Then Exit Function             ' eklenemedi: sýnýr ayný kalýr, taþan satýrlar raporlanýr
+    ' formül ve biçim bir üstteki veri satýrýndan; kopyalanan sabit deðerler silinir
+    ws.Range(ws.Rows(insAt - 1), ws.Rows(insAt + n - 1)).FillDown
+    Call ClearConstants(ws.Range(ws.Rows(insAt), ws.Rows(insAt + n)))
+    EnsureTemplateRows = totRow + n
+    AuditRecord "", "SYSTEM", totRow, ws.Name, "Þablon büyütüldü", "SYSTEM", "WARNING", 90, _
+                n & " satýr eklendi; toplam satýrý " & totRow & " -> " & (totRow + n), _
+                "Veri þablonun toplam satýrýna ulaþýyordu; formüllü satýr eklendi (toplamlar ve SUM baðlantýlarý kendiliðinden güncellendi)."
 End Function
