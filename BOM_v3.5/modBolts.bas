@@ -2,6 +2,9 @@ Attribute VB_Name = "modBolts"
 Option Explicit
 Option Private Module
 
+' Sayfadan okunan cývata anahtarlarý (birleþtirmede bu çalýþtýrmanýn anahtarý tercih edilir)
+Private dictImportedBolts As Object
+
 ' =========================================================================
 ' CIVATA: ayrýþtýrma, somun/pul/rondela kodlarý, aðýrlýklar
 ' =========================================================================
@@ -332,9 +335,6 @@ End Function
 ' onlar yeniden hesaplanýr) ve yeni dosyalarla birlikte liste baþtan dizilir: ayný kod tek satýr,
 ' her dosyanýn adedi kendi sütununda.
 ' =========================================================================
-' Sayfadan okunan anahtarlar (birleþtirmede bu çalýþtýrmanýn anahtarý tercih edilir)
-Private dictImportedBolts As Object
-
 Public Sub ImportExistingBolts(ByVal ws As Worksheet, ByVal colEnd As Long)
     Dim auto As Object, dd As Variant, r As Long, lastR As Long, c As Long, q As Double, lastAuto As Long
     Dim code As String, nm As String, qual As String, note As String, key As String

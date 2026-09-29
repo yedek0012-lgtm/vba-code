@@ -19,6 +19,17 @@ try: libs.VBACompatibilityMode=True
 except Exception as e: print("vbacompat",e)
 
 mods=sorted(glob.glob(sys.argv[1]+'/*.bas'))
+
+# Excel VBA'nın kabul etmediği ama LibreOffice'in geçirdiği yapı: modül düzeyinde bildirim
+# ilk prosedürden SONRA ("Variable not defined" / "Only comments may appear after End Sub").
+for f in mods:
+    inproc=seen=False
+    for i,l in enumerate(open(f,encoding='cp1254').read().split('\n'),1):
+        t=l.strip()
+        if re.match(r'(Public |Private |Friend )?(Static )?(Sub|Function|Property) ',t,re.I): inproc=seen=True; continue
+        if re.match(r'End (Sub|Function|Property)\b',t,re.I): inproc=False; continue
+        if seen and not inproc and t and not t.startswith("'"):
+            print("FAIL",os.path.basename(f)[:-4],": satır",i,"prosedürler arasında bildirim (Excel derlemez):",t)
 names=[]
 for f in mods:
     src=open(f,encoding='cp1254').read().replace('\r\n','\n')
