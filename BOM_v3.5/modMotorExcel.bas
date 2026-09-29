@@ -374,7 +374,12 @@ Public Sub ProcessExcelFile()
                         mbAngPlateWt = mbAngPlateWt + mbRowWt
 
                         mbStatus = "EXACT": mbConf = 100: mbIssue = ""
-                        If pThickE <= 0 Or pWidthE <= 0 Then mbStatus = "ERROR": mbConf = 20: mbIssue = "Plaka kalýnlýk/geniþlik çözülemedi."
+                        If pThickE <= 0 Or pWidthE <= 0 Then
+                            mbStatus = "ERROR": mbConf = 20: mbIssue = "Plaka kalýnlýk/geniþlik çözülemedi -> OGRENME."
+                            ' ölçüsü çözülemeyen plaka (ör. boru "PIPE OD 26.9x2.9") OGRENME'de tanýmlansýn:
+                            ' TÜR = ANGLE (profil / boru) ya da PLATE + kalýnlýk / geniþlik
+                            Call NoteUnknown(UCase$(rawName), r, posNo)
+                        End If
                         If posNo = "" Then mbStatus = IIf(mbStatus = "ERROR", "ERROR", "WARNING"): mbIssue = AddIssue(mbIssue, "Poz no boþ.")
                         If lengthVal <= 0 Then mbStatus = IIf(mbStatus = "ERROR", "ERROR", "WARNING"): mbIssue = AddIssue(mbIssue, "Boy boþ.")
                         AuditRecord fileName, "EXCEL", r, wsIn.Name, rawName & " | Poz: " & posNo, "PLATE", mbStatus, mbConf, _
