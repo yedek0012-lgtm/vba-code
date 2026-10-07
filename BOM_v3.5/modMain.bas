@@ -535,7 +535,7 @@ End If
             fileName = fso.GetBaseName(vItem)
             ext = LCase(fso.GetExtensionName(vItem))
             
-            Call ShowProgress(fIdx / vfCount, "Ýþleniyor: " & fileName)
+            Call ShowProgress((fIdx - 1) / vfCount, "(" & fIdx & "/" & vfCount & ") " & fileName)
             
             fileWeight = 0
             currentSumRow = sumRow
@@ -600,7 +600,7 @@ End If
             boltSheetPending = False
         End If
         If dictDiameters.Count > 0 And Not isDryRun Then
-            Call ShowProgress(1, "Cývatalar listeye diziliyor...")
+            Call ShowProgress(bEnd / vfCount, "Cývatalar listeye diziliyor...")
             
             arrDiams = dictDiameters.keys
             Call SortArrayInPlace(arrDiams)
@@ -1030,7 +1030,7 @@ Sub Kutuphaneye_Aktar()
     Dim prof As String, code As String, cins As String, tp As String, eksik As String, durum As String, key As String
     Dim v1 As Double, v2 As Double, hitRow As Long, warnTxt As String
     Dim nAdded As Long, nSkipped As Long, nExists As Long, nMissing As Long, nLearned As Long, nWarned As Long
-    Dim firstMissRow As Long
+    Dim firstMissRow As Long, newLayout As Boolean, colDur As Long, anyVal As Boolean
 
     On Error Resume Next
     Set ws = ThisWorkbook.Sheets("OGRENME")
@@ -1066,35 +1066,54 @@ Sub Kutuphaneye_Aktar()
         boltRow = Application.WorksheetFunction.Max(3, LastUsedRow(wsBoltLib, 1, 2) + 1)
     End If
 
+    ' Yeni düzen: her türün kendi sütunu, DURUM L'de. Eski düzen (ortak DEÐER 1/2, DURUM H) de okunur.
+    newLayout = (UCase$(Trim$(ws.Cells(1, OG_COL_DUR).Text)) = "DURUM")
+    colDur = IIf(newLayout, OG_COL_DUR, 8)
     lastR = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
     For r = 2 To lastR
         prof = Trim$(ws.Cells(r, 1).Text)
-        If prof = "" Or Left$(CStr(ws.Cells(r, 8).Value), 9) = "AKTARILDI" Then GoTo NextUnk
+        If prof = "" Or Left$(CStr(ws.Cells(r, colDur).Value), 9) = "AKTARILDI" Then GoTo NextUnk
 
         tp = OgrenmeTypeCode(ws.Cells(r, 3).Text)
         code = UCase$(Trim$(ws.Cells(r, 4).Text))
         cins = Trim$(ws.Cells(r, 5).Text)
         If cins = "" Then cins = prof
-        v1 = CellNumber(ws.Cells(r, 6))
-        v2 = CellNumber(ws.Cells(r, 7))
-        ws.Cells(r, 8).Interior.ColorIndex = xlColorIndexNone
+        anyVal = False
+        For i = 6 To IIf(newLayout, OG_COL_B2, 7)
+            If CellNumber(ws.Cells(r, i)) > 0 Then anyVal = True
+        Next i
+        v1 = 0: v2 = 0
+        If Not newLayout Then
+            v1 = CellNumber(ws.Cells(r, 6))
+            v2 = CellNumber(ws.Cells(r, 7))
+        Else
+            Select Case tp
+                Case "ANGLE"
+                    v1 = CellNumber(ws.Cells(r, OG_COL_A1)): v2 = CellNumber(ws.Cells(r, OG_COL_A2))
+                Case "PLATE"
+                    v1 = CellNumber(ws.Cells(r, OG_COL_P1)): v2 = CellNumber(ws.Cells(r, OG_COL_P2))
+                Case "BOLT"
+                    v1 = CellNumber(ws.Cells(r, OG_COL_B1)): v2 = CellNumber(ws.Cells(r, OG_COL_B2))
+            End Select
+        End If
+        ws.Cells(r, colDur).Interior.ColorIndex = xlColorIndexNone
 
         ' Hiçbir þey girilmemiþse: kullanýcý tanýmlamak istemiyor
-        If code = "" And v1 <= 0 And v2 <= 0 Then
-            ws.Cells(r, 8).Value = "Boþ - atlandý"
+        If code = "" And Not anyVal Then
+            ws.Cells(r, colDur).Value = "Boþ - atlandý"
             nSkipped = nSkipped + 1
             GoTo NextUnk
         End If
         If tp = "" Then
-            ws.Cells(r, 8).Value = "TÜR seçin (ANGLE / PLATE / BOLTS&WASHER)"
-            ws.Cells(r, 8).Interior.Color = RGB(255, 199, 206)
+            ws.Cells(r, colDur).Value = "TÜR seçin (ANGLE / PLATE / BOLTS&WASHER)"
+            ws.Cells(r, colDur).Interior.Color = RGB(255, 199, 206)
             nMissing = nMissing + 1
             If firstMissRow = 0 Then firstMissRow = r
             GoTo NextUnk
         End If
         If tp = "BOLT" And wsBoltLib Is Nothing Then
-            ws.Cells(r, 8).Value = "BOLT-LIBRARY sayfasý yok"
-            ws.Cells(r, 8).Interior.Color = RGB(255, 199, 206)
+            ws.Cells(r, colDur).Value = "BOLT-LIBRARY sayfasý yok"
+            ws.Cells(r, colDur).Interior.Color = RGB(255, 199, 206)
             nMissing = nMissing + 1
             If firstMissRow = 0 Then firstMissRow = r
             GoTo NextUnk
@@ -1113,15 +1132,15 @@ Sub Kutuphaneye_Aktar()
                 If v1 <= 0 Then eksik = eksik & ", kg/m"
                 If v2 <= 0 Then eksik = eksik & ", YÜZEY ALAN"
             Case "PLATE"
-                If v1 <= 0 Then eksik = eksik & ", KALINLIK"
-                If v2 <= 0 Then eksik = eksik & ", GENÝÞLÝK"
+                If v1 <= 0 Then eksik = eksik & ", KALINLIK (A)"
+                If v2 <= 0 Then eksik = eksik & ", GENÝÞLÝK (B)"
             Case "BOLT"
                 If code = "" Then eksik = eksik & ", MALZEME KODU"
                 If v1 <= 0 Then eksik = eksik & ", BÝRÝM AÐIRLIK"
         End Select
         If eksik <> "" Then
-            ws.Cells(r, 8).Value = "EKSÝK: " & Mid$(eksik, 3)
-            ws.Cells(r, 8).Interior.Color = RGB(255, 199, 206)
+            ws.Cells(r, colDur).Value = "EKSÝK: " & Mid$(eksik, 3)
+            ws.Cells(r, colDur).Interior.Color = RGB(255, 199, 206)
             nMissing = nMissing + 1
             If firstMissRow = 0 Then firstMissRow = r
             GoTo NextUnk
@@ -1202,17 +1221,24 @@ Sub Kutuphaneye_Aktar()
         nLearned = nLearned + 1
         ' Girilen kg/m / yüzey alan profil ölçüsüyle uyumlu mu? (aktarýlýr ama sarý uyarý)
         warnTxt = ""
+        If tp = "PLATE" Then
+            If v1 > v2 Then
+                warnTxt = "KALINLIK (" & NumToText(v1) & ") GENÝÞLÝKTEN (" & NumToText(v2) & ") BÜYÜK; A = kalýnlýk, B = geniþlik olmalý"
+            ElseIf v1 > 150 Then
+                warnTxt = "kalýnlýk " & NumToText(v1) & " mm çok büyük"
+            End If
+        End If
         If tp = "ANGLE" Then
             warnTxt = SectionValueWarning(cins, v1, v2)
             If warnTxt = "" And UCase$(cins) <> UCase$(prof) Then warnTxt = SectionValueWarning(prof, v1, v2)
         End If
         If warnTxt <> "" Then
-            ws.Cells(r, 8).Value = durum & " | KONTROL EDÝN: " & warnTxt
-            ws.Cells(r, 8).Interior.Color = RGB(255, 235, 156)
+            ws.Cells(r, colDur).Value = durum & " | KONTROL EDÝN: " & warnTxt
+            ws.Cells(r, colDur).Interior.Color = RGB(255, 235, 156)
             nWarned = nWarned + 1
         Else
-            ws.Cells(r, 8).Value = durum
-            ws.Cells(r, 8).Interior.Color = RGB(198, 239, 206)
+            ws.Cells(r, colDur).Value = durum
+            ws.Cells(r, colDur).Interior.Color = RGB(198, 239, 206)
         End If
 NextUnk:
     Next r
@@ -1229,7 +1255,7 @@ NextUnk:
     If nMissing > 0 Then
         On Error Resume Next
         ws.Activate
-        ws.Cells(firstMissRow, 8).Select
+        ws.Cells(firstMissRow, colDur).Select
         On Error GoTo 0
         MsgBox nMissing & " satýr EKSÝK olduðu için aktarýlmadý (DURUM sütununda kýrmýzý; imleç ilk satýrda)." & vbCrLf & _
                "PLATE için DEÐER 1 = KALINLIK ve DEÐER 2 = GENÝÞLÝK (mm) ikisi de gerekir." & vbCrLf & vbCrLf & _
