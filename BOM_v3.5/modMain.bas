@@ -1030,6 +1030,7 @@ Sub Kutuphaneye_Aktar()
     Dim prof As String, code As String, cins As String, tp As String, eksik As String, durum As String, key As String
     Dim v1 As Double, v2 As Double, hitRow As Long, warnTxt As String
     Dim nAdded As Long, nSkipped As Long, nExists As Long, nMissing As Long, nLearned As Long, nWarned As Long
+    Dim firstMissRow As Long
 
     On Error Resume Next
     Set ws = ThisWorkbook.Sheets("OGRENME")
@@ -1088,12 +1089,14 @@ Sub Kutuphaneye_Aktar()
             ws.Cells(r, 8).Value = "TÜR seçin (ANGLE / PLATE / BOLTS&WASHER)"
             ws.Cells(r, 8).Interior.Color = RGB(255, 199, 206)
             nMissing = nMissing + 1
+            If firstMissRow = 0 Then firstMissRow = r
             GoTo NextUnk
         End If
         If tp = "BOLT" And wsBoltLib Is Nothing Then
             ws.Cells(r, 8).Value = "BOLT-LIBRARY sayfasý yok"
             ws.Cells(r, 8).Interior.Color = RGB(255, 199, 206)
             nMissing = nMissing + 1
+            If firstMissRow = 0 Then firstMissRow = r
             GoTo NextUnk
         End If
 
@@ -1120,6 +1123,7 @@ Sub Kutuphaneye_Aktar()
             ws.Cells(r, 8).Value = "EKSÝK: " & Mid$(eksik, 3)
             ws.Cells(r, 8).Interior.Color = RGB(255, 199, 206)
             nMissing = nMissing + 1
+            If firstMissRow = 0 Then firstMissRow = r
             GoTo NextUnk
         End If
 
@@ -1220,7 +1224,19 @@ NextUnk:
            IIf(nWarned > 0, nWarned & " parçanýn kg/m / yüzey alaný ölçüden hesaplanandan çok farklý (DURUM'da sarý)." & vbCrLf, "") & _
            IIf(nMissing > 0, nMissing & " parça EKSÝK veri nedeniyle aktarýlmadý (DURUM sütununa bakýn)." & vbCrLf, ""), _
            IIf(nMissing > 0, vbExclamation, vbInformation), "Öðrenen Kütüphane"
-    If nLearned > 0 Then Call SonIslemiYenile(False)     ' aktar = yenile: tekrar sorulmaz
+    ' Aktar = yenile (sorulmaz). AMA eksik (kýrmýzý) satýr varsa yenilenmez: yenileme OGRENME'yi yeniden yazar
+    ' ve DURUM'daki "EKSÝK: ..." açýklamasý kaybolur; kullanýcý önce eksikleri tamamlar, tekrar AKTAR'a basar.
+    If nMissing > 0 Then
+        On Error Resume Next
+        ws.Activate
+        ws.Cells(firstMissRow, 8).Select
+        On Error GoTo 0
+        MsgBox nMissing & " satýr EKSÝK olduðu için aktarýlmadý (DURUM sütununda kýrmýzý; imleç ilk satýrda)." & vbCrLf & _
+               "PLATE için DEÐER 1 = KALINLIK ve DEÐER 2 = GENÝÞLÝK (mm) ikisi de gerekir." & vbCrLf & vbCrLf & _
+               "Eksikleri tamamlayýp tekrar KÜTÜPHANEYE AKTAR'a basýn; liste o zaman yenilenir.", vbExclamation, "Öðrenen Kütüphane"
+    ElseIf nLearned > 0 Then
+        Call SonIslemiYenile(False)     ' aktar = yenile: tekrar sorulmaz
+    End If
 End Sub
 
 ' Kütüphane saðlýðý: iki kütüphaneyi tarar, sorunlarý KUTUPHANE_KONTROL sayfasýna yazar (deðiþtirmez)
