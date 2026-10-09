@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.12";
+        public const string Surum = "1.13";
         private static Timer _timer;
 
         public void Initialize()
@@ -683,7 +683,7 @@ namespace OtomatikKesit
                 var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
                 ObjectId kesik = KesikCizgiTipi(db, tr);
                 ObjectId duz = SymbolUtilityServices.GetLinetypeContinuousId(db);
-                double olcek = db.Ltscale > 1e-9 ? 1.0 / db.Ltscale : 1.0;
+                double olcek = DesenOlcegi(db);
 
                 // ---- ön / yan görünüş ve 3D model (YÜKLE): çizgiler koordinatından tanınır
                 var model = kule.Uyeler.Values.Select(m => new YuzCizgisi
@@ -756,6 +756,7 @@ namespace OtomatikKesit
                 }
                 tr.Commit();
             }
+            try { doc.Editor.Regen(); } catch { /* görüntü yenilenemezse REGEN elle */ }
 
             string ozet = string.Format("Çizgi: {0} kesikli, {1} düz", yuzRed + red, yuzAna + ana);
             if (eslesmeyen > 0) ozet += ", tanınmayan " + eslesmeyen;
@@ -765,6 +766,22 @@ namespace OtomatikKesit
                 yuzRed, yuzAna, kesit, red, ana));
             Komutlar.Yaz("\n" + ozet + ".\n");
             return ozet;
+        }
+
+        /// <summary>Kesik desenin ekranda her zaman 150/75 mm görünmesi için çizgi tipi ölçeği. Model alanında görünen desen
+        /// = LTSCALE × nesne ölçeği × (MSLTSCALE açıksa anotasyon ölçeğinin çarpanı, ör. 1:100 → 100). Bu iki ayar
+        /// büyükse 150 mm'lik desen çizgi boyundan uzun olur ve AutoCAD çizgiyi düz gösterir.</summary>
+        private static double DesenOlcegi(Database db)
+        {
+            double lts = db.Ltscale > 1e-9 ? db.Ltscale : 1.0, anno = 1.0;
+            try
+            {
+                if (Convert.ToInt32(AcApp.GetSystemVariable("MSLTSCALE")) != 0 && db.Cannoscale != null && db.Cannoscale.Scale > 1e-9) anno = 1.0 / db.Cannoscale.Scale;
+            }
+            catch { /* eski sürüm: anotasyon ölçeği yok */ }
+            Komutlar.Yaz(string.Format(CultureInfo.InvariantCulture,
+                "\nKesik çizgi: LTSCALE {0:0.###}, anotasyon çarpanı {1:0.###} -> nesne çizgi tipi ölçeği {2:0.#####}.\n", lts, anno, 1.0 / (lts * anno)));
+            return 1.0 / (lts * anno);
         }
 
         /// <returns>redundant ise true</returns>

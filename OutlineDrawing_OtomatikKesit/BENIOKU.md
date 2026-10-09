@@ -10,6 +10,10 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL.
 
+**1.13: Kesik çizgi her ölçekte görünür.** Redundant çizgilerin çizgi tipi ölçeği LTSCALE'e ek olarak anotasyon
+ölçeğini de (MSLTSCALE açıksa CANNOSCALE, ör. 1:100 → ×100) hesaba katar; önceden bu durumda 225 mm'lik desen
+100 kat büyüyüp çizgiler düz görünüyordu. Stil sonrası REGEN yapılır; kullanılan ölçek komut satırına yazılır.
+
 **1.12: Görünüş ölçüleri.** "Ölçü" işaretliyse (veya `OTOOLCU`) TRANSVERSE ve LONGITUDINAL FACE'e de ölçü konur:
 sağda PLS-TOWER kısımlarının (Leg Ext., Body Ext., Basic Body, Crossarms, Pikes …) sınır kotları zincir ölçü ve toplam
 yükseklik; görünüş başlığının altında taban genişliği; kol ve tepe uçlarında eksenden uca yatay ölçü (en üst uçta
