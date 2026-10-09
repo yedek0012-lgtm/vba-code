@@ -21,7 +21,8 @@
    - Sadece konturda eleman var (dört yüzün kuşakları) → ön/yan görünüşte zaten görünüyor → **kesit gerekmez**.
    - Kontur içinde eleman var (plan çaprazı, diyafram, travers alt düzlemi) → **kesit önerilir**.
 
-**2. Eğik düzlem kesitleri** (travers üst başlık düzlemi vb.)
+**2. Eğik düzlem kesitleri** (travers üst başlık düzlemi vb.). **Varsayılan kapalı** (`DetectPlanes = false`).
+Gerçek kule çiziminde bu düzlemler ayrıca kesit olarak çizilmiyordu. Gerekirse açılabilir.
 1. Ortak düğümü olan eleman çiftlerinden aday düzlemler üretilir.
 2. Yataydan 3°–40° eğimli olanlar tutulur. Daha az eğimliler yatay kesite, daha dikler ön/yan görünüşe düşer.
 3. Düzlemdeki elemanlar bağlı gruplara ayrılır. İçinde en az bir üçgen (gerçek kafes) olan grup kesit olur.
@@ -49,14 +50,37 @@
 | `MinPlaneMembers` | 4 | Eğik düzlemde en az eleman sayısı |
 | `MergeSymmetric` | true | Sağ/sol travers kesitlerinden birini tut |
 | `MergeIdenticalLevels` | false | Aynı grup listesine sahip kotlardan yalnız ilkini tut ("tipik kesit") |
-| `DetectPlanes` | true | false = yalnız yatay kesitler |
+| `DetectPlanes` | false | true = eğik düzlem kesitlerini de ara |
 | `TopDown` | true | A kesiti en üstte |
 
 ## Test
 
 ```
-bash test/run_test.sh
+bash test/run_test.sh                  # derleme kontrolü + sentetik kule
+bash test/run_test.sh kule.tow         # + gerçek .tow üzerinde önerilen kesitler
+bash test/run_test.sh kule.tow planes  # eğik düzlem araması da açık
 ```
+
+`test/tow_to_csv.py`, .tow dosyasını OutlineDrawing'in okuma kuralıyla (P/S son ekleri, X/Y/XY simetri,
+-90° döndürme, mm, Zmin = 0) eleman listesine çevirir. Böylece AutoCAD açmadan deneme yapılabilir.
+
+### Gerçek kule: Tangent Tower-0°-2°-R1.TOW
+
+439 düğüm, 1157 eleman, ~30 ms. Önerilen 7 yatay kesit ve elle çizilmiş kesitlerle karşılaştırması:
+
+| Öneri | Kot | İçerik | Elle çizilen |
+|---|---|---|---|
+| A | 47800 | Tepe (toprak teli) traversi + gövde | SECTION A ✔ |
+| B | 46000 | Gövde baklava plan çaprazı (H2) | SECTION C (büyük olasılıkla) |
+| C | 42000 | Üst (tek taraflı) travers alt düzlemi + gövde | SECTION B ✔ |
+| D | 34600 | Gövde baklava plan çaprazı (H5) | çizilmemiş |
+| E | 33000 | Alt traversler + gövde | SECTION D ✔ |
+| F | 15500 | Gövde uzatma üstü, baklava + köşe üçgenleri | SECTION E ✔ |
+| G | 9000 | Gövde altı plan çaprazı (H8, R13–R17) | çizilmemiş |
+
+Elle çizilen 5 kesitin hepsi bulunuyor. Fazladan 2 öneri gerçekten plan çaprazı olan kotlar
+(çizilip çizilmeyeceği mühendis kararı). Eğik düzlem araması açılırsa travers üst başlık
+düzlemleri için 3 öneri daha gelir.
 
 Sentetik kule: 36 m gövde, 3 m paneller, Z=12000 / 21000 / 30000'de farklı plan çaprazları,
 Z=24000 ve 30000'de ±X traversler (alt başlık yatay, üst başlık 21° eğik). Yüz çaprazları
@@ -67,8 +91,8 @@ Sahte kesit çıkmıyor. 1 m panelli yoğun kulede (736 eleman) de aynı 6 kesit
 
 ## Bilinen sınırlar / sonraki adımlar
 
-- Gerçek bir `.tow` ile henüz denenmedi. İlk denemede önerilen kesitleri elle aldıklarınızla karşılaştırın,
-  toleransları buna göre ayarlayalım.
+- Tek bir gerçek kule ile denendi (yukarıda). Farklı kule tipleriyle (köşe/gergi, bacak uzatmalı) de denenmeli.
+- Eleman simetri kodu 12 olan elemanlar OutlineDrawing'deki gibi çoğaltılmadan tek eleman alınıyor.
 - Eğik kesit dörtgeninin köşe sırası, `AlignSectionMembersToPlaneFront`'un çizimi hangi yöne
   döndürdüğünü etkileyebilir. Çizim ters dönerse `BoundingQuad`'daki köşe sırası değiştirilebilir.
 - Fikir: Önerilen kesitler 3D modelde geçici bir katmanda (düzlem/kot çizgisi olarak) gösterilebilir.

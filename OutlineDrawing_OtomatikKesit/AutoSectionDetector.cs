@@ -39,7 +39,9 @@ namespace OutlineDrawing
         public int MinLevelMembers = 3;
 
         // ---- Eğik düzlem (nokta) kesitleri ------------------------------
-        public bool DetectPlanes = true;
+        /// <summary>Eğik düzlem araması. Varsayılan kapalı: gerçek kule çiziminde (Tangent Tower-0°-2°)
+        /// travers üst başlık düzlemleri ayrıca kesit olarak çizilmiyordu. Gerekirse true yapın.</summary>
+        public bool DetectPlanes = false;
         /// <summary>mm. Eleman iki ucunun da düzleme uzaklığı bundan küçükse düzlemdedir.</summary>
         public double PlaneTolerance = 20.0;
         /// <summary>Derece. Bundan az eğimli düzlem yatay sayılır (yükseklik kesiti zaten yakalar).</summary>

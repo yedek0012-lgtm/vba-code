@@ -100,7 +100,7 @@ public static class SyntheticTowerTest
 
         Build(36000, 3000, 3);
         var sw = Stopwatch.StartNew();
-        var res = AutoSectionDetector.Detect(M);
+        var res = AutoSectionDetector.Detect(M, new AutoSectionOptions { DetectPlanes = true });
         sw.Stop();
         Console.WriteLine("Uye sayisi: {0}, sure: {1} ms", M.Count, sw.ElapsedMilliseconds);
         char letter = 'A';
@@ -126,7 +126,7 @@ public static class SyntheticTowerTest
         // Performans: yogun kule (1 m panel, 6 segmentli travers)
         Build(36000, 1000, 6);
         sw = Stopwatch.StartNew();
-        var dense = AutoSectionDetector.Detect(M);
+        var dense = AutoSectionDetector.Detect(M, new AutoSectionOptions { DetectPlanes = true });
         sw.Stop();
         Console.WriteLine("Yogun kule: {0} uye, {1} kesit, {2} ms", M.Count, dense.Count, sw.ElapsedMilliseconds);
         foreach (var c in dense) Console.WriteLine("   " + c.Description);
