@@ -10,6 +10,12 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL.
 
+**1.17: Yakınlaştırınca kesikler kendiliğinden görünür.** AutoCAD kesik deseni REGEN anındaki yakınlaştırmaya göre
+üretiyor: ÇALIŞTIR'dan sonra bütün çizim ekrandayken 150/75 mm'lik desen birkaç piksel kalıyor, çizgi düz çiziliyor ve
+yakınlaştırınca REGEN olmadan düz kalıyor (LTSCALE değiştirmek REGEN yaptığı için kesikler o zaman görünüyordu).
+Eklenti artık redundant stili uygulanmış çizimde görünüm son REGEN'dekinden 1,5 kat yakınlaşıp durunca kendisi REGEN
+yapar (`KesikIzleyici`, VIEWSIZE izlenir; komut çalışırken bekler). Elle: `RE`.
+
 **1.16: Kesikli çizgiler ÇALIŞTIR'dan hemen sonra görünür.** AutoCAD yeni atanan çizgi tipini ancak REGEN'de
 gösteriyor; renk hemen değişse de kesikler LTSCALE değiştirilene (o da REGEN yapar) kadar düz görünüyordu. 1.13'teki
 `Editor.Regen()` modeless formun butonundan çalışmıyordu. Artık ÇALIŞTIR / YÜKLE sonrası ve OTOSTIL, OTOIC, OTOOLCU

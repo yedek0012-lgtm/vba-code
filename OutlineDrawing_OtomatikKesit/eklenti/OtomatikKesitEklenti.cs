@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.16";
+        public const string Surum = "1.17";
         private static Timer _timer;
 
         public void Initialize()
@@ -58,9 +58,11 @@ namespace OtomatikKesit
             {
                 try { FormBaglayici.FormlariTara(); }
                 catch { }
+                try { KesikIzleyici.Tik(); }
+                catch { }
             };
             _timer.Start();
-            Komutlar.Yaz("\nOtomatik Kesit " + Surum + " yüklendi. OutlineDrawing formunda 'Oto Kesit' butonu görünecek (komutlar: OTOKESIT, OTOOLCU, OTOSTIL).\n");
+            Komutlar.Yaz("\nOtomatik Kesit " + Surum + " yüklendi. OutlineDrawing formunda 'Oto Kesit' butonu görünecek (komutlar: OTOKESIT, OTOOLCU, OTOSTIL, OTOIC).\n");
         }
 
         public void Terminate()
@@ -471,10 +473,8 @@ namespace OtomatikKesit
     }
 
     /// <summary>
-    /// Çizgi tipi değişen çizgilerin kesikli görünmesi için REGEN. AutoCAD, yeni oluşturulan / yeni atanan çizgi tipini
-    /// ekranda ancak yeniden oluşturmada (REGEN) gösteriyor; renk hemen değişse de kesikler LTSCALE değiştirilene kadar
-    /// düz görünüyordu. OutlineDrawing formu modeless olduğundan butondan Editor.Regen() çalışmaz; REGEN komutu AutoCAD'in
-    /// kuyruğuna gönderilir, işimiz bitince AutoCAD kendisi çalıştırır.
+    /// Çizgi tipi değişen çizgilerin kesikli görünmesi için REGEN (stil uygulandıktan sonra) ve yakınlaştırma izleyicisinin
+    /// başlatılması (bkz. KesikIzleyici).
     /// </summary>
     internal static class Goruntu
     {
@@ -482,12 +482,73 @@ namespace OtomatikKesit
         {
             Document doc = AcApp.DocumentManager.MdiActiveDocument;
             if (doc == null) return;
-            try { doc.SendStringToExecute("_.REGEN ", true, false, false); }
-            catch (System.Exception ex)
+            KesikIzleyici.Etkinlestir(doc);
+            if (!KesikIzleyici.Regen(doc))
             {
-                try { doc.Editor.Regen(); }
-                catch { Komutlar.Yaz("\nGörüntü yenilenemedi (" + ex.Message + "); kesikli çizgiler için REGEN yazın.\n"); }
+                try { doc.SendStringToExecute("_.REGEN ", true, false, false); }
+                catch { Komutlar.Yaz("\nGörüntü yenilenemedi; kesikli çizgiler için RE (REGEN) yazın.\n"); }
             }
+        }
+    }
+
+    /// <summary>
+    /// AutoCAD kesik deseni REGEN anındaki yakınlaştırmaya göre üretir: desen o an ekranda çok küçükse (ÇALIŞTIR'dan sonra
+    /// bütün çizim ekrandayken 150/75 mm birkaç piksel) çizgiyi düz çizer ve yakınlaştırınca, REGEN olmadan, düz kalır.
+    /// Kullanıcı LTSCALE'i değiştirince (REGEN yapar) kesikler görünüyordu. Bu izleyici, stil uygulanmış çizimde görünüm
+    /// son REGEN'dekinden belirgin biçimde yakınlaşıp durduğunda (VIEWSIZE 1/Oran'dan küçük, iki tik aynı) REGEN yapar.
+    /// Uzaklaşınca yalnız taban güncellenir; komut çalışırken (CMDACTIVE) bir şey yapılmaz.
+    /// </summary>
+    internal static class KesikIzleyici
+    {
+        public static double Oran = 1.5;
+        private static readonly HashSet<string> _belgeler = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static string _belge;
+        private static double _taban = -1, _onceki = -1;
+
+        internal static void Etkinlestir(Document doc)
+        {
+            _belgeler.Add(doc.Name);
+            _belge = doc.Name;
+            _taban = _onceki = GorunumBoyu();
+        }
+
+        internal static void Tik()
+        {
+            Document doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null || !_belgeler.Contains(doc.Name)) return;
+            if (Convert.ToInt32(AcApp.GetSystemVariable("CMDACTIVE")) != 0) return;
+            double v = GorunumBoyu();
+            if (v <= 0) return;
+            if (!string.Equals(_belge, doc.Name, StringComparison.OrdinalIgnoreCase)) { _belge = doc.Name; _taban = _onceki = v; return; }
+            bool durdu = Math.Abs(v - _onceki) <= 1e-9 * Math.Max(1.0, v);
+            _onceki = v;
+            if (!durdu) return;                       // tekerlekle yakınlaştırma sürüyor
+            if (v > _taban) { _taban = v; return; }   // uzaklaştı: bir sonraki yakınlaşmada yeniden üret
+            if (v < _taban / Oran)
+            {
+                _taban = v;
+                if (!Regen(doc))
+                {
+                    try { doc.SendStringToExecute("_.REGEN ", false, false, false); } catch { }
+                }
+            }
+        }
+
+        /// <returns>REGEN yapılabildiyse true</returns>
+        internal static bool Regen(Document doc)
+        {
+            try
+            {
+                using (doc.LockDocument()) { doc.Editor.Regen(); }
+                return true;
+            }
+            catch { return false; }
+        }
+
+        private static double GorunumBoyu()
+        {
+            try { return Convert.ToDouble(AcApp.GetSystemVariable("VIEWSIZE"), CultureInfo.InvariantCulture); }
+            catch { return -1; }
         }
     }
 
