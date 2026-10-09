@@ -46,7 +46,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.6";
+        public const string Surum = "1.7";
         private static Timer _timer;
 
         public void Initialize()
@@ -1104,6 +1104,92 @@ namespace OtomatikKesit
         }
     }
 
+    /// <summary>
+    /// OutlineDrawing'in FinalizeMember'ı yalnız 1 (X), 2 (Y), 3 (XY) simetri kodlarını çoğaltıyor; kod 12 olan
+    /// elemanların aynaları çizilmiyordu (örnek kulede sol traverste 14 eleman eksik). Tek DLL derlemesinde
+    /// FinalizeMember'ın sonuna (Z normalizasyonundan önce) bu metodun çağrısı eklenir (eklenti/tek_dll.sh).
+    /// Kod 12 için yalnız X kopyası (PLS koordinatında y -> -y, diğer travers) üretilir; geometrisi zaten var
+    /// olan atlanır. Gerekçe: aynı kulede C3-1 (kod 1, S->Y) ile C3-2 (kod 12, Y->S) aynı tip enine eleman; kod 12
+    /// yön tersine çevrilmiş X simetrisi gibi davranıyor. Y aynası alınırsa zikzak çaprazlar X çaprazlamaya döner (yanlış).
+    /// </summary>
+    public static class SimetriDuzeltici
+    {
+        private const BindingFlags Hepsi = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        public static readonly int[] DuzeltilenKodlar = { 12 };
+        /// <summary>Son çalıştırmada eklenen eleman sayısı.</summary>
+        public static int Eklenen;
+
+        public static void Uygula(object dataprocessing)
+        {
+            try
+            {
+                Eklenen = 0;
+                Type t = dataprocessing.GetType();
+                var am = t.GetProperty("angMember", Hepsi).GetValue(dataprocessing, null) as IDictionary;
+                var fm = t.GetProperty("finalMember", Hepsi).GetValue(dataprocessing, null) as IDictionary;
+                if (am == null || fm == null || fm.Count == 0) return;
+
+                Type ft = null;
+                PropertyInfo[] k = null;
+                string[] adlar = { "start_x", "start_y", "start_z", "end_x", "end_y", "end_z" };
+                var geo = new HashSet<string>();
+                foreach (DictionaryEntry de in fm)
+                {
+                    if (de.Value == null) continue;
+                    if (ft == null) { ft = de.Value.GetType(); k = adlar.Select(a => ft.GetProperty(a, Hepsi)).ToArray(); }
+                    geo.Add(Anahtar(Koordinat(de.Value, k)));
+                }
+                if (ft == null) return;
+
+                var eklenecek = new List<KeyValuePair<string, object>>();
+                double[,] aynalar = { { 1, -1 } };   // yalnız X (y -> -y)
+                string[] ekler = { "X" };
+                foreach (DictionaryEntry de in am)
+                {
+                    object a = de.Value;
+                    if (a == null) continue;
+                    PropertyInfo sp = a.GetType().GetProperty("SymmetricCode", Hepsi);
+                    int kod = sp != null ? Convert.ToInt32(sp.GetValue(a, null)) : 0;
+                    if (Array.IndexOf(DuzeltilenKodlar, kod) < 0) continue;
+                    string ad = Convert.ToString(de.Key, CultureInfo.InvariantCulture);
+                    if (!fm.Contains(ad)) continue;
+                    object asil = fm[ad];
+                    double[] p = Koordinat(asil, k);
+                    for (int i = 0; i < ekler.Length; i++)
+                    {
+                        double fx = aynalar[i, 0], fy = aynalar[i, 1];
+                        double[] q = { fx * p[0], fy * p[1], p[2], fx * p[3], fy * p[4], p[5] };
+                        string yeni = ad + ekler[i];
+                        if (fm.Contains(yeni) || !geo.Add(Anahtar(q))) continue;
+                        object kopya = Activator.CreateInstance(ft);
+                        foreach (PropertyInfo pi in ft.GetProperties(Hepsi))
+                            if (pi.CanRead && pi.CanWrite && pi.GetIndexParameters().Length == 0)
+                                pi.SetValue(kopya, pi.GetValue(asil, null), null);
+                        for (int j = 0; j < 6; j++) k[j].SetValue(kopya, q[j], null);
+                        eklenecek.Add(new KeyValuePair<string, object>(yeni, kopya));
+                    }
+                }
+                foreach (var kv in eklenecek) fm[kv.Key] = kv.Value;
+                Eklenen = eklenecek.Count;
+            }
+            catch { /* düzeltme yapılamazsa OutlineDrawing eskisi gibi devam eder */ }
+        }
+
+        private static double[] Koordinat(object v, PropertyInfo[] k)
+        {
+            var r = new double[6];
+            for (int i = 0; i < 6; i++) r[i] = Convert.ToDouble(k[i].GetValue(v, null));
+            return r;
+        }
+
+        private static string Anahtar(double[] q)
+        {
+            Func<double, string> R = v => (Math.Round(v) + 0.0).ToString(CultureInfo.InvariantCulture);
+            string a = R(q[0]) + "," + R(q[1]) + "," + R(q[2]), b = R(q[3]) + "," + R(q[4]) + "," + R(q[5]);
+            return string.CompareOrdinal(a, b) < 0 ? a + "|" + b : b + "|" + a;
+        }
+    }
+
     /// <summary>.tow dosyasında OutlineDrawing'in desteklemediği durumları bulur.</summary>
     public static class TowKontrol
     {
@@ -1143,6 +1229,16 @@ namespace OtomatikKesit
             {
                 if (string.IsNullOrEmpty(towPath) || !File.Exists(towPath)) return null;
                 var d = DesteklenmeyenSimetri(towPath);
+#if TEK_DLL
+                // Tek DLL'de FinalizeMember düzeltildi (SimetriDuzeltici): bu kodların aynaları artık çiziliyor
+                foreach (int kod in SimetriDuzeltici.DuzeltilenKodlar)
+                {
+                    List<string> l;
+                    if (!d.TryGetValue(kod, out l)) continue;
+                    Komutlar.Yaz(string.Format("\nBilgi: simetri kodu {0} olan {1} elemanın aynaları eklendi (OutlineDrawing düzeltmesi).\n", kod, l.Count));
+                    d.Remove(kod);
+                }
+#endif
                 if (d.Count == 0) return null;
                 int toplam = d.Values.Sum(l => l.Count);
                 string kodlar = string.Join(", ", d.Keys.OrderBy(x => x));

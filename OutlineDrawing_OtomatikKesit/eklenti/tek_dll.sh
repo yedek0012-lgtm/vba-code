@@ -11,7 +11,7 @@ OUT="${TMPDIR:-/tmp}/otomatikkesit_build"
 REF="$OUT/acad"
 FW="$OUT/net48/pkg/build/.NETFramework/v4.8"
 TOOL="$OUT/ilrepack"
-mkdir -p bin/tek "$TOOL"
+mkdir -p bin/tek "$TOOL" "$OUT/birlesik"   # ara dosya adı OutlineDrawing.dll olmalı: ILRepack assembly adını dosya adından alır
 
 bash build.sh >/dev/null    # referansları indirir (AutoCAD.NET 24.1, .NET Framework 4.8)
 
@@ -35,5 +35,16 @@ mcs -langversion:7.2 -target:library -optimize+ -nowarn:1591 -nostdlib -noconfig
     OtomatikKesitEklenti.cs "$OUT/AutoSectionDetector.gen.cs"
 
 mono "$TOOL/pkg/tools/ILRepack.exe" /targetplatform:v4,"$FW" /copyattrs \
-    /lib:"$LIB" /out:bin/tek/OutlineDrawing.dll "$KAYNAK_DLL" "$OUT/OtomatikKesit_tek.dll"
+    /lib:"$LIB" /out:"$OUT/birlesik/OutlineDrawing.dll" "$KAYNAK_DLL" "$OUT/OtomatikKesit_tek.dll"
+
+# FinalizeMember yaması: simetri kodu 12 elemanların aynaları (SimetriDuzeltici)
+CECIL="$OUT/cecil"
+if [ ! -f "$CECIL/pkg/lib/net40/Mono.Cecil.dll" ]; then
+    mkdir -p "$CECIL"
+    curl -sSL -o "$CECIL/c.nupkg" "https://api.nuget.org/v3-flatcontainer/mono.cecil/0.11.5/mono.cecil.0.11.5.nupkg"
+    python3 -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$CECIL/c.nupkg" "$CECIL/pkg"
+fi
+cp -f "$CECIL/pkg/lib/net40/Mono.Cecil.dll" "$OUT/"
+mcs -out:"$OUT/FinalizeMemberYama.exe" -r:"$OUT/Mono.Cecil.dll" yama/FinalizeMemberYama.cs
+mono "$OUT/FinalizeMemberYama.exe" "$OUT/birlesik/OutlineDrawing.dll" bin/tek/OutlineDrawing.dll "$LIB" "$FW" "$FW/Facades"
 echo "Tek DLL: $(pwd)/bin/tek/OutlineDrawing.dll"

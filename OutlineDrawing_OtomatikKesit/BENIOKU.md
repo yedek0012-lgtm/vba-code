@@ -10,6 +10,11 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL.
 
+**1.7: OutlineDrawing düzeltmesi dahil.** `FinalizeMember` simetri kodu 12 olan elemanların aynalarını çizmiyordu
+(Tangent Tower'da sol alt traverste 14 eleman eksikti). Tek DLL'de `FinalizeMember`'ın sonuna
+`SimetriDuzeltici.Uygula` çağrısı eklendi (`eklenti/yama/FinalizeMemberYama.cs`, Mono.Cecil). Kod 12 için yalnız
+X aynası üretilir, geometrisi zaten var olan atlanır. Ayrıntı: `STABILITE.md` A1.
+
 Yeniden üretmek için (OutlineDrawing kaynak kodu değişip yeniden derlenirse gerekir):
 `bash eklenti/tek_dll.sh /yol/OutlineDrawing.dll` → `eklenti/bin/tek/OutlineDrawing.dll`.
 Tek DLL derlemesinde eklentinin `[assembly: CommandClass]` satırı kapatılır (`TEK_DLL`), yoksa AutoCAD yalnız

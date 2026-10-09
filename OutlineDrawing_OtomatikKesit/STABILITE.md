@@ -10,27 +10,24 @@ OutlineDrawing kaynak kodunda yapılması gerekenler ise kodlarıyla birlikte a�
 dosyasında 14 elemanın kodu 12: C3-2, C3-6 ve C3-19…C3-30, yani alt traversin üst düzlemi. Bu yüzden 33–35 m
 arasında sağ kolda 101, sol kolda 87 eleman çiziliyor. 3D modelde, görünüşlerde ve kesitlerde 14 eleman eksik.
 
-Bu elemanlar traversin iki kenarındaki düğümleri birleştiriyor (`...S` → `...Y`), yani kendi Y aynalarıyla çakışıyorlar.
-Kod 12'yi "X + Y" olarak çoğaltıp geometrik olarak aynı olanları atlamak her iki yorumda da doğru sonucu verir:
+Aynı kulede C3-1 (kod 1, `C_4PF0.33S → C_4PF0.33Y`) ile C3-2 (kod 12, `0C_4PF0.33Y → 0C_4PF0.33S`) aynı tip enine
+eleman; tek farkları tanım yönü. Üst traversin üst düzlemi tek yönlü zikzak çaprazlı. Kod 12 bu yüzden pratikte
+"yalnız X aynası" (diğer travers) gibi davranıyor. Y aynası da alınırsa zikzak çaprazlar X çaprazlamaya döner, bu yanlış.
 
 ```csharp
 // FinalizeMember içinde, SymmetricCode'a göre kopya üretilen yerde:
 int kod = am.SymmetricCode;
-bool xKopya = kod == 1 || kod == 3 || kod == 12;
-bool yKopya = kod == 2 || kod == 3 || kod == 12;
-bool xyKopya = kod == 3 || kod == 12;
+bool xKopya = kod == 1 || kod == 3 || kod == 12;   // 12: X simetrisi (tanım yönü ters)
+bool yKopya = kod == 2 || kod == 3;
+bool xyKopya = kod == 3;
 if (kod > 3 && kod != 12) errorList.Add("Bilinmeyen eleman simetri kodu " + kod + ": " + anahtar);
-
-// Her kopyayı eklemeden önce aynı geometride eleman var mı bak (yönsüz, 1 mm):
-static string GeoAnahtar(double ax, double ay, double az, double bx, double by, double bz)
-{
-    string p = $"{Math.Round(ax)+0.0},{Math.Round(ay)+0.0},{Math.Round(az)+0.0}";
-    string q = $"{Math.Round(bx)+0.0},{Math.Round(by)+0.0},{Math.Round(bz)+0.0}";
-    return string.CompareOrdinal(p, q) < 0 ? p + "|" + q : q + "|" + p;
-}
 ```
 
-Eklenti bu durumu YÜKLE ve Oto Kesit sırasında **"DİKKAT: … simetri kodu 12; aynaları çizilmiyor"** diye bildirir.
+**Tek DLL (1.7) bu düzeltmeyi içeriyor:** `FinalizeMember`'ın sonuna `SimetriDuzeltici.Uygula` çağrısı eklendi
+(`eklenti/yama/FinalizeMemberYama.cs`, Mono.Cecil). Tangent Tower'da 14 eleman eklenir ve 33–35 m arasında iki
+travers eşitlenir (101 / 101).
+
+Ayrı eklenti DLL'i (OutlineDrawing.dll'e dokunmayan) bu durumu YÜKLE ve Oto Kesit sırasında **"DİKKAT: … simetri kodu 12; aynaları çizilmiyor"** diye bildirir.
 
 ### A2. YÜKLE ve ÇALIŞTIR model alanındaki her şeyi siliyor — veri kaybı riski
 `loadtowerfile` ve `runtowerfile` model alanındaki **bütün** nesneleri siliyor. Antet, notlar ya da aynı DWG'deki başka
