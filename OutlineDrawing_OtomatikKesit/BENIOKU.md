@@ -10,6 +10,16 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL.
 
+**1.18: Görünüşün yeri başlıktan bulunur (yalnız ön görünüş çizildiğinde yan görünüş üstüne biniyordu).**
+OutlineDrawing ön görünüşü ofset 0'a, yan görünüşü ön de çizildiyse 50000'e, çizilmediyse 0'a koyuyor. Kare gövdeli
+kulelerde yan yüz çizgilerinin çoğu ön yüzünkilerle birebir çakışıyor (YAA-R1 195'te 136, Tangent 198'de 186);
+eklenti yalnız TRANSVERSE FACE çizildiğinde onu yan görünüş de sanıyor, yan görünüşün ölçülerini ve iç elemanlarını
+(tepe, girder, bel X'leri) ön görünüşün üstüne çiziyordu. Artık görünüşün yeri ve hali "TRANSVERSE FACE" /
+"LONGITUDINAL FACE" başlığından bulunup çizgilerle doğrulanıyor; başlık yoksa yalnız o yüze özgü çizgilere bakılıyor,
+yüzler özdeşse görünüş kullanılmıyor (`GorunusKonumBulucu`). Redundant stili de her görünüşü kendi yerinde ve kendi
+çizgileriyle tanıyor. Komut satırına bulunan görünüşler yazılır. Test: `test/gorunus_konum_testi.sh` (yalnız ön /
+yalnız yan / ikisi; başlıklı / başlıksız; 2D Aktar; araya kesit çizgileri): 7 kulede hiçbir görünüş yanlış yere konmuyor.
+
 **1.17: Yakınlaştırınca kesikler kendiliğinden görünür.** AutoCAD kesik deseni REGEN anındaki yakınlaştırmaya göre
 üretiyor: ÇALIŞTIR'dan sonra bütün çizim ekrandayken 150/75 mm'lik desen birkaç piksel kalıyor, çizgi düz çiziliyor ve
 yakınlaştırınca REGEN olmadan düz kalıyor (LTSCALE değiştirmek REGEN yaptığı için kesikler o zaman görünüyordu).

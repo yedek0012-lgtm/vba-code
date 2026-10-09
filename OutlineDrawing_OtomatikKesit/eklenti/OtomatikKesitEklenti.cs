@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.17";
+        public const string Surum = "1.18";
         private static Timer _timer;
 
         public void Initialize()
@@ -671,20 +671,12 @@ namespace OtomatikKesit
                     KuleVerisi kule = yol.Length > 0 && File.Exists(yol) ? KuleOkuyucu.Oku(f.GetType().Assembly, yol) : null;
                     if (kule != null)
                     {
-                        var cizgiler = new List<Point3d[]>();
-                        foreach (ObjectId id in ms)
+                        foreach (GorunusKonumu k in GorunusYeri.Bul(tr, ms, kule))
                         {
-                            var l = tr.GetObject(id, OpenMode.ForRead) as Line;
-                            if (l != null) cizgiler.Add(new[] { l.StartPoint, l.EndPoint });
-                        }
-                        foreach (var yuz in new[] { kule.OnYuz, kule.YanYuz })
-                        {
-                            if (yuz.Count == 0) continue;
-                            int ofs; bool ikiD;
-                            if (!GorunusBul(yuz, cizgiler, out ofs, out ikiD)) continue;
+                            List<YuzCizgisi> yuz = k.Yan ? kule.YanYuz : kule.OnYuz;
                             // Ölçüler görünüş başlığının düzleminde: çizildiği hal Y=0 (normal -Y), 2D Aktar sonrası Z=0
-                            Matrix3d m = ikiD ? Matrix3d.Identity : Matrix3d.Rotation(Math.PI / 2, Vector3d.XAxis, Point3d.Origin);
-                            foreach (OlcuTanimi o in GorunusOlcuPlani.Hesapla(yuz, ofs)) { OlcuKoy(db, tr, ms, o, m); adet++; }
+                            Matrix3d m = k.IkiD ? Matrix3d.Identity : Matrix3d.Rotation(Math.PI / 2, Vector3d.XAxis, Point3d.Origin);
+                            foreach (OlcuTanimi o in GorunusOlcuPlani.Hesapla(yuz, k.Ofs)) { OlcuKoy(db, tr, ms, o, m); adet++; }
                             gorunus++;
                         }
                     }
@@ -724,23 +716,6 @@ namespace OtomatikKesit
             dim.TransformBy(m);
             ms.AppendEntity(dim);
             tr.AddNewlyCreatedDBObject(dim, true);
-        }
-
-        /// <summary>Görünüşün çizimde hangi ofsetle (0 / 50000) ve hangi halde (çizildiği gibi / 2D Aktar sonrası)
-        /// durduğunu, çizgilerinin en az yarısı eşleşen seçenekle bulur.</summary>
-        internal static bool GorunusBul(List<YuzCizgisi> yuz, List<Point3d[]> cizgiler, out int ofs, out bool ikiD)
-        {
-            ofs = 0; ikiD = false;
-            int enIyi = 0;
-            foreach (int o in YuzEslestirici.Ofsetler)
-                foreach (bool iki in new[] { false, true })
-                {
-                    var es = new YuzEslestirici(yuz, new[] { o }, !iki, iki);
-                    string g;
-                    int n = cizgiler.Count(c => es.Bul(c[0].X, c[0].Y, c[0].Z, c[1].X, c[1].Y, c[1].Z, out g));
-                    if (n > enIyi) { enIyi = n; ofs = o; ikiD = iki; }
-                }
-            return enIyi >= Math.Max(1, yuz.Count / 2);
         }
 
         private static void KatmaniHazirla(Database db, Transaction tr)
@@ -801,14 +776,21 @@ namespace OtomatikKesit
                     P = new[] { m.start_x, m.start_y, m.start_z, m.end_x, m.end_y, m.end_z },
                     Grup = m.group_label
                 });
-                var yuz = new YuzEslestirici(kule.OnYuz.Concat(kule.YanYuz).Concat(model));
+                // Görünüşler bulundukları yerde ve yalnız kendi çizgileriyle aranır: kare gövdede ön ve yan yüz çizgileri
+                // aynı ofsette çakışır, birinin grubu öbürüne verilmesin. Bulunamazsa (başlık yok, yüzler özdeş) eski yol.
+                var indeksler = new List<YuzEslestirici>();
+                List<GorunusKonumu> konumlar = GorunusYeri.Bul(tr, ms, kule);
+                foreach (GorunusKonumu k in konumlar)
+                    indeksler.Add(new YuzEslestirici(k.Yan ? kule.YanYuz : kule.OnYuz, new[] { k.Ofs }, !k.IkiD, k.IkiD));
+                indeksler.Add(new YuzEslestirici(model, new[] { 0 }, true, true));   // YÜKLE'nin 3D modeli ofsetsiz
+                if (konumlar.Count == 0) indeksler.Add(new YuzEslestirici(kule.OnYuz.Concat(kule.YanYuz)));
                 foreach (ObjectId id in ms)
                 {
                     var l = tr.GetObject(id, OpenMode.ForRead) as Line;
                     if (l == null || string.Equals(l.Layer, IcElemanlar.Katman, StringComparison.OrdinalIgnoreCase)) continue;
                     Point3d a = l.StartPoint, b = l.EndPoint;
-                    string grup;
-                    if (!yuz.Bul(a.X, a.Y, a.Z, b.X, b.Y, b.Z, out grup)) continue;
+                    string grup = null;
+                    if (!indeksler.Any(x => x.Bul(a.X, a.Y, a.Z, b.X, b.Y, b.Z, out grup))) continue;
                     try
                     {
                         l.UpgradeOpen();
@@ -1302,6 +1284,159 @@ namespace OtomatikKesit
     }
 
     // =================================================================
+    //  Görünüşlerin çizimdeki yeri
+    // =================================================================
+    internal static class GorunusYeri
+    {
+        internal const string OnBaslik = "TRANSVERSE FACE", YanBaslik = "LONGITUDINAL FACE";
+
+        /// <summary>Model alanındaki çizgi ve görünüş başlıklarından ön/yan görünüşün yerini bulur (bkz. GorunusKonumBulucu).
+        /// İç eleman katmanındaki çizgiler hesaba katılmaz.</summary>
+        internal static List<GorunusKonumu> Bul(Transaction tr, BlockTableRecord ms, KuleVerisi kule)
+        {
+            var cizgiler = new List<double[]>();
+            var basliklar = new List<GorunusBasligi>();
+            foreach (ObjectId id in ms)
+            {
+                if (id.IsErased) continue;
+                var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                if (ent == null) continue;
+                var l = ent as Line;
+                if (l != null)
+                {
+                    if (string.Equals(l.Layer, IcElemanlar.Katman, StringComparison.OrdinalIgnoreCase)) continue;
+                    cizgiler.Add(new[] { l.StartPoint.X, l.StartPoint.Y, l.StartPoint.Z, l.EndPoint.X, l.EndPoint.Y, l.EndPoint.Z });
+                    continue;
+                }
+                var t = ent as DBText;
+                if (t == null || t.TextString == null) continue;
+                string s = t.TextString.Trim();
+                bool on = s.Equals(OnBaslik, StringComparison.OrdinalIgnoreCase), yan = s.Equals(YanBaslik, StringComparison.OrdinalIgnoreCase);
+                if (!on && !yan) continue;
+                Point3d p = t.HorizontalMode == TextHorizontalMode.TextLeft && t.VerticalMode == TextVerticalMode.TextBase
+                    ? t.Position : t.AlignmentPoint;
+                Vector3d n = t.Normal;
+                if (Math.Abs(n.Y) > 0.9) basliklar.Add(new GorunusBasligi { Yan = yan, X = p.X, IkiD = false });
+                else if (Math.Abs(n.Z) > 0.9) basliklar.Add(new GorunusBasligi { Yan = yan, X = p.X, IkiD = true });
+            }
+            List<GorunusKonumu> sonuc = GorunusKonumBulucu.Bul(kule.OnYuz, kule.YanYuz, basliklar, cizgiler);
+            foreach (GorunusKonumu k in sonuc)
+                Komutlar.Yaz(string.Format("\nGörünüş: {0} ofset {1}{2}, {3}/{4} çizgi ({5}).\n", k.Yan ? YanBaslik : OnBaslik,
+                    k.Ofs, k.IkiD ? " (2D)" : "", k.Eslesen, k.Toplam, k.Kaynak));
+            return sonuc;
+        }
+    }
+
+    /// <summary>Bir görünüşün çizimdeki yeri.</summary>
+    public class GorunusKonumu
+    {
+        public bool Yan;        // false: TRANSVERSE FACE (ön), true: LONGITUDINAL FACE (yan)
+        public int Ofs;         // OutlineDrawing ofseti: çizim x = görünüş x + Ofs
+        public bool IkiD;       // 2D Aktar sonrası hal: (x, z, -y)
+        public int Eslesen, Toplam;
+        public string Kaynak;
+    }
+
+    /// <summary>Görünüş başlığı yazısı: OutlineDrawing görünüşün x ortasına (normal -Y) yazar.</summary>
+    public class GorunusBasligi
+    {
+        public bool Yan;
+        public double X;
+        public bool IkiD;
+    }
+
+    /// <summary>
+    /// Ön ve yan görünüşün çizimdeki yerini bulur. OutlineDrawing ön görünüşü ofset 0'a, yan görünüşü ön de çizildiyse
+    /// 50000'e, çizilmediyse 0'a koyar ve başlığını görünüşün x ortasına yazar. Kare gövdeli kulelerde yan yüz çizgilerinin
+    /// çoğu ön yüz çizgileriyle aynı ofsette birebir çakışır (YAA-R1 195'te 136, Tangent Tower 198'de 186). Yalnız çizgi
+    /// eşleştirmesine bakmak, sadece ön görünüş çizildiğinde onu yan görünüş de sanıyor; yan görünüşün ölçüleri ve iç
+    /// elemanları ön görünüşün üstüne çiziliyordu. Bu yüzden:
+    ///  1. Başlık varsa yer başlıktan hesaplanır (ofset = başlık x - görünüşün x ortası, hal başlığın normalinden) ve
+    ///     görünüş çizgilerinin en az yarısının orada olduğu doğrulanır.
+    ///  2. Başlık yoksa yalnız o yüze özgü (öbür yüzle çakışmayan) çizgilere bakılır.
+    ///  3. Özgü çizgi yoksa (yüzler özdeş) görünüş belirsiz sayılır ve kullanılmaz.
+    /// İki görünüş aynı yere düşerse başlıktan bulunan (yoksa daha çok eşleşen) kalır.
+    /// </summary>
+    public static class GorunusKonumBulucu
+    {
+        public static double EsikOrani = 0.5;
+        public static int EnAzOzgu = 3;
+        public static readonly int[] Ofsetler = { 0, 50000 };
+
+        public static List<GorunusKonumu> Bul(List<YuzCizgisi> on, List<YuzCizgisi> yan, List<GorunusBasligi> basliklar, List<double[]> cizgiler)
+        {
+            var cizim = new YuzEslestirici(cizgiler.Select(c => new YuzCizgisi { P = c }), new[] { 0 }, true, false);
+            var adaylar = new List<GorunusKonumu>();
+            foreach (bool y in new[] { false, true })
+            {
+                List<YuzCizgisi> F = y ? yan : on, G = y ? on : yan;
+                if (F == null || F.Count == 0) continue;
+                GorunusKonumu k = BasliktanBul(F, y, basliklar, cizim) ?? OzguCizgilerdenBul(F, G, y, cizim);
+                if (k != null) adaylar.Add(k);
+            }
+            var sonuc = new List<GorunusKonumu>();
+            foreach (GorunusKonumu k in adaylar.OrderBy(k => k.Kaynak == KaynakBaslik ? 0 : 1).ThenByDescending(k => (double)k.Eslesen / Math.Max(1, k.Toplam)))
+                if (!sonuc.Any(o => o.Ofs == k.Ofs && o.IkiD == k.IkiD)) sonuc.Add(k);
+            return sonuc.OrderBy(k => k.Yan).ToList();
+        }
+
+        public const string KaynakBaslik = "başlıktan", KaynakOzgu = "yüze özgü çizgilerden";
+
+        private static GorunusKonumu BasliktanBul(List<YuzCizgisi> F, bool yan, List<GorunusBasligi> basliklar, YuzEslestirici cizim)
+        {
+            if (basliklar == null) return null;
+            double cx = (F.Min(c => Math.Min(c.P[0], c.P[3])) + F.Max(c => Math.Max(c.P[0], c.P[3]))) / 2;
+            GorunusKonumu enIyi = null;
+            foreach (GorunusBasligi b in basliklar.Where(b => b.Yan == yan))
+            {
+                int ofs = (int)Math.Round(b.X - cx);
+                int n = Say(F, ofs, b.IkiD, cizim);
+                if (n < EsikOrani * F.Count || (enIyi != null && n <= enIyi.Eslesen)) continue;
+                enIyi = new GorunusKonumu { Yan = yan, Ofs = ofs, IkiD = b.IkiD, Eslesen = n, Toplam = F.Count, Kaynak = KaynakBaslik };
+            }
+            return enIyi;
+        }
+
+        private static GorunusKonumu OzguCizgilerdenBul(List<YuzCizgisi> F, List<YuzCizgisi> G, bool yan, YuzEslestirici cizim)
+        {
+            // Özgü çizgiler ofsetten ve halden bağımsız (iki yüz aynı dönüşümle kayar): ofset 0, çizildiği hal
+            List<YuzCizgisi> ozgu = F;
+            if (G != null && G.Count > 0)
+            {
+                var g = new YuzEslestirici(G, new[] { 0 }, true, false);
+                string grup;
+                ozgu = F.Where(c => !g.Bul(c.P[0], c.P[1], c.P[2], c.P[3], c.P[4], c.P[5], out grup)).ToList();
+            }
+            if (ozgu.Count < EnAzOzgu) return null;
+            GorunusKonumu enIyi = null;
+            foreach (int ofs in Ofsetler)
+                foreach (bool iki in new[] { false, true })
+                {
+                    int n = Say(ozgu, ofs, iki, cizim);
+                    if (n < EsikOrani * ozgu.Count || (enIyi != null && n <= enIyi.Eslesen)) continue;
+                    enIyi = new GorunusKonumu { Yan = yan, Ofs = ofs, IkiD = iki, Eslesen = n, Toplam = ozgu.Count, Kaynak = KaynakOzgu };
+                }
+            return enIyi;
+        }
+
+        /// <summary>Görünüş çizgilerinden kaçı çizimde (ofs, hal) yerinde var.</summary>
+        public static int Say(List<YuzCizgisi> F, int ofs, bool ikiD, YuzEslestirici cizim)
+        {
+            int n = 0;
+            string g;
+            foreach (YuzCizgisi c in F)
+            {
+                double[] p = c.P;
+                bool var = ikiD
+                    ? cizim.Bul(p[0] + ofs, p[2], -p[1], p[3] + ofs, p[5], -p[4], out g)
+                    : cizim.Bul(p[0] + ofs, p[1], p[2], p[3] + ofs, p[4], p[5], out g);
+                if (var) n++;
+            }
+            return n;
+        }
+    }
+
+    // =================================================================
     //  Görünüşlere iç elemanların izdüşümü (PLS-TOWER görünüşündeki gibi)
     // =================================================================
     internal static class IcElemanlar
@@ -1336,33 +1471,23 @@ namespace OtomatikKesit
                 var katman = (LayerTableRecord)tr.GetObject(lt[Katman], OpenMode.ForRead);
                 if (katman.IsLocked) { katman.UpgradeOpen(); katman.IsLocked = false; }
 
-                var cizgiler = new List<Point3d[]>();
                 foreach (ObjectId id in ms)
                 {
                     var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
-                    if (ent == null) continue;
-                    if (string.Equals(ent.Layer, Katman, StringComparison.OrdinalIgnoreCase))
-                    {
-                        try { ent.UpgradeOpen(); ent.Erase(); } catch { }
-                        continue;
-                    }
-                    var l = ent as Line;
-                    if (l != null) cizgiler.Add(new[] { l.StartPoint, l.EndPoint });
+                    if (ent == null || !string.Equals(ent.Layer, Katman, StringComparison.OrdinalIgnoreCase)) continue;
+                    try { ent.UpgradeOpen(); ent.Erase(); } catch { }
                 }
 
                 ObjectId kesik = stil ? KesitStili.KesikCizgiTipi(db, tr) : ObjectId.Null;
                 ObjectId duz = SymbolUtilityServices.GetLinetypeContinuousId(db);
                 double olcek = stil ? KesitStili.DesenOlcegi(db) : 1;
-                foreach (bool yan in new[] { false, true })
+                foreach (GorunusKonumu k in GorunusYeri.Bul(tr, ms, kule))
                 {
-                    List<YuzCizgisi> yuz = yan ? kule.YanYuz : kule.OnYuz;
-                    if (yuz.Count == 0) continue;
-                    int ofs; bool ikiD;
-                    if (!KesitOlculeri.GorunusBul(yuz, cizgiler, out ofs, out ikiD)) continue;
+                    List<YuzCizgisi> yuz = k.Yan ? kule.YanYuz : kule.OnYuz;
                     gorunus++;
-                    foreach (YuzCizgisi c in IcElemanPlani.Hesapla(kule.Uyeler, yuz, yan))
+                    foreach (YuzCizgisi c in IcElemanPlani.Hesapla(kule.Uyeler, yuz, k.Yan))
                     {
-                        var line = new Line(Nokta(c.P, 0, ofs, ikiD), Nokta(c.P, 3, ofs, ikiD));
+                        var line = new Line(Nokta(c.P, 0, k.Ofs, k.IkiD), Nokta(c.P, 3, k.Ofs, k.IkiD));
                         line.SetDatabaseDefaults(db);
                         line.Layer = Katman;
                         if (stil) KesitStili.Boya(line, c.Grup != null && kule.RedundantGruplar.Contains(c.Grup.Trim()), kesik, duz, olcek);
