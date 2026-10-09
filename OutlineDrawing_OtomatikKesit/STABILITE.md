@@ -81,6 +81,20 @@ Her kaydın başında beklenen biçim (`'etiket'` satırı, `; group, section` y
 AutoCAD 2025'ten itibaren .NET 8 kullanılıyor. Hem OutlineDrawing hem eklenti .NET Framework 4.8 olduğu için o
 sürümlerde yüklenmez. Geçiş gerekirse proje SDK stiline çevrilip `net8.0-windows` hedeflenmeli.
 
+### A8. Grup tipi okunmuyor
+`Parse_GroupLabel` grup satırından yalnız açıklama, boyut ve malzemeyi alıyor. PLS-TOWER'ın "group type" sütunu
+(7. alan: 1 Leg, 2 Other, 3 Redundant) okunmuyor. Redundant ayrımı bu sütuna göre yapılmalı; açıklama serbest
+metin olduğundan güvenilmez (YAA-R1'de 104 redundant grubun yalnız 44'ünün açıklamasında "Redundant" geçiyor).
+Ayrıca satırda tam 9 alan yoksa okuma o satırda duruyor ve sonraki gruplar sessizce atlanıyor.
+
+```csharp
+// GroupLabel'e: public int groupType { get; set; }
+grpLabel[t[0].Trim()] = new GroupLabel { description = t[1].Trim(), size = t[2].Trim(), material = t[3].Trim(),
+                                         groupType = int.Parse(t[6], CultureInfo.InvariantCulture) };
+```
+
+**Eklenti (1.11+)** bu sütunu .tow'dan kendisi okuyor (`KuleOkuyucu.TowRedundantGruplari`).
+
 ## B. Eklentide düzeltilenler (1.6)
 
 | Konu | Önceki risk | Düzeltme |

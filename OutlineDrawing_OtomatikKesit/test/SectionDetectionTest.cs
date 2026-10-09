@@ -42,7 +42,7 @@ public static class SD { const BindingFlags H = BindingFlags.Instance|BindingFla
       cizim[s].Add(seg); cizimAd[s].Add((string)st.GetProperty("name").GetValue(sv, null));
       derin[s][0] = Math.Min(derin[s][0], Math.Min(w1, w2)); derin[s][1] = Math.Max(derin[s][1], Math.Max(w1, w2));
     }
-    var red = KuleOkuyucu.Redundantlar(o);
+    var red = KuleOkuyucu.Redundantlar(o, a[0]);
     int stilHata = 0, eslesmeyen = 0;
     foreach (var kv in cizim) {
       var tanim = tanimlar[kv.Key]; List<string> anahtar; var kaynak = KesitSecici.Sec(uyeler, tanim, out anahtar);

@@ -10,7 +10,8 @@
 //    - "Ölçü" kutucuğu: işaretliyse ÇALIŞTIR'dan sonra her "SECTION x" çizimine
 //      ölçü koyar (üstte zincir ölçü, sağda toplam derinlik).
 //    - "Redundant" kutucuğu: işaretliyse ÇALIŞTIR'dan sonra ön/yan görünüşte ve kesitlerde
-//      ana elemanlar düz/cyan, redundant elemanlar (grup açıklaması "Redundant") kesikli/mavi olur.
+//      ana elemanlar düz/cyan, redundant elemanlar kesikli/mavi olur. Redundant: PLS-TOWER grup tipi
+//      "Redundant" (grup tablosunda tip 3, PLS'te turuncu) veya grup açıklamasında "Redundant" geçen gruplar.
 //
 //  OutlineDrawing'in iç tiplerine yansıtma (reflection) ile erişilir, bu yüzden
 //  OutlineDrawing.dll'in yeniden derlenmesi gerekmez.
@@ -46,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.10";
+        public const string Surum = "1.11";
         private static Timer _timer;
 
         public void Initialize()
@@ -623,7 +624,7 @@ namespace OtomatikKesit
             if (path.Length == 0 || !File.Exists(path)) return "Redundant stili: .tow dosyası seçili değil.";
             KuleVerisi kule = KuleOkuyucu.Oku(f.GetType().Assembly, path);
             if (kule == null) return "Redundant stili: .tow okunamadı.";
-            if (kule.RedundantGruplar.Count == 0) return "Redundant stili: .tow'da açıklaması 'Redundant' olan grup yok.";
+            if (kule.RedundantGruplar.Count == 0) return "Redundant stili: .tow'da redundant grup yok (grup tipi Redundant veya açıklamada 'Redundant').";
 
             Dictionary<string, KesitTanimi> tanimlar = GridTanimlari(f);
             int ana = 0, red = 0, eslesmeyen = 0, kesit = 0, hata = 0, yuzAna = 0, yuzRed = 0, yazi = 0;
@@ -1436,7 +1437,7 @@ namespace OtomatikKesit
             {
                 Uyeler = Kopyala(data),
                 GorunenAnahtarlar = Gorunenler(data),
-                RedundantGruplar = Redundantlar(data),
+                RedundantGruplar = Redundantlar(data, towPath),
                 OnYuz = Yuz(data, "frontFace"),
                 YanYuz = Yuz(data, "sideFace")
             };
@@ -1463,6 +1464,57 @@ namespace OtomatikKesit
                 });
             }
             return sonuc;
+        }
+
+        /// <summary>Redundant gruplar: .tow grup tablosunda PLS-TOWER grup tipi Redundant olanlar
+        /// ve açıklamasında "redundant" geçenler.</summary>
+        public static HashSet<string> Redundantlar(object data, string towPath)
+        {
+            HashSet<string> sonuc = Redundantlar(data);
+            try { sonuc.UnionWith(TowRedundantGruplari(towPath)); }
+            catch (System.Exception ex) { System.Diagnostics.Debug.WriteLine("Grup tipi okunamadı: " + ex.Message); }
+            return sonuc;
+        }
+
+        /// <summary>PLS-TOWER grup tipi kodu: 1 Leg, 2 Other, 3 Redundant (PLS-TOWER çiziminde turuncu).</summary>
+        public const int RedundantGrupTipi = 3;
+
+        /// <summary>.tow grup tablosunda ("; group label, description, size, material, angle type, element type, group type")
+        /// grup tipi Redundant olan grup adları. OutlineDrawing bu sütunu okumadığı için dosyadan okunur.</summary>
+        public static HashSet<string> TowRedundantGruplari(string towPath)
+        {
+            var sonuc = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(towPath) || !File.Exists(towPath)) return sonuc;
+            string[] satirlar = File.ReadAllLines(towPath, System.Text.Encoding.GetEncoding(28591));
+            for (int i = 0; i < satirlar.Length; i++)
+            {
+                string s = satirlar[i];
+                int yorum = s.IndexOf(';');
+                if (yorum < 0 || s.IndexOf("group label", yorum, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                string[] sutunlar = s.Substring(yorum + 1).Split(',').Select(x => x.Trim()).ToArray();
+                int tipSutunu = Array.FindIndex(sutunlar, x => x.Equals("group type", StringComparison.OrdinalIgnoreCase));
+                int adet;
+                if (tipSutunu < 0 || !int.TryParse(s.Substring(0, yorum).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out adet)) continue;
+                for (int k = i + 1; k <= i + adet && k < satirlar.Length; k++)
+                {
+                    List<string> t = Parcala(satirlar[k]);
+                    int tip;
+                    if (t.Count > tipSutunu && int.TryParse(t[tipSutunu], NumberStyles.Integer, CultureInfo.InvariantCulture, out tip)
+                        && tip == RedundantGrupTipi)
+                        sonuc.Add(t[0].Trim());
+                }
+                i += adet;
+            }
+            return sonuc;
+        }
+
+        /// <summary>Tırnaklı alanları tek parça sayan boşluk ayırıcı ('a b' 'c' 1 2 -> a b | c | 1 | 2).</summary>
+        private static List<string> Parcala(string s)
+        {
+            var t = new List<string>();
+            foreach (Match m in Regex.Matches(s, @"'([^']*)'|(\S+)"))
+                t.Add(m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value);
+            return t;
         }
 
         /// <summary>grpLabel'de açıklaması "redundant" içeren grup adları.</summary>

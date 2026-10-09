@@ -10,6 +10,12 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL.
 
+**1.11: Redundant tanımı PLS-TOWER grup tipine göre.** Grup tablosundaki "group type" sütunu 3 (Redundant,
+PLS-TOWER çiziminde turuncu) olan gruplar da kesikli/mavi çizilir; önceden yalnız açıklamasında "Redundant" geçen
+gruplar sayılıyordu. YAA-R1'de açıklaması "Crossarm Brace", "Basic Body Inner Horizontal", "... Rdnt" olan
+60 redundant grup ana eleman çiziliyordu: redundant eleman 246 → 538 (TRANSVERSE FACE'te 53 → 101 çizgi).
+OutlineDrawing bu sütunu okumadığı için eklenti .tow'dan kendisi okur. Tangent Tower ve uzatmalarında değişiklik yok.
+
 **1.10:**
 - Bir kottaki elemanlar birbirinin aynası olan kopuk parçalardan oluşuyorsa (iki toprak teli tepesinin kapağı,
   dört bacak köşesi) yükseklik kesiti yerine yalnız bir parçayı (+X / -Y tarafı) çevreleyen yatay düzlem kesiti
@@ -69,7 +75,8 @@ Eklenti, .tow dosyasını OutlineDrawing'in kendi okuyucusuyla (`dataprocessing.
 
 - **Redundant** kutucuğu (varsayılan işaretli): ÇALIŞTIR'dan sonra ön görünüş (TRANSVERSE FACE), yan görünüş
   (LONGITUDINAL FACE) ve kesitlerdeki ana elemanlar düz çizgi ve
-  cyan (4), redundant elemanlar (grup açıklaması "Redundant" olanlar) kesikli (DASHED) ve mavi (5) olur.
+  cyan (4), redundant elemanlar kesikli (DASHED) ve mavi (5) olur. Redundant: PLS-TOWER grup tipi Redundant
+  (grup tablosunda 3, PLS'te turuncu) veya açıklamasında "Redundant" geçen gruplar.
   Çizilen her çizgi, grid'deki kesit tanımıyla OutlineDrawing'in seçim kuralına göre bulunan elemanlarla
   rijit dönüşümle (döndürme, öteleme, aynalama) eşleştirilir. Ön/yan görünüş çizgileri ise OutlineDrawing'in
   frontFace/sideFace koordinatlarından birebir tanınır (2D Aktar sonrası da). Çizginin katmanı değişmez. Elle: `OTOSTIL`.
