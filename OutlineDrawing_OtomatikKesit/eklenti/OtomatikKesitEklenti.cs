@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.11";
+        public const string Surum = "1.12";
         private static Timer _timer;
 
         public void Initialize()
@@ -531,7 +531,7 @@ namespace OtomatikKesit
             Document doc = AcApp.DocumentManager.MdiActiveDocument;
             if (doc == null) return "Ölçü: açık çizim yok.";
             Database db = doc.Database;
-            int adet = 0, kesit = 0;
+            int adet = 0, kesit = 0, gorunus = 0;
 
             using (doc.LockDocument())
             using (Transaction tr = db.TransactionManager.StartTransaction())
@@ -549,42 +549,88 @@ namespace OtomatikKesit
                     Matrix3d m = e.XZ
                         ? Matrix3d.Displacement(new Vector3d(0, e.W, 0)) * Matrix3d.Rotation(Math.PI / 2, Vector3d.XAxis, Point3d.Origin)
                         : Matrix3d.Displacement(new Vector3d(0, 0, e.W));
-                    foreach (OlcuTanimi o in olculer)
-                    {
-                        var dim = new RotatedDimension(o.Rotation,
-                            new Point3d(o.U1, o.V1, 0), new Point3d(o.U2, o.V2, 0), new Point3d(o.UD, o.VD, 0),
-                            "", db.Dimstyle);
-                        dim.SetDatabaseDefaults(db);
-                        dim.Layer = Katman;
-                        dim.Dimtxt = o.Yazi;
-                        dim.Dimasz = 0.75 * o.Yazi;
-                        dim.Dimexo = 0.5 * o.Yazi;
-                        dim.Dimexe = 0.5 * o.Yazi;
-                        dim.Dimgap = 0.25 * o.Yazi;
-                        dim.Dimdec = 0;
-                        dim.Dimtad = 1;
-                        dim.Dimtih = false;
-                        dim.Dimtoh = false;
-                        dim.DimfxlenOn = true;   // uzatma çizgisi sabit boy: geometriden uzaktaki köşelerde
-                        dim.Dimfxlen = o.Uzatma; // kesit boyunca uzanan uzun çizgi olmasın
-                        dim.Dimscale = 1;     // çizimin ölçü stili ölçekli olsa da yazı 200 mm kalsın
-                        dim.Dimlfac = 1;      // ölçülen değer gerçek mm olsun
-                        dim.Dimtfac = 1;
-                        dim.Dimlunit = 2;     // ondalık
-                        dim.Dimrnd = 0;
-                        dim.TransformBy(m);
-                        ms.AppendEntity(dim);
-                        tr.AddNewlyCreatedDBObject(dim, true);
-                        adet++;
-                    }
+                    foreach (OlcuTanimi o in olculer) { OlcuKoy(db, tr, ms, o, m); adet++; }
                     kesit++;
                 }
+
+                // ---- ön (TRANSVERSE) ve yan (LONGITUDINAL) görünüş ölçüleri
+                try
+                {
+                    Form f = FormBaglayici.AcikFormuBul();
+                    string yol = f != null ? FormBaglayici.YolAl(f) : "";
+                    KuleVerisi kule = yol.Length > 0 && File.Exists(yol) ? KuleOkuyucu.Oku(f.GetType().Assembly, yol) : null;
+                    if (kule != null)
+                    {
+                        var cizgiler = new List<Point3d[]>();
+                        foreach (ObjectId id in ms)
+                        {
+                            var l = tr.GetObject(id, OpenMode.ForRead) as Line;
+                            if (l != null) cizgiler.Add(new[] { l.StartPoint, l.EndPoint });
+                        }
+                        foreach (var yuz in new[] { kule.OnYuz, kule.YanYuz })
+                        {
+                            if (yuz.Count == 0) continue;
+                            int ofs; bool ikiD;
+                            if (!GorunusBul(yuz, cizgiler, out ofs, out ikiD)) continue;
+                            // Ölçüler görünüş başlığının düzleminde: çizildiği hal Y=0 (normal -Y), 2D Aktar sonrası Z=0
+                            Matrix3d m = ikiD ? Matrix3d.Identity : Matrix3d.Rotation(Math.PI / 2, Vector3d.XAxis, Point3d.Origin);
+                            foreach (OlcuTanimi o in GorunusOlcuPlani.Hesapla(yuz, ofs)) { OlcuKoy(db, tr, ms, o, m); adet++; }
+                            gorunus++;
+                        }
+                    }
+                }
+                catch (System.Exception ex) { Komutlar.Yaz("\nGörünüş ölçüsü konamadı: " + ex.Message + "\n"); }
                 tr.Commit();
             }
-            string ozet = string.Format("Ölçü: {0} kesit", kesit);
-            Komutlar.Yaz(string.Format("\nÖlçü ayrıntı: {0} kesite {1} ölçü (katman {2}).\n", kesit, adet, Katman));
+            string ozet = string.Format("Ölçü: {0} kesit, {1} görünüş", kesit, gorunus);
+            Komutlar.Yaz(string.Format("\nÖlçü ayrıntı: {0} kesit + {1} görünüşe {2} ölçü (katman {3}).\n", kesit, gorunus, adet, Katman));
             Komutlar.Yaz("\n" + ozet + ".\n");
             return ozet;
+        }
+
+        private static void OlcuKoy(Database db, Transaction tr, BlockTableRecord ms, OlcuTanimi o, Matrix3d m)
+        {
+            var dim = new RotatedDimension(o.Rotation,
+                new Point3d(o.U1, o.V1, 0), new Point3d(o.U2, o.V2, 0), new Point3d(o.UD, o.VD, 0),
+                "", db.Dimstyle);
+            dim.SetDatabaseDefaults(db);
+            dim.Layer = Katman;
+            dim.Dimtxt = o.Yazi;
+            dim.Dimasz = 0.75 * o.Yazi;
+            dim.Dimexo = 0.5 * o.Yazi;
+            dim.Dimexe = 0.5 * o.Yazi;
+            dim.Dimgap = 0.25 * o.Yazi;
+            dim.Dimdec = 0;
+            dim.Dimtad = 1;
+            dim.Dimtih = false;
+            dim.Dimtoh = false;
+            dim.DimfxlenOn = true;   // uzatma çizgisi sabit boy: geometriden uzaktaki köşelerde
+            dim.Dimfxlen = o.Uzatma; // çizim boyunca uzanan uzun çizgi olmasın
+            dim.Dimscale = 1;     // çizimin ölçü stili ölçekli olsa da yazı boyu korunsun
+            dim.Dimlfac = 1;      // ölçülen değer gerçek mm olsun
+            dim.Dimtfac = 1;
+            dim.Dimlunit = 2;     // ondalık
+            dim.Dimrnd = 0;
+            dim.TransformBy(m);
+            ms.AppendEntity(dim);
+            tr.AddNewlyCreatedDBObject(dim, true);
+        }
+
+        /// <summary>Görünüşün çizimde hangi ofsetle (0 / 50000) ve hangi halde (çizildiği gibi / 2D Aktar sonrası)
+        /// durduğunu, çizgilerinin en az yarısı eşleşen seçenekle bulur.</summary>
+        private static bool GorunusBul(List<YuzCizgisi> yuz, List<Point3d[]> cizgiler, out int ofs, out bool ikiD)
+        {
+            ofs = 0; ikiD = false;
+            int enIyi = 0;
+            foreach (int o in YuzEslestirici.Ofsetler)
+                foreach (bool iki in new[] { false, true })
+                {
+                    var es = new YuzEslestirici(yuz, new[] { o }, !iki, iki);
+                    string g;
+                    int n = cizgiler.Count(c => es.Bul(c[0].X, c[0].Y, c[0].Z, c[1].X, c[1].Y, c[1].Z, out g));
+                    if (n > enIyi) { enIyi = n; ofs = o; ikiD = iki; }
+                }
+            return enIyi >= Math.Max(1, yuz.Count / 2);
         }
 
         private static void KatmaniHazirla(Database db, Transaction tr)
@@ -1129,6 +1175,127 @@ namespace OtomatikKesit
         }
     }
 
+    /// <summary>
+    /// Ön (TRANSVERSE) / yan (LONGITUDINAL) görünüş ölçüleri, görünüş koordinatlarında (u = x + ofset, v = z):
+    ///  - sağda düşey zincir: PLS-TOWER kısımlarının (Leg Ext., Body Ext., Basic Body, Crossarms, Pikes ...) sınır
+    ///    kotları, onun dışında toplam yükseklik;
+    ///  - altta (görünüş başlığının altında) taban genişliği;
+    ///  - kol / tepe uçlarında eksenden uca yatay ölçü (en üstteki uçta üstte, diğerlerinde ucun altında).
+    /// </summary>
+    public static class GorunusOlcuPlani
+    {
+        public static double Yazi = 250, Aralik = 700;
+        public static double BirlesmeTol = 50;      // bundan yakın kotlar tek kot sayılır (mm)
+        public static double UcTol = 100;           // uç (kol, tepe) sayılması için komşu kotlardan taşma (mm)
+        private const double BaslikBoyu = 600, BaslikPayi = 890;   // OutlineDrawing: başlık 600, taban - 890'da
+
+        public static List<OlcuTanimi> Hesapla(List<YuzCizgisi> yuz, double ofs)
+        {
+            var sonuc = new List<OlcuTanimi>();
+            var segs = yuz.Select(c => new[] { c.P[0] + ofs, c.P[2], c.P[3] + ofs, c.P[5] }).ToList();
+            if (segs.Count == 0) return sonuc;
+            double minU = segs.Min(s => Math.Min(s[0], s[2])), maxU = segs.Max(s => Math.Max(s[0], s[2]));
+            double minV = segs.Min(s => Math.Min(s[1], s[3])), maxV = segs.Max(s => Math.Max(s[1], s[3]));
+            if (maxV - minV < 1000) return sonuc;
+            Func<OlcuTanimi, OlcuTanimi> t = o => { o.Yazi = Yazi; o.Uzatma = 0.8 * Aralik; return o; };
+
+            // ---- düşey zincir: kısım sınırları
+            var kotlar = new List<double> { minV, maxV };
+            foreach (var g in yuz.Where(c => !string.IsNullOrWhiteSpace(c.Kesim) && c.Kesim != "UNDEFINED").GroupBy(c => c.Kesim.Trim()))
+            {
+                kotlar.Add(g.Min(c => Math.Min(c.P[2], c.P[5])));
+                kotlar.Add(g.Max(c => Math.Max(c.P[2], c.P[5])));
+            }
+            kotlar = Birlestir(kotlar);
+            double uz = maxU + Aralik;
+            for (int i = 0; i + 1 < kotlar.Count; i++)
+                sonuc.Add(t(new OlcuTanimi
+                {
+                    U1 = Sag(segs, kotlar[i]), V1 = kotlar[i], U2 = Sag(segs, kotlar[i + 1]), V2 = kotlar[i + 1],
+                    UD = uz, VD = (kotlar[i] + kotlar[i + 1]) / 2, Rotation = Math.PI / 2
+                }));
+            if (kotlar.Count > 2)
+                sonuc.Add(t(new OlcuTanimi
+                {
+                    U1 = Sag(segs, minV), V1 = minV, U2 = Sag(segs, maxV), V2 = maxV,
+                    UD = uz + Aralik, VD = (minV + maxV) / 2, Rotation = Math.PI / 2
+                }));
+
+            // ---- taban genişliği (başlığın altında)
+            double l0 = Sol(segs, minV), r0 = Sag(segs, minV), eksen = (l0 + r0) / 2;
+            if (r0 - l0 > BirlesmeTol)
+                sonuc.Add(t(new OlcuTanimi
+                {
+                    U1 = l0, V1 = minV, U2 = r0, V2 = minV,
+                    UD = eksen, VD = minV - BaslikPayi - Aralik, Rotation = 0
+                }));
+
+            // ---- uçlar: sağ / sol profilin yerel en büyükleri (taban hariç)
+            var seviyeler = Birlestir(segs.SelectMany(s => new[] { s[1], s[3] }).ToList(), 1);
+            var sag = seviyeler.Select(v => Sag(segs, v) - eksen).ToList();
+            var sol = seviyeler.Select(v => eksen - Sol(segs, v)).ToList();
+            var ucSag = YerelEnBuyuk(sag); var ucSol = YerelEnBuyuk(sol);
+            foreach (int i in ucSag.Union(ucSol).Distinct().OrderBy(i => i))
+            {
+                double v = seviyeler[i];
+                if (v <= minV + BirlesmeTol) continue;
+                double ur = eksen + sag[i], ul = eksen - sol[i];
+                bool sagUc = ucSag.Contains(i), solUc = ucSol.Contains(i);
+                double bas = solUc ? ul : eksen, son = sagUc ? ur : eksen;
+                // Ucun üstünde bu aralıkta çizgi yoksa ölçü üste, varsa alta
+                bool ustBos = !segs.Any(s => Math.Max(s[1], s[3]) > v + BirlesmeTol && Math.Max(s[0], s[2]) > bas && Math.Min(s[0], s[2]) < son);
+                double vd = ustBos ? v + Aralik : v - Aralik;
+                if (solUc) sonuc.Add(t(new OlcuTanimi { U1 = ul, V1 = v, U2 = eksen, V2 = v, UD = (ul + eksen) / 2, VD = vd, Rotation = 0 }));
+                if (sagUc) sonuc.Add(t(new OlcuTanimi { U1 = eksen, V1 = v, U2 = ur, V2 = v, UD = (ur + eksen) / 2, VD = vd, Rotation = 0 }));
+            }
+            return sonuc;
+        }
+
+        private static List<int> YerelEnBuyuk(List<double> r)
+        {
+            var l = new List<int>();
+            for (int i = 1; i < r.Count; i++)
+            {
+                // Düz kısımda (aynı genişlik) ilerleyen kotlar: platonun sonu alınır
+                int j = i;
+                while (j + 1 < r.Count && Math.Abs(r[j + 1] - r[i]) <= 1) j++;
+                bool alt = r[i] > r[i - 1] + UcTol;
+                bool ust = j + 1 >= r.Count || r[j + 1] < r[i] - UcTol;
+                if (alt && ust) l.Add(i);
+                i = j;
+            }
+            return l;
+        }
+
+        private static List<double> Birlestir(List<double> kotlar, double tol = -1)
+        {
+            if (tol < 0) tol = BirlesmeTol;
+            var l = new List<double>();
+            foreach (double v in kotlar.OrderBy(x => x))
+                if (l.Count == 0 || v - l[l.Count - 1] > tol) l.Add(v);
+            return l;
+        }
+
+        /// <summary>v kotunda görünüşün en sağ / en sol u değeri (kotu kesen veya o kotta biten çizgiler).</summary>
+        private static double Sag(List<double[]> segs, double v) { return Uc(segs, v, true); }
+        private static double Sol(List<double[]> segs, double v) { return Uc(segs, v, false); }
+
+        private static double Uc(List<double[]> segs, double v, bool sag)
+        {
+            double sonuc = sag ? double.MinValue : double.MaxValue;
+            foreach (var s in segs)
+            {
+                double v1 = Math.Min(s[1], s[3]), v2 = Math.Max(s[1], s[3]);
+                if (v < v1 - 1 || v > v2 + 1) continue;
+                double u;
+                if (v2 - v1 < 1) u = sag ? Math.Max(s[0], s[2]) : Math.Min(s[0], s[2]);
+                else u = s[0] + (s[2] - s[0]) * (v - s[1]) / (s[3] - s[1]);
+                sonuc = sag ? Math.Max(sonuc, u) : Math.Min(sonuc, u);
+            }
+            return sonuc == double.MinValue || sonuc == double.MaxValue ? 0 : sonuc;
+        }
+    }
+
     /// <summary>Model alanında OutlineDrawing'e ait olmayan nesneler (başka katmanlarda).</summary>
     internal static class YabanciNesneler
     {
@@ -1343,6 +1510,7 @@ namespace OtomatikKesit
     {
         public double[] P;      // { sx, sy, sz, ex, ey, ez }
         public string Grup;
+        public string Kesim;    // PLS-TOWER section (Basic Body 1, 35.0 Leg Ext. ...)
     }
 
     /// <summary>Ön/yan görünüş çizgilerini koordinatından tanır. OutlineDrawing görünüşü
@@ -1355,15 +1523,19 @@ namespace OtomatikKesit
         private const double Hucre = 10, Tol = 0.5;
         private readonly Dictionary<string, List<KeyValuePair<double[], string>>> _idx = new Dictionary<string, List<KeyValuePair<double[], string>>>();
 
-        public YuzEslestirici(IEnumerable<YuzCizgisi> cizgiler)
+        public YuzEslestirici(IEnumerable<YuzCizgisi> cizgiler) : this(cizgiler, Ofsetler, true, true) { }
+
+        /// <param name="ucBoyutlu">OutlineDrawing'in çizdiği hal</param>
+        /// <param name="ikiBoyutlu">2D Aktar sonrası hal</param>
+        public YuzEslestirici(IEnumerable<YuzCizgisi> cizgiler, int[] ofsetler, bool ucBoyutlu, bool ikiBoyutlu)
         {
             foreach (var c in cizgiler)
-                foreach (int ofs in Ofsetler)
+                foreach (int ofs in ofsetler)
                 {
                     double o = ofs;
                     double ax = c.P[0] + o, bx = c.P[3] + o;   // OutlineDrawing ile aynı toplama
-                    Ekle(new[] { ax, c.P[1], c.P[2], bx, c.P[4], c.P[5] }, c.Grup);
-                    Ekle(new[] { ax, c.P[2], -c.P[1], bx, c.P[5], -c.P[4] }, c.Grup);   // 2D Aktar sonrası
+                    if (ucBoyutlu) Ekle(new[] { ax, c.P[1], c.P[2], bx, c.P[4], c.P[5] }, c.Grup);
+                    if (ikiBoyutlu) Ekle(new[] { ax, c.P[2], -c.P[1], bx, c.P[5], -c.P[4] }, c.Grup);   // 2D Aktar sonrası
                 }
         }
 
@@ -1451,16 +1623,22 @@ namespace OtomatikKesit
             var d = pi != null ? pi.GetValue(data, null) as IDictionary : null;
             if (d == null) return sonuc;
             string[] adlar = { "start_x", "start_y", "start_z", "end_x", "end_y", "end_z" };
-            PropertyInfo[] p = null; PropertyInfo g = null;
+            PropertyInfo[] p = null; PropertyInfo g = null, ks = null;
             foreach (DictionaryEntry de in d)
             {
                 object v = de.Value;
                 if (v == null) continue;
-                if (p == null) { p = adlar.Select(a => v.GetType().GetProperty(a, Hepsi)).ToArray(); g = v.GetType().GetProperty("group_label", Hepsi); }
+                if (p == null)
+                {
+                    p = adlar.Select(a => v.GetType().GetProperty(a, Hepsi)).ToArray();
+                    g = v.GetType().GetProperty("group_label", Hepsi);
+                    ks = v.GetType().GetProperty("section_label", Hepsi);
+                }
                 sonuc.Add(new YuzCizgisi
                 {
                     P = p.Select(x => Convert.ToDouble(x.GetValue(v, null))).ToArray(),
-                    Grup = g != null ? g.GetValue(v, null) as string : null
+                    Grup = g != null ? g.GetValue(v, null) as string : null,
+                    Kesim = ks != null ? ks.GetValue(v, null) as string : null
                 });
             }
             return sonuc;

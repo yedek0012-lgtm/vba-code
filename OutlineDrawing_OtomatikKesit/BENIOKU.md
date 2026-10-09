@@ -10,6 +10,12 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL.
 
+**1.12: Görünüş ölçüleri.** "Ölçü" işaretliyse (veya `OTOOLCU`) TRANSVERSE ve LONGITUDINAL FACE'e de ölçü konur:
+sağda PLS-TOWER kısımlarının (Leg Ext., Body Ext., Basic Body, Crossarms, Pikes …) sınır kotları zincir ölçü ve toplam
+yükseklik; görünüş başlığının altında taban genişliği; kol ve tepe uçlarında eksenden uca yatay ölçü (en üst uçta
+üstte, diğerlerinde ucun altında). Görünüşün yeri (ofset 0 / 50000) ve hali (çizildiği gibi / 2D Aktar sonrası)
+çizgilerinden bulunur; ölçüler başlıkla aynı düzlemde, `OTO_KESIT_OLCU` katmanında.
+
 **1.11: Redundant tanımı PLS-TOWER grup tipine göre.** Grup tablosundaki "group type" sütunu 3 (Redundant,
 PLS-TOWER çiziminde turuncu) olan gruplar da kesikli/mavi çizilir; önceden yalnız açıklamasında "Redundant" geçen
 gruplar sayılıyordu. YAA-R1'de açıklaması "Crossarm Brace", "Basic Body Inner Horizontal", "... Rdnt" olan
