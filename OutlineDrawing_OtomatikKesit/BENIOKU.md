@@ -13,7 +13,7 @@
    Bu yapılmazsa NETLOAD "Could not load file or assembly" hatası verebilir.
 2. AutoCAD'de önce her zamanki gibi `OutlineDrawing.dll`'i, sonra `OtomatikKesit.dll`'i **NETLOAD** edin
    (güvenlik sorusu çıkarsa "Her zaman yükle").
-3. OutlineDrawing formunu açın. "Kesit Alma" kutusunda Liste butonunun altında **Oto Kesit** butonu ve **Ölçü** kutucuğu belirir.
+3. OutlineDrawing formunu açın. "Kesit Alma" kutusunda Liste butonunun altında **Oto Kesit** butonu, **Ölçü** ve **Redundant** kutucukları belirir.
 4. .tow seç → **Oto Kesit** → tabloyu kontrol et → **ÇALIŞTIR**. Komut satırından `OTOKESIT` de aynı işi yapar.
 
 Her açılışta otomatik yüklenmesi için iki DLL'i de AutoCAD'in `APPLOAD` → "Startup Suite"ine ekleyebilirsiniz.
@@ -31,6 +31,12 @@ Eklenti, .tow dosyasını OutlineDrawing'in kendi okuyucusuyla (`dataprocessing.
 - **Ölçü** kutucuğu (varsayılan işaretli): ÇALIŞTIR'dan sonra her `SECTION x` çizimine ölçü koyar.
   Üstte zincir ölçü (gövde köşeleri ve kol uçları), sağda toplam derinlik. Ölçüler `OTO_KESIT_OLCU`
   katmanına konur ve her çalıştırmada yenilenir. Elle: `OTOOLCU`. "2D Aktar" ölçüleri de birlikte döndürür.
+
+- **Redundant** kutucuğu (varsayılan işaretli): ÇALIŞTIR'dan sonra kesitlerdeki ana elemanlar düz çizgi ve
+  cyan (4), redundant elemanlar (grup açıklaması "Redundant" olanlar) kesikli (DASHED) ve mavi (5) olur.
+  Çizilen her çizgi, grid'deki kesit tanımıyla OutlineDrawing'in seçim kuralına göre bulunan elemanlarla
+  rijit dönüşümle (döndürme, öteleme, aynalama) eşleştirilir; çizginin katmanı değişmez. Elle: `OTOSTIL`.
+  Kesik desen boyu ~75 mm (global LTSCALE'e göre ayarlanır).
 
 Tangent Tower-0°-2°-R1 ile sonuç (OutlineDrawing'in görünürlük hesabıyla):
 
