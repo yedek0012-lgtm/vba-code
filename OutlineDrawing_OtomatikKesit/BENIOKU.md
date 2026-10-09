@@ -78,6 +78,10 @@ bash test/run_test.sh kule.tow planes  # eğik düzlem araması da açık
 | F | 15500 | Gövde uzatma üstü, baklava + köşe üçgenleri | SECTION E ✔ |
 | G | 9000 | Gövde altı plan çaprazı (H8, R13–R17) | çizilmemiş |
 
+Uzatma dosyaları (her biri ayrı .tow): 2BE, 5BE ve 8BE gövde uzatmalarında 1'er plan kesiti
+(uzatma içindeki plan çaprazı) öneriliyor. 0 LE ve -2 LE bacak uzatmalarında plan çaprazı olmadığı için
+kesit önerilmiyor (bunlar düşey görünüş olarak çiziliyor).
+
 Elle çizilen 5 kesitin hepsi bulunuyor. Fazladan 2 öneri gerçekten plan çaprazı olan kotlar
 (çizilip çizilmeyeceği mühendis kararı). Eğik düzlem araması açılırsa travers üst başlık
 düzlemleri için 3 öneri daha gelir.
