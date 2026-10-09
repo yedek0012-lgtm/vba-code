@@ -10,6 +10,12 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL.
 
+**1.15: Görünüş tamlık kontrolü.** Bütün elemanlar önden ve yandan izdüşürülüp (PLS-TOWER görünüşü) her birinin
+çizimde karşılığı olduğu doğrulandı (`test/gorunus_testi.sh`). Ön görünüş 7 kulede %100 (YAA-R1 1210/1210, Tangent
+1068/1068). Yan görünüşte OutlineDrawing'in atladığı Tangent Tower en üst paneli (z 46000–47800: L13, H1, CB-D1;
+önünde uçtan görülen travers var) artık iç eleman olarak çiziliyor; yan görünüşte eksik kalan yalnız gövde dışına
+taşan, uçtan görülen travers elemanları (bilerek, okunmaz yığın olmasın diye).
+
 **1.14: Görünüşlere iç elemanlar (PLS-TOWER görünüşündeki gibi).** "İç eleman" kutucuğu (varsayılan işaretli) veya
 `OTOIC`: ön/yan görünüşe, yüz düzleminde olmayan elemanların izdüşümü eklenir (kalça çaprazları, iç diyaframlar; ör.
 YAA-R1 20BE uzatmasındaki P-E1-5_20). Yalnız görünüşte yeni bir çizgi oluşturanlar eklenir: izdüşümü yüz

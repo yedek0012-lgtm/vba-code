@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.14";
+        public const string Surum = "1.15";
         private static Timer _timer;
 
         public void Initialize()
@@ -1353,19 +1353,35 @@ namespace OtomatikKesit
             return sonuc;
         }
 
-        /// <summary>z kotunda görünüş yüzünün bakış yönündeki en büyük |derinliği| (gövde yarı genişliği); yüz o kotta yoksa 0.</summary>
+        public static double BoslukPayi = 3000;  // yüzün o kotta çizgisi yoksa en yakın yüz kotu bu kadar uzakta olabilir (mm)
+
+        /// <summary>z kotunda görünüş yüzünün bakış yönündeki en büyük |derinliği| (gövde yarı genişliği).
+        /// Yüzün o kotta çizgisi yoksa (ör. OutlineDrawing'in yan yüzü, önünde uçtan görülen travers olan en üst paneli
+        /// atlıyor) en yakın yüz kotundaki değer; o da BoslukPayi'ndan uzaksa 0.</summary>
         private static double Derinlik(List<YuzCizgisi> yuz, double z)
         {
-            double d = 0;
+            double d = 0, enYakin = double.MaxValue, yakinD = 0;
+            bool var = false;
             foreach (var c in yuz)
             {
                 double z1 = c.P[2], z2 = c.P[5];
-                if (z < Math.Min(z1, z2) - 1 || z > Math.Max(z1, z2) + 1) continue;
+                if (z < Math.Min(z1, z2) - 1 || z > Math.Max(z1, z2) + 1)
+                {
+                    for (int i = 0; i < 2; i++)
+                    {
+                        double dz = Math.Abs(c.P[2 + 3 * i] - z), dd = Math.Abs(c.P[1 + 3 * i]);
+                        if (dz < enYakin - 1) { enYakin = dz; yakinD = dd; }
+                        else if (Math.Abs(dz - enYakin) <= 1) yakinD = Math.Max(yakinD, dd);
+                    }
+                    continue;
+                }
+                var = true;
                 double v = Math.Abs(z2 - z1) < 1 ? Math.Max(Math.Abs(c.P[1]), Math.Abs(c.P[4]))
                                                  : Math.Abs(c.P[1] + (c.P[4] - c.P[1]) * (z - z1) / (z2 - z1));
                 d = Math.Max(d, v);
             }
-            return d;
+            if (var) return d;
+            return enYakin <= BoslukPayi ? yakinD : 0;
         }
 
         private static double Boy(double u1, double v1, double u2, double v2)
