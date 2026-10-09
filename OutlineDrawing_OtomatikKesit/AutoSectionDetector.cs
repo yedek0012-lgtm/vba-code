@@ -65,6 +65,11 @@ namespace OutlineDrawing
         /// (bundan dik düzlemler gövde yüzüdür; oradaki elemanlar raporda "kapsanmayan" olarak listelenir).</summary>
         public double MaxHiddenPlaneTiltDeg = 80.0;
 
+        /// <summary>DetectHidden'da eğik düzlem kesitinin en az eleman sayısı. Daha küçük düzlemler (tek bir
+        /// gizli elemanı göstermek için açılan 3-4 elemanlık üçgenler) kesit olarak anlamsız; onların elemanları
+        /// raporda "kapsanmayan" olarak listelenir.</summary>
+        public int MinHiddenPlaneMembers = 6;
+
         /// <summary>true: A kesiti en üstte, aşağı doğru B, C, ...</summary>
         public bool TopDown = true;
     }
@@ -243,7 +248,7 @@ namespace OutlineDrawing
                                                           Math.Abs(V3.Dot(nrm, b.B) - d) <= opt.PlaneTolerance).ToList();
                             foreach (var comp in ConnectedGroups(inPlane))
                             {
-                                if (comp.Count < 3) continue;
+                                if (comp.Count < Math.Max(3, opt.MinHiddenPlaneMembers)) continue;
                                 int score = gain(comp);
                                 if (score == 0 || score < bestScore || !HasTriangle(comp)) continue;
                                 V3 c = Centroid(comp);

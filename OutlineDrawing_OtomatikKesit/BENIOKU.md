@@ -36,13 +36,18 @@ Eklenti, .tow dosyasını OutlineDrawing'in kendi okuyucusuyla (`dataprocessing.
   cyan (4), redundant elemanlar (grup açıklaması "Redundant" olanlar) kesikli (DASHED) ve mavi (5) olur.
   Çizilen her çizgi, grid'deki kesit tanımıyla OutlineDrawing'in seçim kuralına göre bulunan elemanlarla
   rijit dönüşümle (döndürme, öteleme, aynalama) eşleştirilir; çizginin katmanı değişmez. Elle: `OTOSTIL`.
-  Kesik desen boyu ~75 mm (global LTSCALE'e göre ayarlanır).
+  Kesikli çizgi tipi `OTO_KESIK` eklenti tarafından oluşturulur (150 çizgi / 75 boşluk mm, .lin dosyası gerekmez;
+  global LTSCALE'e göre ayarlanır). Sonuç ve olası hatalar formdaki UYARI satırında görünür.
+- Eğik düzlem kesiti en az 6 eleman içermeli (`MinHiddenPlaneMembers`). Daha küçük düzlemler tek bir gizli
+  elemanı göstermek için açılan anlamsız üçgenlerdi; o elemanlar artık `KAPSANMAYAN` olarak raporlanıyor.
+  Ana kulede bunlar travers bölgesindeki gövde yan yüz çaprazları: CB-D1-T, CB-D3-T, CB-D9-T. Yan görünüşte
+  traversin arkasında kaldıkları için görünmüyorlar.
 
 Tangent Tower-0°-2°-R1 ile sonuç (OutlineDrawing'in görünürlük hesabıyla):
 
 | Dosya | Görünmeyen eleman | Kapsanan | Kesit |
 |---|---|---|---|
-| Ana kule | 219 | 219 | 15 (9 yatay, 6 eğik) |
+| Ana kule | 219 | 207 | 12 (8 yatay, 4 eğik) |
 | 2BE / 5BE / 8BE | 42 | 42 | 2 |
 | 0 LE / -2 LE | 28 / 24 | hepsi | 1 (bacak hip düzlemi) |
 

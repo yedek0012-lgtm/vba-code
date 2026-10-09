@@ -92,7 +92,7 @@ namespace OtomatikKesit
                 Yaz("\nOutlineDrawing formu açık değil (kesit tanımları ve .tow yolu formdan okunur).\n");
                 return;
             }
-            KesitStili.Uygula(f);
+            Yaz("\n" + KesitStili.Uygula(f) + "\n");
         }
 
         internal static void Yaz(string msg)
@@ -187,16 +187,18 @@ namespace OtomatikKesit
             if (run != null)
                 run.Click += (s, e) =>
                 {
+                    var mesaj = new List<string>();
                     if (chkR.Checked)
                     {
-                        try { KesitStili.Uygula(f); }
-                        catch (System.Exception ex) { Komutlar.Yaz("\nRedundant çizgi tipi uygulanamadı: " + ex.Message + "\n"); }
+                        try { mesaj.Add(KesitStili.Uygula(f)); }
+                        catch (System.Exception ex) { mesaj.Add("Redundant çizgi tipi uygulanamadı: " + ex.Message); }
                     }
                     if (chk.Checked)
                     {
-                        try { KesitOlculeri.Ekle(); }
-                        catch (System.Exception ex) { Komutlar.Yaz("\nÖlçü eklenemedi: " + ex.Message + "\n"); }
+                        try { mesaj.Add(KesitOlculeri.Ekle()); }
+                        catch (System.Exception ex) { mesaj.Add("Ölçü eklenemedi: " + ex.Message); }
                     }
+                    if (mesaj.Count > 0) Uyari(f, string.Join(" | ", mesaj));
                 };
         }
 
@@ -301,7 +303,7 @@ namespace OtomatikKesit
             if (row.DataGridView.Columns.Contains(sutun)) row.Cells[sutun].Value = deger;
         }
 
-        private static void Uyari(Form f, string mesaj)
+        internal static void Uyari(Form f, string mesaj)
         {
             // OutlineDrawing'in kendi uyarı etiketi; yoksa komut satırı
             if (!Cagir(f, "PrintErrorLabel", 5000, mesaj)) Komutlar.Yaz("\n" + mesaj + "\n");
@@ -404,10 +406,10 @@ namespace OtomatikKesit
         internal const string Katman = "OTO_KESIT_OLCU";
 
         /// <summary>Model alanındaki her "SECTION x" çizimine ölçü koyar; önceki otomatik ölçüleri siler.</summary>
-        internal static void Ekle()
+        internal static string Ekle()
         {
             Document doc = AcApp.DocumentManager.MdiActiveDocument;
-            if (doc == null) return;
+            if (doc == null) return "Ölçü: açık çizim yok.";
             Database db = doc.Database;
             int adet = 0, kesit = 0;
 
@@ -449,7 +451,9 @@ namespace OtomatikKesit
                 }
                 tr.Commit();
             }
-            Komutlar.Yaz(string.Format("\nKesit ölçüleri: {0} kesite {1} ölçü eklendi (katman {2}).\n", kesit, adet, Katman));
+            string ozet = string.Format("Ölçü: {0} kesite {1} ölçü (katman {2})", kesit, adet, Katman);
+            Komutlar.Yaz("\n" + ozet + ".\n");
+            return ozet;
         }
 
         private static void KatmaniHazirla(Database db, Transaction tr)
@@ -470,37 +474,44 @@ namespace OtomatikKesit
     {
         public static short AnaRenk = 4;               // cyan, düz çizgi
         public static short RedundantRenk = 5;         // mavi, kesikli
-        public static string RedundantCizgiTipi = "DASHED";
-        public static double KesikBoyu = 75;           // ekrandaki desen uzunluğu (mm)
+        public const string CizgiTipiAdi = "OTO_KESIK";
+        public static double Cizgi = 150, Bosluk = 75; // kesik deseni (mm, ekranda)
 
         private const BindingFlags Hepsi = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        private static readonly string[] NoktaSutunlari = { "ColumnFirstPoint", "ColumnSecondPoint", "ColumnThirdPoint", "ColumnFourthPoint" };
 
-        internal static void Uygula(Form f)
+        /// <returns>Kullanıcıya gösterilecek kısa özet</returns>
+        internal static string Uygula(Form f)
         {
             Document doc = AcApp.DocumentManager.MdiActiveDocument;
-            if (doc == null) return;
+            if (doc == null) return "Redundant stili: açık çizim yok.";
             Database db = doc.Database;
 
             var txt = FormBaglayici.Alan(f, "txtTowerPath") as TextBox;
             string path = txt != null ? (txt.Text ?? "").Trim() : "";
-            if (path.Length == 0 || !File.Exists(path)) { Komutlar.Yaz("\nRedundant stili: .tow dosyası seçili değil.\n"); return; }
+            if (path.Length == 0 || !File.Exists(path)) return "Redundant stili: .tow dosyası seçili değil.";
             KuleVerisi kule = KuleOkuyucu.Oku(f.GetType().Assembly, path);
-            if (kule == null) return;
-            if (kule.RedundantGruplar.Count == 0) { Komutlar.Yaz("\nRedundant stili: .tow dosyasında açıklaması 'Redundant' olan grup yok.\n"); return; }
+            if (kule == null) return "Redundant stili: .tow okunamadı.";
+            if (kule.RedundantGruplar.Count == 0) return "Redundant stili: .tow'da açıklaması 'Redundant' olan grup yok.";
 
             Dictionary<string, KesitTanimi> tanimlar = GridTanimlari(f);
-            int ana = 0, red = 0, eslesmeyen = 0, kesit = 0;
+            int ana = 0, red = 0, eslesmeyen = 0, kesit = 0, hata = 0;
+            var tanimsiz = new List<string>();
+            string ilkHata = null;
 
             using (doc.LockDocument())
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
                 var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
-                double ltOlcek = CizgiTipiHazirla(db, tr);
+                ObjectId kesik = KesikCizgiTipi(db, tr);
+                ObjectId duz = SymbolUtilityServices.GetLinetypeContinuousId(db);
+                double olcek = db.Ltscale > 1e-9 ? 1.0 / db.Ltscale : 1.0;
 
                 foreach (KesitCizimi e in KesitCizimleri.Topla(tr, ms, null))
                 {
+                    if (e.Segs.Count == 0) continue;
                     KesitTanimi tanim;
-                    if (e.Segs.Count == 0 || !tanimlar.TryGetValue(e.Ad, out tanim)) continue;
+                    if (!tanimlar.TryGetValue(e.Ad, out tanim)) { tanimsiz.Add(e.Ad); continue; }
                     List<string> anahtarlar;
                     List<double[]> kaynak = KesitSecici.Sec(kule.Uyeler, tanim, out anahtarlar);
                     int[] eslesme = Eslestirici.Eslestir(kaynak, e.Segs, 2.0);
@@ -508,74 +519,102 @@ namespace OtomatikKesit
                     for (int i = 0; i < e.Ids.Count; i++)
                     {
                         if (eslesme[i] < 0) { eslesmeyen++; continue; }
-                        FinalMember m = kule.Uyeler[anahtarlar[eslesme[i]]];
-                        bool redundant = m.group_label != null && kule.RedundantGruplar.Contains(m.group_label.Trim());
-                        var line = (Entity)tr.GetObject(e.Ids[i], OpenMode.ForWrite);
-                        if (redundant)
+                        try
                         {
-                            line.Color = AcColor.FromColorIndex(Autodesk.AutoCAD.Colors.ColorMethod.ByAci, RedundantRenk);
-                            line.Linetype = RedundantCizgiTipi;
-                            line.LinetypeScale = ltOlcek;
-                            red++;
+                            FinalMember m = kule.Uyeler[anahtarlar[eslesme[i]]];
+                            bool redundant = m.group_label != null && kule.RedundantGruplar.Contains(m.group_label.Trim());
+                            var ent = (Entity)tr.GetObject(e.Ids[i], OpenMode.ForWrite);
+                            if (redundant)
+                            {
+                                ent.Color = AcColor.FromColorIndex(Autodesk.AutoCAD.Colors.ColorMethod.ByAci, RedundantRenk);
+                                ent.LinetypeId = kesik;
+                                ent.LinetypeScale = olcek;
+                                red++;
+                            }
+                            else
+                            {
+                                ent.Color = AcColor.FromColorIndex(Autodesk.AutoCAD.Colors.ColorMethod.ByAci, AnaRenk);
+                                ent.LinetypeId = duz;
+                                ana++;
+                            }
                         }
-                        else
+                        catch (System.Exception ex)
                         {
-                            line.Color = AcColor.FromColorIndex(Autodesk.AutoCAD.Colors.ColorMethod.ByAci, AnaRenk);
-                            line.Linetype = "Continuous";
-                            ana++;
+                            hata++;
+                            if (ilkHata == null) ilkHata = ex.Message;
                         }
                     }
                 }
                 tr.Commit();
             }
-            Komutlar.Yaz(string.Format("\nKesit çizgi tipleri: {0} kesit, {1} ana eleman (düz), {2} redundant (kesikli){3}.\n",
-                kesit, ana, red, eslesmeyen > 0 ? ", eşleşmeyen çizgi " + eslesmeyen : ""));
+
+            string ozet = string.Format("Çizgi tipi: {0} kesit, {1} redundant kesikli, {2} ana düz", kesit, red, ana);
+            if (eslesmeyen > 0) ozet += ", eşleşmeyen çizgi " + eslesmeyen;
+            if (tanimsiz.Count > 0) ozet += ", tabloda bulunamayan kesit: " + string.Join(",", tanimsiz);
+            if (hata > 0) ozet += string.Format(", {0} çizgide hata ({1})", hata, ilkHata);
+            Komutlar.Yaz("\n" + ozet + ".\n");
+            return ozet;
         }
 
-        /// <summary>DASHED çizgi tipini yükler; ekranda ~KesikBoyu mm desen verecek nesne ölçeğini döndürür.</summary>
-        private static double CizgiTipiHazirla(Database db, Transaction tr)
+        /// <summary>Dosyaya (acad.lin) bağımlı olmadan kesikli çizgi tipini oluşturur.</summary>
+        private static ObjectId KesikCizgiTipi(Database db, Transaction tr)
         {
             var ltt = (LinetypeTable)tr.GetObject(db.LinetypeTableId, OpenMode.ForRead);
-            if (!ltt.Has(RedundantCizgiTipi))
+            if (ltt.Has(CizgiTipiAdi)) return ltt[CizgiTipiAdi];
+            ltt.UpgradeOpen();
+            var r = new LinetypeTableRecord
             {
-                string dosya = db.Measurement == MeasurementValue.Metric ? "acadiso.lin" : "acad.lin";
-                try { db.LoadLineTypeFile(RedundantCizgiTipi, dosya); }
-                catch { try { db.LoadLineTypeFile(RedundantCizgiTipi, "acad.lin"); } catch { } }
-            }
-            if (!ltt.Has(RedundantCizgiTipi)) return 1.0;
-            var rec = (LinetypeTableRecord)tr.GetObject(ltt[RedundantCizgiTipi], OpenMode.ForRead);
-            double desen = rec.PatternLength > 1e-9 ? rec.PatternLength : 1.0;
-            double global = db.Ltscale > 1e-9 ? db.Ltscale : 1.0;
-            return KesikBoyu / (desen * global);
+                Name = CizgiTipiAdi,
+                AsciiDescription = "Oto Kesit redundant __ __ __",
+                PatternLength = Cizgi + Bosluk,
+                NumDashes = 2
+            };
+            r.SetDashLengthAt(0, Cizgi);
+            r.SetDashLengthAt(1, -Bosluk);
+            ObjectId id = ltt.Add(r);
+            tr.AddNewlyCreatedDBObject(r, true);
+            return id;
         }
 
-        /// <summary>mainform.CollectSectionsFromGrid() sonucunu yerel tanımlara çevirir.</summary>
+        /// <summary>Kesit tablosundaki satırları doğrudan okur (Kesit İsmi, Yükseklik, 1-4. Nokta "x;y;z").</summary>
         private static Dictionary<string, KesitTanimi> GridTanimlari(Form f)
         {
             var sonuc = new Dictionary<string, KesitTanimi>(StringComparer.OrdinalIgnoreCase);
-            MethodInfo mi = f.GetType().GetMethod("CollectSectionsFromGrid", Hepsi, null, Type.EmptyTypes, null);
-            var d = mi != null ? mi.Invoke(f, null) as IDictionary : null;
-            if (d == null) return sonuc;
-            foreach (DictionaryEntry de in d)
+            var grid = FormBaglayici.Alan(f, "dataGridView1") as DataGridView;
+            if (grid == null) return sonuc;
+            foreach (DataGridViewRow row in grid.Rows)
             {
-                object r = de.Value;
-                if (r == null) continue;
+                if (row.IsNewRow || !grid.Columns.Contains("ColumnSection")) continue;
+                string ad = Hucre(row, "ColumnSection");
+                if (ad.Length == 0) continue;
                 var tanim = new KesitTanimi();
-                var h = r.GetType().GetProperty("Height", Hepsi).GetValue(r, null);
-                if (h != null) tanim.Yukseklik = Convert.ToDouble(h);
-                var pts = r.GetType().GetProperty("Points", Hepsi).GetValue(r, null) as IEnumerable;
-                if (pts != null)
-                    foreach (object p in pts)
-                    {
-                        Type pt = p.GetType();
-                        tanim.Noktalar.Add(new[] {
-                            Convert.ToDouble(pt.GetProperty("X", Hepsi).GetValue(p, null)),
-                            Convert.ToDouble(pt.GetProperty("Y", Hepsi).GetValue(p, null)),
-                            Convert.ToDouble(pt.GetProperty("Z", Hepsi).GetValue(p, null)) });
-                    }
-                sonuc[Convert.ToString(de.Key, CultureInfo.InvariantCulture)] = tanim;
+                double h;
+                string hs = Hucre(row, "ColumnHeight");
+                if (hs.Length > 0 && Sayi(hs, out h)) tanim.Yukseklik = h;
+                foreach (string sutun in NoktaSutunlari)
+                {
+                    string[] p = Hucre(row, sutun).Split(';');
+                    double x, y, z;
+                    if (p.Length == 3 && Sayi(p[0], out x) && Sayi(p[1], out y) && Sayi(p[2], out z))
+                        tanim.Noktalar.Add(new[] { x, y, z });
+                }
+                if (tanim.Yukseklik.HasValue || tanim.Noktalar.Count >= 3) sonuc[ad] = tanim;
             }
             return sonuc;
+        }
+
+        private static string Hucre(DataGridViewRow row, string sutun)
+        {
+            if (!row.DataGridView.Columns.Contains(sutun)) return "";
+            object v = row.Cells[sutun].Value;
+            return v == null ? "" : v.ToString().Trim();
+        }
+
+        // OutlineDrawing.TryParseDouble ile aynı: önce geçerli kültür, sonra Invariant
+        private static bool Sayi(string s, out double d)
+        {
+            return double.TryParse(s, NumberStyles.Float, CultureInfo.CurrentCulture, out d) ||
+                   double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out d);
         }
     }
 
