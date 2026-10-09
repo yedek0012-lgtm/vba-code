@@ -63,7 +63,13 @@ namespace OutlineDrawing
 
         /// <summary>Derece. DetectHidden'da görünmeyen elemanlar için aranan eğik düzlemlerin üst sınırı
         /// (bundan dik düzlemler gövde yüzüdür; oradaki elemanlar raporda "kapsanmayan" olarak listelenir).</summary>
-        public double MaxHiddenPlaneTiltDeg = 80.0;
+        public double MaxHiddenPlaneTiltDeg = 90.0;
+
+        /// <summary>Derece. Bundan dik düzlemler (gövde/bacak yüzleri, kiriş iç çerçeveleri) yalnız elemanlarının en az
+        /// DikDuzlemGizliOrani kadarı ön/yan görünüşte görünmüyorsa kesit olur. Böylece bacakların iç yüzleri ve kiriş
+        /// diyaframları kesit alır, dış yüzler (zaten ön/yan görünüşte çizilen) kesit almaz.</summary>
+        public double DikDuzlemEsigiDeg = 75.0;
+        public double DikDuzlemGizliOrani = 0.5;
 
         /// <summary>DetectHidden'da eğik düzlem kesitinin en az eleman sayısı. Daha küçük düzlemler (tek bir
         /// gizli elemanı göstermek için açılan 3-4 elemanlık üçgenler) kesit olarak anlamsız; onların elemanları
@@ -250,7 +256,9 @@ namespace OutlineDrawing
                             {
                                 if (comp.Count < Math.Max(3, opt.MinHiddenPlaneMembers)) continue;
                                 int score = gain(comp);
-                                if (score == 0 || score < bestScore || !HasTriangle(comp)) continue;
+                                if (score == 0 || score < bestScore || !(HasTriangle(comp) || HasCrossing(comp, nrm))) continue;
+                                if (tilt > opt.DikDuzlemEsigiDeg &&
+                                    comp.Count(b => !seen.Contains(b.GeoKey)) < opt.DikDuzlemGizliOrani * comp.Count) continue;
                                 V3 c = Centroid(comp);
                                 int rank = (c.X < -st ? 2 : 0) + (c.Y > st ? 1 : 0);   // +X / -Y tarafı tercih
                                 if (score > bestScore || rank < bestRank)
@@ -601,6 +609,34 @@ namespace OutlineDrawing
         {
             V3 d0 = bars[0].Dir;
             return bars.Any(b => V3.Cross(d0, b.Dir).Length >= sinParallel);
+        }
+
+        /// <summary>Düzlemde birbirini iç noktada kesen iki eleman var mı (kesişimde düğüm olmayan X çapraz)?
+        /// Bacak iç yüzleri gibi yatay elemansız X çaprazlı yüzlerde üçgen oluşmaz; bu yüzler de gerçek kafestir.</summary>
+        private static bool HasCrossing(List<Bar> bars, V3 n)
+        {
+            V3 u = V3.Cross(Math.Abs(n.Z) < 0.9 ? new V3(0, 0, 1) : new V3(1, 0, 0), n);
+            u = u / u.Length;
+            V3 v = V3.Cross(n, u);
+            var p = bars.Select(b => new[] { V3.Dot(b.A, u), V3.Dot(b.A, v), V3.Dot(b.B, u), V3.Dot(b.B, v) }).ToList();
+            for (int i = 0; i < p.Count; i++)
+                for (int j = i + 1; j < p.Count; j++)
+                {
+                    if (bars[i].KeyA == bars[j].KeyA || bars[i].KeyA == bars[j].KeyB ||
+                        bars[i].KeyB == bars[j].KeyA || bars[i].KeyB == bars[j].KeyB) continue;
+                    if (IcKesisim(p[i], p[j])) return true;
+                }
+            return false;
+        }
+
+        private static bool IcKesisim(double[] a, double[] b)
+        {
+            double d1x = a[2] - a[0], d1y = a[3] - a[1], d2x = b[2] - b[0], d2y = b[3] - b[1];
+            double den = d1x * d2y - d1y * d2x;
+            if (Math.Abs(den) < 1e-9) return false;
+            double t = ((b[0] - a[0]) * d2y - (b[1] - a[1]) * d2x) / den;
+            double s = ((b[0] - a[0]) * d1y - (b[1] - a[1]) * d1x) / den;
+            return t > 0.05 && t < 0.95 && s > 0.05 && s < 0.95;
         }
 
         private static bool HasTriangle(List<Bar> bars)

@@ -95,10 +95,10 @@ sürümlerde yüklenmez. Geçiş gerekirse proje SDK stiline çevrilip `net8.0-w
 
 ## C. Test durumu
 
-AutoCAD dışında (Mono, OutlineDrawing'in gerçek okuyucusu ve AutoCAD 2022 referanslarıyla), 6 .tow dosyasında:
+AutoCAD dışında (Mono, OutlineDrawing'in gerçek okuyucusu ve AutoCAD 2022 referanslarıyla), 7 .tow dosyasında (Tangent Tower + 5 uzatma + YAA-R1):
 
 - OutlineDrawing'in gerçek `SectionDetection` kodu, sahte geometri kütüphaneleriyle (`test/sahte_autocad`) çalıştırılıyor
-  (`test/kesit_testi.sh`): bütün kesitler tam.
+  (`test/kesit_testi.sh`): bütün kesitler tam; çizilecek her çizgi eklentinin eşleştiricisiyle eşleşiyor, yanlış stil 0.
 
 - Görünmeyen elemanlar: ana kule 207/219 (kalan 12 eleman, gövde yan yüz çaprazlarının traversin arkasında kalan
   kısmı; yan düşey görünüşte zaten çiziliyor), uzatmalar 42/42, 28/28, 24/24.

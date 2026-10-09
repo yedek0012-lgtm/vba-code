@@ -46,7 +46,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.8";
+        public const string Surum = "1.9";
         private static Timer _timer;
 
         public void Initialize()
@@ -370,11 +370,12 @@ namespace OtomatikKesit
 
                 Cagir(f, "RefreshSectionLetters");
 
-                string ozet = string.Format("{0} otomatik kesit eklendi.", bulunan.Count);
+                string ozet = string.Format("{0} kesit eklendi", bulunan.Count);
                 if (rapor != null)
-                    ozet += string.Format(" Görünmeyen {0} elemanın {1} tanesi kesitlerde.", rapor.HiddenMembers, rapor.CoveredHidden);
+                    ozet += string.Format(" (görünmeyen {0}/{1} eleman kapsandı{2})", rapor.CoveredHidden, rapor.HiddenMembers,
+                        rapor.UncoveredKeys.Count > 0 ? ", liste komut satırında" : "");
                 string towUyari = TowKontrol.Uyari(path);
-                Uyari(f, ozet + " Kontrol edip ÇALIŞTIR'a basın." + (towUyari != null ? " | " + towUyari : ""));
+                Uyari(f, ozet + ". Kontrol edip ÇALIŞTIR'a basın." + (towUyari != null ? " " + towUyari : ""));
 
                 string log = "\nOtomatik kesitler:\n  " + string.Join("\n  ", satirlar) + "\n";
                 if (rapor != null)
@@ -398,8 +399,27 @@ namespace OtomatikKesit
             if (row.DataGridView.Columns.Contains(sutun)) row.Cells[sutun].Value = deger;
         }
 
+        private static ToolTip _uyariIpucu;
+
+        /// <summary>OutlineDrawing'in uyarı etiketi (lblError) tek satırda sağdaki seçenek kutusunun altında kalıyordu:
+        /// genişlik sınırı verilir (metin alt satıra kayar) ve tam metin ipucu balonunda gösterilir.</summary>
+        private static void UyariEtiketiniHazirla(Form f, string mesaj)
+        {
+            var lbl = Alan(f, "lblError") as Label;
+            if (lbl == null || lbl.Parent == null) return;
+            int sag = lbl.Parent.ClientSize.Width - 8;
+            foreach (Control c in lbl.Parent.Controls)
+                if (c != lbl && c.Visible && c.Left > lbl.Left && c.Top < lbl.Bottom + 60 && c.Bottom > lbl.Top)
+                    sag = Math.Min(sag, c.Left - 8);
+            int gen = Math.Max(150, sag - lbl.Left);
+            if (lbl.MaximumSize.Width != gen) lbl.MaximumSize = new Size(gen, 0);
+            if (_uyariIpucu == null) _uyariIpucu = new ToolTip { AutoPopDelay = 30000 };
+            _uyariIpucu.SetToolTip(lbl, mesaj);
+        }
+
         internal static void Uyari(Form f, string mesaj)
         {
+            try { UyariEtiketiniHazirla(f, mesaj); } catch { }
             // OutlineDrawing'in kendi uyarı etiketi; yoksa komut satırı
             bool oldu = false;
             try { oldu = Cagir(f, "PrintErrorLabel", 8000, mesaj); } catch { }
@@ -544,6 +564,8 @@ namespace OtomatikKesit
                         dim.Dimtad = 1;
                         dim.Dimtih = false;
                         dim.Dimtoh = false;
+                        dim.DimfxlenOn = true;   // uzatma çizgisi sabit boy: geometriden uzaktaki köşelerde
+                        dim.Dimfxlen = 400;      // kesit boyunca uzanan uzun çizgi olmasın
                         dim.Dimscale = 1;     // çizimin ölçü stili ölçekli olsa da yazı 200 mm kalsın
                         dim.Dimlfac = 1;      // ölçülen değer gerçek mm olsun
                         dim.Dimtfac = 1;
@@ -558,7 +580,8 @@ namespace OtomatikKesit
                 }
                 tr.Commit();
             }
-            string ozet = string.Format("Ölçü: {0} kesite {1} ölçü (katman {2})", kesit, adet, Katman);
+            string ozet = string.Format("Ölçü: {0} kesit", kesit);
+            Komutlar.Yaz(string.Format("\nÖlçü ayrıntı: {0} kesite {1} ölçü (katman {2}).\n", kesit, adet, Katman));
             Komutlar.Yaz("\n" + ozet + ".\n");
             return ozet;
         }
@@ -687,11 +710,12 @@ namespace OtomatikKesit
                 tr.Commit();
             }
 
-            string ozet = string.Format("Çizgi tipi: görünüşlerde {0} redundant / {1} ana, {2} kesitte {3} redundant / {4} ana",
-                yuzRed, yuzAna, kesit, red, ana);
-            if (eslesmeyen > 0) ozet += ", tanınmayan " + eslesmeyen + " çizgi ana kabul edildi";
-            if (tanimsiz.Count > 0) ozet += ", tabloda bulunamayan kesit: " + string.Join(",", tanimsiz);
-            if (hata > 0) ozet += string.Format(", {0} çizgide hata ({1})", hata, ilkHata);
+            string ozet = string.Format("Çizgi: {0} kesikli, {1} düz", yuzRed + red, yuzAna + ana);
+            if (eslesmeyen > 0) ozet += ", tanınmayan " + eslesmeyen;
+            if (tanimsiz.Count > 0) ozet += ", tabloda olmayan kesit: " + string.Join(",", tanimsiz);
+            if (hata > 0) ozet += string.Format(", {0} hata ({1})", hata, ilkHata);
+            Komutlar.Yaz(string.Format("\nÇizgi tipi ayrıntı: görünüşler {0} redundant / {1} ana; {2} kesit {3} redundant / {4} ana.\n",
+                yuzRed, yuzAna, kesit, red, ana));
             Komutlar.Yaz("\n" + ozet + ".\n");
             return ozet;
         }
@@ -977,6 +1001,7 @@ namespace OtomatikKesit
         public static List<OlcuTanimi> Hesapla(List<double[]> segs)
         {
             var sonuc = new List<OlcuTanimi>();
+            segs = AnaParcalar(segs);
             var pts = new List<double[]>();
             foreach (var s in segs) { pts.Add(new[] { s[0], s[1] }); pts.Add(new[] { s[2], s[3] }); }
             var hull = Sadelestir(Kontur(pts), KirikAcisi);
@@ -1019,6 +1044,32 @@ namespace OtomatikKesit
                 });
             }
             return sonuc;
+        }
+
+        public static double KucukParcaOrani = 0.1;   // toplam boyu en büyük parçanın bundan azı olan kopuk parçalar ölçülmez
+
+        /// <summary>Birbirine bağlı çizgi grupları; toplam boyu en büyük grubun KucukParcaOrani'ndan az olan kopuk
+        /// küçük gruplar (ör. kol ucundaki tek kısa eleman) ölçüye katılmaz, zincir ölçü boşluğa uzamaz.</summary>
+        public static List<double[]> AnaParcalar(List<double[]> segs)
+        {
+            if (segs.Count < 2) return segs;
+            Func<double, double, string> k = (x, y) => Math.Round(x).ToString(CultureInfo.InvariantCulture) + "," + Math.Round(y).ToString(CultureInfo.InvariantCulture);
+            var ebeveyn = new Dictionary<string, string>();
+            Func<string, string> bul = null;
+            bul = a => { while (ebeveyn[a] != a) a = ebeveyn[a]; return a; };
+            foreach (var s in segs)
+            {
+                string a = k(s[0], s[1]), b = k(s[2], s[3]);
+                if (!ebeveyn.ContainsKey(a)) ebeveyn[a] = a;
+                if (!ebeveyn.ContainsKey(b)) ebeveyn[b] = b;
+                string ra = bul(a), rb = bul(b);
+                if (ra != rb) ebeveyn[ra] = rb;
+            }
+            var gruplar = segs.GroupBy(s => bul(k(s[0], s[1]))).ToList();
+            Func<IEnumerable<double[]>, double> boy = g => g.Sum(s => Math.Sqrt((s[2] - s[0]) * (s[2] - s[0]) + (s[3] - s[1]) * (s[3] - s[1])));
+            double enBuyuk = gruplar.Max(g => boy(g));
+            var kalan = gruplar.Where(g => boy(g) >= KucukParcaOrani * enBuyuk).SelectMany(g => g).ToList();
+            return kalan.Count > 0 ? kalan : segs;
         }
 
         /// <summary>Konturda neredeyse düz devam eden (dönüşü açı sınırından küçük) köşeleri atar;

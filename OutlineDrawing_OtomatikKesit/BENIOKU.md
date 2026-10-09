@@ -10,6 +10,15 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL.
 
+**1.9 (YAA-R1 kulesiyle):**
+- Bacakların iç yüzleri ve kiriş iç çerçeveleri gibi dik/düşey düzlemler (75°'den dik) kesit alır, ama yalnız
+  elemanlarının en az yarısı ön/yan görünüşte görünmüyorsa. Dış yüzler (zaten görünüşte olanlar) kesit almaz.
+- Kesişim noktasında düğüm olmayan X çaprazlı yüzler (yatay elemansız) artık kafes sayılıyor.
+  YAA-R1: görünmeyen 422 elemanın 418'i kapsanıyor (önce 372).
+- Ölçü: uzatma çizgileri sabit boy (DIMFXLON, 400 mm); kesitteki küçük kopuk parçalar (ör. kol ucundaki tek kısa
+  eleman) zincir ölçüye katılmıyor.
+- Uyarı satırı alt satıra kayıyor, tam metin ipucu balonunda; mesajlar kısaldı, ayrıntı komut satırında.
+
 **1.8: Kesitler arası eleman paylaşımı düzeltildi.** `SectionDetection` bir elemanı yalnız son kesitte çiziyordu
 (F kesitinin iki H5 elemanı G'ye gidiyordu). Anahtar artık "kesit§eleman"; ayrıntı `STABILITE.md` A1b.
 Doğrulama: `bash test/kesit_testi.sh eklenti/bin/tek/OutlineDrawing.dll kule.tow`.
