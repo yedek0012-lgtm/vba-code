@@ -94,6 +94,51 @@ grpLabel[t[0].Trim()] = new GroupLabel { description = t[1].Trim(), size = t[2].
 ```
 
 **Eklenti (1.11+)** bu sütunu .tow'dan kendisi okuyor (`KuleOkuyucu.TowRedundantGruplari`).
+**Tek DLL (1.19)** "tam 9 alan" denetimini "en az 9 alan" yapıyor (`Parse_GroupLabel` yaması): PLS'in yeni bir sürümü
+tabloya sütun eklerse grup tablosu yine okunuyor (yamasız OutlineDrawing 0 grup okuyor, bütün etiketlerde profil boş).
+
+### A9. 15 karakter ve üstü düğüm / eleman adı tablonun geri kalanını sessizce düşürüyor — KRİTİK
+`Parse_JointsGeometry`, `Parse_SecondaryJoints` ve `Parse_AngleMemberConnectivity` kayıt sayısını kullanmıyor; "sonraki
+satır bir ad satırı mı" diye `IsPoseLine` ile bakıyor. `IsPoseLine` adın **15 karakterden kısa** ve boşluksuz olmasını
+istiyor. Uzun bir ad (PLS'in ürettiği kesir düğümü adları kolayca 15'i geçer, ör. `002205aPF0.333`) görüldüğü yerde
+okuma durur; sonraki bütün düğümler / elemanlar ve onlara bağlı elemanlar çizimde olmaz, `errorList` boş kalır.
+Deneme: her 7. düğümün adı uzatılmış YAA-R1 ve Tangent Tower'da yamasız OutlineDrawing **0** eleman okuyor.
+
+```csharp
+// IsPoseLine yerine: boş değil, ';' yok (PLS'te tablo sonundaki başlık satırlarının hepsinde var), tek ad
+bool IsPoseLine(string s) {
+    if (string.IsNullOrWhiteSpace(s) || s.Contains(";")) return false;
+    s = s.Trim();
+    if (s[0] == '\'' || s[0] == '"') return s.Length >= 2 && s.IndexOf(s[0], 1) == s.Length - 1;   // tırnaklı ad boşluk içerebilir
+    return s.IndexOfAny(new[] { ' ', '\t' }) < 0;
+}
+// Daha iyisi: başlıktaki kayıt sayısını (ör. "128 ; Joints Geometry") kullanmak.
+```
+
+**Tek DLL (1.19) bu düzeltmeyi içeriyor** (`TowYama.PozSatiri`). Ayrıca eklenti her YÜKLE / ÇALIŞTIR / Oto Kesit'te
+.tow'daki açı elemanlarını kendisi sayıp OutlineDrawing'in okuduklarıyla karşılaştırıyor; okunmayan eleman varsa
+adlarıyla uyarıyor (`TowKontrol.OkumaKontrol`). Ayrı eklenti DLL'inde yama yok, uyarı var.
+
+### A10. .tow kod sayfası
+`File.ReadAllLines(path)` UTF-8 varsayıyor; PLS dosyayı Windows-1254 (Türkçe ANSI) yazıyor. Türkçe karakterler
+(ç, ğ, ı, ş ...) `�` olarak okunuyor: açıklama ve grup adlarında görünür bozulma. Okuma `Encoding.GetEncoding(1254)` ile
+yapılmalı. (Eklenti grup tiplerini OutlineDrawing ile aynı kod çözmeyle okuyor ki anahtarlar eşleşsin.)
+
+### A12. Sabit görünüş ve kesit aralığı
+`runtowerfile` görünüşleri 50000, kesitleri 30000 mm arayla diziyor. 30 m'den geniş bir kesit (YAA-R1'in kol kotu
+kesiti 28,7 m; 35–40 m traversli kulelerde daha geniş) komşusunun üstüne biniyor; 45 m'den geniş kulede ön ve yan
+görünüş de çakışıyor. Aralık kule genişliğinden hesaplanmalı.
+
+**Tek DLL (1.19)**: `TowYama.GorunusAraligi` = en az 50000, gerekirse genişlik + 10000; `TowYama.KesitAraligi` = en az
+30000, gerekirse genişlik + 6000 (1000'e yuvarlanır). Tangent Tower 30000 / 50000 (değişmedi), YAA-R1 36000 / 50000.
+Eklenti kesit çizgilerini toplarken pencereyi çizimdeki gerçek kesit aralığından ölçer.
+
+Not (hata değil, davranış): `PreparePolygon` kesit çokgenini merkezine göre %5 büyütüyor; nokta kesitine çokgenin
+biraz dışındaki elemanlar da girer. Eklentinin kopyası (`KesitSecici`) 1.19'dan beri bunu da birebir uyguluyor.
+
+### A11. Açı elemanı dışındaki elemanlar
+OutlineDrawing yalnız "Angle Member Connectivity" tablosunu okuyor; kablo, gergi (guy), brace, davit kolu, X-arm
+(tüplü olanlar dahil) çizilmiyor. Eklenti .tow'da bu türden eleman varsa uyarıyor.
 
 ## B. Eklentide düzeltilenler (1.6)
 
@@ -109,19 +154,22 @@ grpLabel[t[0].Trim()] = new GroupLabel { description = t[1].Trim(), size = t[2].
 
 ## C. Test durumu
 
-AutoCAD dışında (Mono, OutlineDrawing'in gerçek okuyucusu ve AutoCAD 2022 referanslarıyla), 7 .tow dosyasında (Tangent Tower + 5 uzatma + YAA-R1):
+Tek komut: `bash test/hepsi.sh eklenti/bin/tek/OutlineDrawing.dll kule1.tow kule2.tow ...` (AutoCAD'siz; Mono,
+OutlineDrawing'in gerçek okuyucusu ve gerçek `SectionDetection`'ı, sahte geometri kütüphaneleriyle). Verilen her .tow
+ve ondan üretilen yapay varyantlar (`test/tow_varyant.py`: 90° / 180° döndürülmüş, dikdörtgen gövde, eksi kot, yeni
+grup sütunu, Türkçe grup adı, 15+ karakter ad, 3 kat büyük kule ve bunların birleşimi) üzerinde dört test:
 
-- OutlineDrawing'in gerçek `SectionDetection` kodu, sahte geometri kütüphaneleriyle (`test/sahte_autocad`) çalıştırılıyor
-  (`test/kesit_testi.sh`): bütün kesitler tam; çizilecek her çizgi eklentinin eşleştiricisiyle eşleşiyor, yanlış stil 0.
+| Test | Ne doğrulanıyor |
+|---|---|
+| `detay_testi.sh` | Bağımsız .tow okuyucusu ile OutlineDrawing aynı elemanları (geometri olarak) okuyor mu; otomatik kesitler görünmeyen her elemanı kapsıyor mu; **her eleman ailesi (aynalarıyla) görünüşte veya bir kesitte etiketiyle çiziliyor mu** |
+| `kesit_testi.sh` | Gerçek SectionDetection her kesitte beklenen bütün elemanları çiziyor mu; çizilen her çizgi tanınıyor mu; redundant stili doğru mu |
+| `gorunus_testi.sh` | Her elemanın önden / yandan izdüşümü çizimde var mı (yüz çizgileri + iç eleman izdüşümleri) |
+| `gorunus_konum_testi.sh` | Ön / yan görünüş her durumda (yalnız ön / yalnız yan / ikisi, başlıklı / başlıksız, 2D Aktar, araya kesitler) doğru yerde bulunuyor mu |
 
-- Görünmeyen elemanlar: ana kule 207/219 (kalan 12 eleman, gövde yan yüz çaprazlarının traversin arkasında kalan
-  kısmı; yan düşey görünüşte zaten çiziliyor), uzatmalar 42/42, 28/28, 24/24.
-- Ön/yan görünüş çizgisi tanıma 100 %, 2D Aktar sonrası da 100 %.
-- Kesit çizgisi eşleşmesi 100 %, yanlış redundant stili 0.
-- Ölçü yerleşimi elle çizilen kesitlerle aynı (A = 4800 | 2400 | 4800 × 2400, B = 5700 | 2400, D = 5700 | 2400 | 5700).
+Sonuç (1.19): 7 gerçek kule + 63 varyant, bütün testler TAMAM (ayrıntı BENIOKU.md 1.19).
 
-AutoCAD içinde test edilemeyenler: forma buton ekleme, ÇALIŞTIR'a bağlanma ve silme onayı (WinForms olay listesi).
-Bunlar kullanımda doğrulanmalı.
+AutoCAD içinde test edilemeyenler: forma buton / kutucuk ekleme, ÇALIŞTIR'a bağlanma, silme onayı, ölçülerin ve
+kesik çizginin ekranda görünüşü, yakınlaştırınca REGEN. Bunlar kullanımda bir kez doğrulanmalı.
 
 ## D. Sonraki adımlar (isteğe bağlı)
 

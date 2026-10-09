@@ -8,7 +8,28 @@
 
 `eklenti/bin/tek/OutlineDrawing.dll` = OutlineDrawing v1.3 + Otomatik Kesit, tek dosya (ILRepack ile birleştirildi).
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
-Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL.
+Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC.
+
+**1.19: Sistem denetimi — hiçbir eleman atlanmasın.**
+- *Yerel panel kesiti:* açgözlü kesit seçiminden sonra hâlâ hiçbir kesitte olmayan görünmeyen eleman için yalnız onun
+  panelini gösteren küçük bir düzlem kesiti eklenir (Tangent Tower CB-D1/D3/D9-T, YAA-R1 CA-9). Görünmeyen eleman
+  kapsaması 7 kulede %100; her eleman ailesi görünüşte veya bir kesitte etiketiyle çiziliyor.
+- *OutlineDrawing okuyucusu (tek DLL yaması):* 15 karakter ve üstü düğüm / eleman adı tablonun geri kalanını sessizce
+  düşürüyordu (uzun adlı denemede 0 eleman okunuyordu) -> düzeltildi (STABILITE A9). Grup tablosu fazladan sütunla da
+  okunuyor (A8).
+- *Okuma doğrulaması:* YÜKLE / ÇALIŞTIR / Oto Kesit'te eklenti .tow'daki açı elemanlarını kendisi sayıp OutlineDrawing'in
+  okuduklarıyla karşılaştırır; okunmayan eleman, düğümü tanımsız eleman, açı elemanı olmayan eleman (kablo, davit,
+  X-arm) ve okunamayan grup satırı varsa adlarıyla uyarır.
+- Grup tipleri OutlineDrawing ile aynı kod çözmeyle okunur: Türkçe karakterli grup adlarında redundant ayrımı doğru.
+- *Görünüş / kesit aralığı (tek DLL yaması):* sabit 50000 / 30000 yerine kule genişliğine göre (en az aynı değerler);
+  geniş traversli kulelerde kesitler üst üste binmez (STABILITE A12). Kesit çizgileri toplanırken pencere çizimdeki
+  gerçek kesit aralığından ölçülür.
+- Kesit seçiminin kopyası (stil ve ölçü için) OutlineDrawing'in düzlem eksenleri ve %5 büyütülen çokgeniyle birebir.
+- Form: üç kutucuk "Kesit Alma" kutusuna sığmazsa yan yana dizilir.
+- Ölçülerden biri AutoCAD tarafından reddedilirse öbürleri yine konur; aynı bilgi komut satırına bir kez yazılır.
+- Test: `bash test/hepsi.sh eklenti/bin/tek/OutlineDrawing.dll *.tow` — 7 gerçek kule ve onlardan üretilen 63 yapay
+  varyant (döndürülmüş, dikdörtgen gövde, eksi kot, yeni grup sütunu, Türkçe ad, uzun ad, büyük kule): okuma,
+  kapsama, kesit çizimi ve stil, görünüş izdüşümü, görünüş yeri testlerinin hepsi TAMAM.
 
 **1.18: Görünüşün yeri başlıktan bulunur (yalnız ön görünüş çizildiğinde yan görünüş üstüne biniyordu).**
 OutlineDrawing ön görünüşü ofset 0'a, yan görünüşü ön de çizildiyse 50000'e, çizilmediyse 0'a koyuyor. Kare gövdeli
@@ -195,6 +216,21 @@ Gerçek kule çiziminde bu düzlemler ayrıca kesit olarak çizilmiyordu. Gereki
 | `TopDown` | true | A kesiti en üstte |
 
 ## Test
+
+Bütün sistem (önerilen, her değişiklikten sonra; AutoCAD gerekmez, Mono yeterli):
+
+```
+bash eklenti/tek_dll.sh /yol/OutlineDrawingv1.3.dll                     # tek DLL'i üret
+bash test/hepsi.sh eklenti/bin/tek/OutlineDrawing.dll kule1.tow kule2.tow # her .tow + 9 yapay varyantı
+```
+
+Her dosyada dört test (ayrıntı STABILITE.md C): `detay_testi.sh` (okuma = bağımsız okuyucu, kapsama, her eleman
+etiketli çiziliyor mu), `kesit_testi.sh` (gerçek SectionDetection, eşleşme, stil), `gorunus_testi.sh` (izdüşüm),
+`gorunus_konum_testi.sh` (görünüş yeri). Yapay varyantlar `test/tow_varyant.py` ile üretilir (döndürme, dikdörtgen
+gövde, eksi kot, yeni grup sütunu, Türkçe ad, uzun ad, büyük kule; ayrıca bilerek bozuk dosyalar: `eksikdugum`,
+`xarm`, `grupeksik`).
+
+Eski / tek tek testler:
 
 ```
 bash test/run_test.sh                  # derleme kontrolü + sentetik kule
