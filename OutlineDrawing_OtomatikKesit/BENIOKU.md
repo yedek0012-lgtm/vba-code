@@ -10,6 +10,11 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL.
 
+**1.16: Kesikli çizgiler ÇALIŞTIR'dan hemen sonra görünür.** AutoCAD yeni atanan çizgi tipini ancak REGEN'de
+gösteriyor; renk hemen değişse de kesikler LTSCALE değiştirilene (o da REGEN yapar) kadar düz görünüyordu. 1.13'teki
+`Editor.Regen()` modeless formun butonundan çalışmıyordu. Artık ÇALIŞTIR / YÜKLE sonrası ve OTOSTIL, OTOIC, OTOOLCU
+sonunda `REGEN` AutoCAD'in komut kuyruğuna gönderiliyor (SendStringToExecute).
+
 **1.15: Görünüş tamlık kontrolü.** Bütün elemanlar önden ve yandan izdüşürülüp (PLS-TOWER görünüşü) her birinin
 çizimde karşılığı olduğu doğrulandı (`test/gorunus_testi.sh`). Ön görünüş 7 kulede %100 (YAA-R1 1210/1210, Tangent
 1068/1068). Yan görünüşte OutlineDrawing'in atladığı Tangent Tower en üst paneli (z 46000–47800: L13, H1, CB-D1;

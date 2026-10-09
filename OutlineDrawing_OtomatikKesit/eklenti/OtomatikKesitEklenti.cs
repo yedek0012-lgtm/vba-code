@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.15";
+        public const string Surum = "1.16";
         private static Timer _timer;
 
         public void Initialize()
@@ -86,7 +86,7 @@ namespace OtomatikKesit
         [CommandMethod("OTOOLCU", CommandFlags.Session)]
         public void OtoOlcu()
         {
-            FormBaglayici.Guvenli(null, "Ölçü", () => KesitOlculeri.Ekle());
+            FormBaglayici.Guvenli(null, "Ölçü", () => { KesitOlculeri.Ekle(); Goruntu.Yenile(); });
         }
 
         [CommandMethod("OTOIC", CommandFlags.Session)]
@@ -98,7 +98,7 @@ namespace OtomatikKesit
                 Yaz("\nOutlineDrawing formu açık değil. Önce OutlineDrawing'i çalıştırıp .tow dosyasını seçin.\n");
                 return;
             }
-            FormBaglayici.Guvenli(f, "İç eleman", () => FormBaglayici.Uyari(f, IcElemanlar.Ciz(f, true)));
+            FormBaglayici.Guvenli(f, "İç eleman", () => { FormBaglayici.Uyari(f, IcElemanlar.Ciz(f, true)); Goruntu.Yenile(); });
         }
 
         [CommandMethod("OTOSTIL", CommandFlags.Session)]
@@ -110,7 +110,7 @@ namespace OtomatikKesit
                 Yaz("\nOutlineDrawing formu açık değil (kesit tanımları ve .tow yolu formdan okunur).\n");
                 return;
             }
-            FormBaglayici.Guvenli(f, "Çizgi tipi", () => Yaz("\n" + KesitStili.Uygula(f) + "\n"));
+            FormBaglayici.Guvenli(f, "Çizgi tipi", () => { Yaz("\n" + KesitStili.Uygula(f) + "\n"); Goruntu.Yenile(); });
         }
 
         internal static void Yaz(string msg)
@@ -222,7 +222,7 @@ namespace OtomatikKesit
                     var mesaj = new List<string>();
                     string uyari = TowKontrol.Uyari(YolAl(f));
                     if (uyari != null) mesaj.Add(uyari);
-                    if (chkR.Checked) mesaj.Add(KesitStili.Uygula(f));
+                    if (chkR.Checked) { mesaj.Add(KesitStili.Uygula(f)); Goruntu.Yenile(); }
                     if (mesaj.Count > 0) Uyari(f, string.Join(" | ", mesaj));
                 });
 
@@ -246,6 +246,7 @@ namespace OtomatikKesit
                         try { mesaj.Add(KesitOlculeri.Ekle()); }
                         catch (System.Exception ex) { mesaj.Add("Ölçü eklenemedi: " + IcHata(ex).Message); }
                     }
+                    if (chkI.Checked || chkR.Checked || chk.Checked) Goruntu.Yenile();
                     if (mesaj.Count > 0) Uyari(f, string.Join(" | ", mesaj));
                 });
         }
@@ -466,6 +467,27 @@ namespace OtomatikKesit
             if (mi == null) return false;
             mi.Invoke(mi.IsStatic ? null : o, args);
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Çizgi tipi değişen çizgilerin kesikli görünmesi için REGEN. AutoCAD, yeni oluşturulan / yeni atanan çizgi tipini
+    /// ekranda ancak yeniden oluşturmada (REGEN) gösteriyor; renk hemen değişse de kesikler LTSCALE değiştirilene kadar
+    /// düz görünüyordu. OutlineDrawing formu modeless olduğundan butondan Editor.Regen() çalışmaz; REGEN komutu AutoCAD'in
+    /// kuyruğuna gönderilir, işimiz bitince AutoCAD kendisi çalıştırır.
+    /// </summary>
+    internal static class Goruntu
+    {
+        internal static void Yenile()
+        {
+            Document doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) return;
+            try { doc.SendStringToExecute("_.REGEN ", true, false, false); }
+            catch (System.Exception ex)
+            {
+                try { doc.Editor.Regen(); }
+                catch { Komutlar.Yaz("\nGörüntü yenilenemedi (" + ex.Message + "); kesikli çizgiler için REGEN yazın.\n"); }
+            }
         }
     }
 
@@ -783,7 +805,6 @@ namespace OtomatikKesit
                 }
                 tr.Commit();
             }
-            try { doc.Editor.Regen(); } catch { /* görüntü yenilenemezse REGEN elle */ }
 
             string ozet = string.Format("Çizgi: {0} kesikli, {1} düz", yuzRed + red, yuzAna + ana);
             if (eslesmeyen > 0) ozet += ", tanınmayan " + eslesmeyen;
