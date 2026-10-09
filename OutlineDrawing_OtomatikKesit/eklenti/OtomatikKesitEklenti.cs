@@ -46,7 +46,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.9";
+        public const string Surum = "1.10";
         private static Timer _timer;
 
         public void Initialize()
@@ -555,17 +555,17 @@ namespace OtomatikKesit
                             "", db.Dimstyle);
                         dim.SetDatabaseDefaults(db);
                         dim.Layer = Katman;
-                        dim.Dimtxt = 200;
-                        dim.Dimasz = 150;
-                        dim.Dimexo = 100;
-                        dim.Dimexe = 100;
-                        dim.Dimgap = 50;
+                        dim.Dimtxt = o.Yazi;
+                        dim.Dimasz = 0.75 * o.Yazi;
+                        dim.Dimexo = 0.5 * o.Yazi;
+                        dim.Dimexe = 0.5 * o.Yazi;
+                        dim.Dimgap = 0.25 * o.Yazi;
                         dim.Dimdec = 0;
                         dim.Dimtad = 1;
                         dim.Dimtih = false;
                         dim.Dimtoh = false;
                         dim.DimfxlenOn = true;   // uzatma çizgisi sabit boy: geometriden uzaktaki köşelerde
-                        dim.Dimfxlen = 400;      // kesit boyunca uzanan uzun çizgi olmasın
+                        dim.Dimfxlen = o.Uzatma; // kesit boyunca uzanan uzun çizgi olmasın
                         dim.Dimscale = 1;     // çizimin ölçü stili ölçekli olsa da yazı 200 mm kalsın
                         dim.Dimlfac = 1;      // ölçülen değer gerçek mm olsun
                         dim.Dimtfac = 1;
@@ -986,6 +986,8 @@ namespace OtomatikKesit
     public class OlcuTanimi
     {
         public double U1, V1, U2, V2, UD, VD, Rotation;
+        /// <summary>Kesit büyüklüğüne göre ölçü yazı yüksekliği ve uzatma çizgisi boyu (mm).</summary>
+        public double Yazi = 200, Uzatma = 400;
         public double Deger { get { return Math.Abs(Rotation) < 1e-9 ? Math.Abs(U2 - U1) : Math.Abs(V2 - V1); } }
     }
 
@@ -1010,6 +1012,12 @@ namespace OtomatikKesit
             double minU = hull.Min(p => p[0]), maxU = hull.Max(p => p[0]);
             double minV = hull.Min(p => p[1]), maxV = hull.Max(p => p[1]);
 
+            // Küçük kesitlerde (ör. 829 mm'lik tepe kapağı) ölçü aralığı ve yazı orantılı küçülür
+            double boyut = Math.Max(maxU - minU, maxV - minV);
+            double aralik = Math.Min(Aralik, Math.Max(150, 0.1 * boyut));
+            double yazi = Math.Min(200, Math.Max(100, 0.06 * boyut));
+            double uzatma = 0.8 * aralik;
+
             // Üst zincir: kontur köşelerinin u değerleri (her u için en üstteki köşe)
             var us = new List<double[]>();
             foreach (var p in hull.OrderBy(p => p[0]))
@@ -1023,12 +1031,12 @@ namespace OtomatikKesit
             }
             if (us.Count >= 2 && maxU - minU >= EnKisa)
             {
-                double vd = maxV + Aralik;
+                double vd = maxV + aralik;
                 for (int i = 0; i + 1 < us.Count; i++)
                     sonuc.Add(new OlcuTanimi
                     {
                         U1 = us[i][0], V1 = us[i][1], U2 = us[i + 1][0], V2 = us[i + 1][1],
-                        UD = (us[i][0] + us[i + 1][0]) / 2, VD = vd, Rotation = 0
+                        UD = (us[i][0] + us[i + 1][0]) / 2, VD = vd, Rotation = 0, Yazi = yazi, Uzatma = uzatma
                     });
             }
 
@@ -1040,7 +1048,7 @@ namespace OtomatikKesit
                 sonuc.Add(new OlcuTanimi
                 {
                     U1 = ust[0], V1 = ust[1], U2 = alt[0], V2 = alt[1],
-                    UD = maxU + Aralik, VD = (maxV + minV) / 2, Rotation = Math.PI / 2
+                    UD = maxU + aralik, VD = (maxV + minV) / 2, Rotation = Math.PI / 2, Yazi = yazi, Uzatma = uzatma
                 });
             }
             return sonuc;

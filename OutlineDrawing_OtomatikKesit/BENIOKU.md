@@ -10,6 +10,12 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL.
 
+**1.10:**
+- Bir kottaki elemanlar birbirinin aynası olan kopuk parçalardan oluşuyorsa (iki toprak teli tepesinin kapağı,
+  dört bacak köşesi) yükseklik kesiti yerine yalnız bir parçayı (+X / -Y tarafı) çevreleyen yatay düzlem kesiti
+  (4 nokta) önerilir. YAA-R1'de A (tepe kapağı 829 × 610) ve V (bacak köşesi) böyle; görünmeyen kapsaması aynı.
+- Ölçü aralığı ve yazısı kesit büyüklüğüne göre (büyük kesitte 500 / 200 mm, küçükte en az 150 / 100 mm).
+
 **1.9 (YAA-R1 kulesiyle):**
 - Bacakların iç yüzleri ve kiriş iç çerçeveleri gibi dik/düşey düzlemler (75°'den dik) kesit alır, ama yalnız
   elemanlarının en az yarısı ön/yan görünüşte görünmüyorsa. Dış yüzler (zaten görünüşte olanlar) kesit almaz.

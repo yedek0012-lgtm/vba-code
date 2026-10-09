@@ -69,6 +69,11 @@ namespace OutlineDrawing
         /// DikDuzlemGizliOrani kadarı ön/yan görünüşte görünmüyorsa kesit olur. Böylece bacakların iç yüzleri ve kiriş
         /// diyaframları kesit alır, dış yüzler (zaten ön/yan görünüşte çizilen) kesit almaz.</summary>
         public double DikDuzlemEsigiDeg = 75.0;
+
+        /// <summary>Bir kottaki elemanlar birbirinin aynası olan kopuk parçalardan oluşuyorsa (ör. iki toprak teli
+        /// tepesinin kapağı, dört bacak köşesi) yükseklik kesiti yerine yalnız bir parçayı (+X / -Y tarafı) çevreleyen
+        /// yatay düzlem (4 nokta) kesiti önerilir: çizim tek parçayı okunur büyüklükte ve kendi ölçüleriyle gösterir.</summary>
+        public bool AynaParcalardaTekParca = true;
         public double DikDuzlemGizliOrani = 0.5;
 
         /// <summary>DetectHidden'da eğik düzlem kesitinin en az eleman sayısı. Daha küçük düzlemler (tek bir
@@ -275,6 +280,31 @@ namespace OutlineDrawing
                     bestLevel.Used = true;
                     int hid = bestLevel.Bars.Count(b => !seen.Contains(b.GeoKey));
                     mark(bestLevel.Bars);
+                    List<Bar> tek = opt.AynaParcalardaTekParca ? TekAynaParca(bestLevel.Bars, st) : null;
+                    if (tek != null)
+                    {
+                        double h = bestLevel.Z, m = opt.PolygonMargin;
+                        double x0 = tek.Min(b => Math.Min(b.A.X, b.B.X)) - m, x1 = tek.Max(b => Math.Max(b.A.X, b.B.X)) + m;
+                        double y0 = tek.Min(b => Math.Min(b.A.Y, b.B.Y)) - m, y1 = tek.Max(b => Math.Max(b.A.Y, b.B.Y)) + m;
+                        int parca = bestLevel.Bars.Count / Math.Max(1, tek.Count);
+                        result.Add(new AutoSectionCandidate
+                        {
+                            Kind = AutoSectionKind.Plane,
+                            Points = new List<SectionPoint3D>
+                            {
+                                new SectionPoint3D(Math.Round(x0, 3), Math.Round(y0, 3), h), new SectionPoint3D(Math.Round(x1, 3), Math.Round(y0, 3), h),
+                                new SectionPoint3D(Math.Round(x1, 3), Math.Round(y1, 3), h), new SectionPoint3D(Math.Round(x0, 3), Math.Round(y1, 3), h)
+                            },
+                            TiltDeg = 0,
+                            SortZ = h,
+                            PlanMemberCount = tek.Count(b => !seen.Contains(b.GeoKey)),
+                            MemberKeys = tek.Select(b => b.Key).ToList(),
+                            Description = string.Format(CultureInfo.InvariantCulture,
+                                "Yatay kesit Z={0:0} mm, tek parça ({1} ayna parçadan biri): {2} eleman, {3} tanesi ön/yan görünüşte yok",
+                                h, parca, tek.Count, tek.Count(b => !seen.Contains(b.GeoKey)))
+                        });
+                        continue;
+                    }
                     result.Add(new AutoSectionCandidate
                     {
                         Kind = AutoSectionKind.Height,
@@ -575,6 +605,30 @@ namespace OutlineDrawing
                     return a.Bars.Any(ab => (ab.Mid - m).Length <= tol);
                 });
                 if (all) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Kottaki elemanlar birden fazla kopuk parçaya ayrılıyor ve bütün parçalar birinin (+X / -Y tarafı
+        /// tercih) X=0 / Y=0 / her ikisine göre aynasıysa o parçayı döndürür; değilse null.</summary>
+        private static List<Bar> TekAynaParca(List<Bar> bars, double tol)
+        {
+            var gruplar = ConnectedGroups(bars, true);
+            if (gruplar.Count < 2) return null;
+            var secilen = gruplar.OrderBy(g => { V3 c = Centroid(g); return (c.X < -tol ? 2 : 0) + (c.Y > tol ? 1 : 0); }).First();
+            foreach (var g in gruplar)
+                if (g != secilen && !AynaGrup(secilen, g, tol)) return null;
+            return secilen;
+        }
+
+        private static bool AynaGrup(List<Bar> a, List<Bar> b, double tol)
+        {
+            if (a.Count != b.Count) return false;
+            int[,] isaret = { { -1, 1 }, { 1, -1 }, { -1, -1 } };
+            for (int s = 0; s < 3; s++)
+            {
+                double fx = isaret[s, 0], fy = isaret[s, 1];
+                if (b.All(bb => a.Any(ab => (ab.Mid - new V3(fx * bb.Mid.X, fy * bb.Mid.Y, bb.Mid.Z)).Length <= tol))) return true;
             }
             return false;
         }
