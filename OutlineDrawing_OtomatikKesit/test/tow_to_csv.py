@@ -5,7 +5,8 @@ OutlineDrawing'in dataprocessing akisini taklit eder:
   - Primary joint etiketi + 'P', secondary joint etiketi + 'S';
     simetri kodu 1 -> 'X' (y -> -y), 2 -> 'Y' (x -> -x), 3 -> X, Y, XY
   - Eleman simetri kodu 1/2/3 ayni kurala gore cogaltilir (diger kodlar tek eleman)
-  - Koordinatlar m -> mm, RotateAllMinus90AboutZ: (x, y) -> (y, -x), en dusuk Z = 0
+  - Koordinatlar m -> mm, RotateAllMinus90AboutZ: (x, y) -> (y, -x),
+    en dusuk Z < 0 ise Z = 0'a kaydirilir (NormalizeFinalMembersZMinToZero)
 Cikti satiri: anahtar,sx,sy,sz,ex,ey,ez,grup,boyut,section_label
 
 Kullanim:  python3 tow_to_csv.py kule.tow > kule.csv
@@ -86,6 +87,8 @@ def main(path):
             rows.append((label + suf, A[0] * fx, A[1] * fy, A[2], B[0] * fx, B[1] * fy, B[2], grp, groups.get(grp, ""), sec))
 
     zmin = min(min(r[3], r[6]) for r in rows)
+    if zmin >= -1e-9:
+        zmin = 0.0
     w = csv.writer(sys.stdout, lineterminator="\n")
     for r in rows:
         w.writerow([r[0],

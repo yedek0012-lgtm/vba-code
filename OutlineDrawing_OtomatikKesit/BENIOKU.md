@@ -4,6 +4,23 @@
 `.tow` geometrisinden kendisi bulur ve mevcut kesit tablosuna (grid) yazar. Kesitleri çizen kod
 (SectionDetection → DrawSections) **olduğu gibi** kullanılır.
 
+## Hazır DLL ile kurulum (önerilen, kaynak koda gerek yok)
+
+`eklenti/bin/OtomatikKesit.dll` ayrı bir eklentidir; OutlineDrawing.dll'e dokunmaz.
+
+1. `OtomatikKesit.dll`'i OutlineDrawing.dll ile aynı klasöre koyun.
+   İnternetten indirildiyse: dosyaya sağ tık → Özellikler → **Engellemeyi kaldır** (Unblock) → Tamam.
+   Bu yapılmazsa NETLOAD "Could not load file or assembly" hatası verebilir.
+2. AutoCAD'de önce her zamanki gibi `OutlineDrawing.dll`'i, sonra `OtomatikKesit.dll`'i **NETLOAD** edin
+   (güvenlik sorusu çıkarsa "Her zaman yükle").
+3. OutlineDrawing formunu açın. "Kesit Alma" kutusunda Liste butonunun altında **Oto Kesit** butonu belirir.
+4. .tow seç → **Oto Kesit** → tabloyu kontrol et → **ÇALIŞTIR**. Komut satırından `OTOKESIT` de aynı işi yapar.
+
+Her açılışta otomatik yüklenmesi için iki DLL'i de AutoCAD'in `APPLOAD` → "Startup Suite"ine ekleyebilirsiniz.
+
+Eklenti, .tow dosyasını OutlineDrawing'in kendi okuyucusuyla (`dataprocessing.Run`) okur, yani koordinatlar
+3D modelinizle birebir aynıdır. Yeniden derlemek için: `bash eklenti/build.sh` (Mono + NuGet AutoCAD.NET 24.1).
+
 ## Mevcut durum (DLL'den okunan)
 
 | Adım | Şu an |
@@ -30,7 +47,7 @@ Gerçek kule çiziminde bu düzlemler ayrıca kesit olarak çizilmiyordu. Gereki
 4. ±X / ±Y ayna simetriği olan travers kesitlerinden yalnız biri (+X tarafı) tutulur.
 5. Grubu saran en küçük dikdörtgen, 50 mm dışa büyütülerek 4 nokta olarak verilir (`First..Fourth Point`).
 
-## Kurulum
+## Kaynak koda ekleyerek kurulum (alternatif)
 
 1. `AutoSectionDetector.cs` ve `mainform.OtomatikKesit.cs` dosyalarını OutlineDrawing projesine ekleyin.
 2. mainform tasarımcısında bir buton ekleyin (`Name = btnAutoSection`, `Text = "Otomatik Kesit"`) ve
@@ -62,7 +79,7 @@ bash test/run_test.sh kule.tow planes  # eğik düzlem araması da açık
 ```
 
 `test/tow_to_csv.py`, .tow dosyasını OutlineDrawing'in okuma kuralıyla (P/S son ekleri, X/Y/XY simetri,
--90° döndürme, mm, Zmin = 0) eleman listesine çevirir. Böylece AutoCAD açmadan deneme yapılabilir.
+-90° döndürme, mm, Z < 0 ise sıfıra kaydırma) eleman listesine çevirir. Böylece AutoCAD açmadan deneme yapılabilir.
 
 ### Gerçek kule: Tangent Tower-0°-2°-R1.TOW
 
@@ -79,7 +96,7 @@ bash test/run_test.sh kule.tow planes  # eğik düzlem araması da açık
 | G | 9000 | Gövde altı plan çaprazı (H8, R13–R17) | çizilmemiş |
 
 Uzatma dosyaları (her biri ayrı .tow): 2BE, 5BE ve 8BE gövde uzatmalarında 1'er plan kesiti
-(uzatma içindeki plan çaprazı) öneriliyor. 0 LE ve -2 LE bacak uzatmalarında plan çaprazı olmadığı için
+(Z=9000, uzatma üstündeki plan çaprazı) öneriliyor. 0 LE ve -2 LE bacak uzatmalarında plan çaprazı olmadığı için
 kesit önerilmiyor (bunlar düşey görünüş olarak çiziliyor).
 
 Elle çizilen 5 kesitin hepsi bulunuyor. Fazladan 2 öneri gerçekten plan çaprazı olan kotlar
