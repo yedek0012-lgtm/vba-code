@@ -13,13 +13,35 @@
    Bu yapılmazsa NETLOAD "Could not load file or assembly" hatası verebilir.
 2. AutoCAD'de önce her zamanki gibi `OutlineDrawing.dll`'i, sonra `OtomatikKesit.dll`'i **NETLOAD** edin
    (güvenlik sorusu çıkarsa "Her zaman yükle").
-3. OutlineDrawing formunu açın. "Kesit Alma" kutusunda Liste butonunun altında **Oto Kesit** butonu belirir.
+3. OutlineDrawing formunu açın. "Kesit Alma" kutusunda Liste butonunun altında **Oto Kesit** butonu ve **Ölçü** kutucuğu belirir.
 4. .tow seç → **Oto Kesit** → tabloyu kontrol et → **ÇALIŞTIR**. Komut satırından `OTOKESIT` de aynı işi yapar.
 
 Her açılışta otomatik yüklenmesi için iki DLL'i de AutoCAD'in `APPLOAD` → "Startup Suite"ine ekleyebilirsiniz.
 
 Eklenti, .tow dosyasını OutlineDrawing'in kendi okuyucusuyla (`dataprocessing.Run`) okur, yani koordinatlar
 3D modelinizle birebir aynıdır. Yeniden derlemek için: `bash eklenti/build.sh` (Mono + NuGet AutoCAD.NET 24.1).
+
+### Eklentinin yaptıkları (v2)
+
+- **Oto Kesit:** OutlineDrawing'in kendi ön görünüş (`frontFace`) ve yan görünüş (`sideFace`) hesabına göre
+  **görünmeyen** elemanları bulur (görünen bir elemanın ±X/±Y aynası da görülmüş sayılır). Ardından bu
+  elemanların hepsi bir kesite girene kadar yatay ve eğik kesit seçer (`AutoSectionDetector.DetectHidden`).
+  Her adımda en çok görünmeyen elemanı kapsayan kesit alınır; bir kesit aynalarını da kapsar.
+  Kapsanamayan eleman kalırsa komut satırında `KAPSANMAYAN:` satırlarıyla listelenir.
+- **Ölçü** kutucuğu (varsayılan işaretli): ÇALIŞTIR'dan sonra her `SECTION x` çizimine ölçü koyar.
+  Üstte zincir ölçü (gövde köşeleri ve kol uçları), sağda toplam derinlik. Ölçüler `OTO_KESIT_OLCU`
+  katmanına konur ve her çalıştırmada yenilenir. Elle: `OTOOLCU`. "2D Aktar" ölçüleri de birlikte döndürür.
+
+Tangent Tower-0°-2°-R1 ile sonuç (OutlineDrawing'in görünürlük hesabıyla):
+
+| Dosya | Görünmeyen eleman | Kapsanan | Kesit |
+|---|---|---|---|
+| Ana kule | 219 | 219 | 15 (9 yatay, 6 eğik) |
+| 2BE / 5BE / 8BE | 42 | 42 | 2 |
+| 0 LE / -2 LE | 28 / 24 | hepsi | 1 (bacak hip düzlemi) |
+
+Ölçüler elle çizilen kesitlerle aynı çıkıyor: A = 4800 \| 2400 \| 4800 × 2400, B = 5700 \| 2400 × 2400,
+D = 5700 \| 2400 \| 5700 × 2400.
 
 ## Mevcut durum (DLL'den okunan)
 

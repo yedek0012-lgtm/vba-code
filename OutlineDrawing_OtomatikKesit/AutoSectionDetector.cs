@@ -61,6 +61,10 @@ namespace OutlineDrawing
         /// <summary>mm. Simetri eşleştirmesinde ağırlık merkezi toleransı.</summary>
         public double SymmetryTolerance = 100.0;
 
+        /// <summary>Derece. DetectHidden'da görünmeyen elemanlar için aranan eğik düzlemlerin üst sınırı
+        /// (bundan dik düzlemler gövde yüzüdür; oradaki elemanlar raporda "kapsanmayan" olarak listelenir).</summary>
+        public double MaxHiddenPlaneTiltDeg = 80.0;
+
         /// <summary>true: A kesiti en üstte, aşağı doğru B, C, ...</summary>
         public bool TopDown = true;
     }
@@ -81,6 +85,17 @@ namespace OutlineDrawing
         /// <summary>Sıralama kotu (mm).</summary>
         public double SortZ;
         public string Description = "";
+    }
+
+    /// <summary>DetectHidden sonucu: ön/yan görünüşte görünmeyen elemanların kesitlerle kapsanma durumu.</summary>
+    public class AutoSectionReport
+    {
+        public int TotalMembers;
+        public int HiddenMembers;
+        public int CoveredHidden;
+        /// <summary>Hiçbir kesitte görünmeyen gizli elemanların finalMember anahtarları.</summary>
+        public List<string> UncoveredKeys = new List<string>();
+        public List<string> UncoveredDescriptions = new List<string>();
     }
 
     public static class AutoSectionDetector
@@ -120,6 +135,178 @@ namespace OutlineDrawing
                 p.X.ToString("0.###", CultureInfo.CurrentCulture),
                 p.Y.ToString("0.###", CultureInfo.CurrentCulture),
                 p.Z.ToString("0.###", CultureInfo.CurrentCulture));
+        }
+
+        // =================================================================
+        //  0) GÖRÜNMEYEN ELEMANLARA GÖRE KESİT (önerilen yöntem)
+        //     visibleKeys = ön görünüş (frontFace) + yan görünüş (sideFace)
+        //     anahtarları. Görünen bir elemanın ±X/±Y aynaları da görülmüş
+        //     sayılır. Kalan (gizli) elemanların hepsi bir kesite girene kadar:
+        //       a) gizli yatay eleman olan her kot -> yatay kesit
+        //       b) kalan gizli elemanlar için en çoğunu kapsayan eğik düzlem
+        //          (açgözlü seçim; bir düzlem aynalarını da kapsar)
+        //     Kapsanamayanlar raporda listelenir.
+        // =================================================================
+        public static List<AutoSectionCandidate> DetectHidden(IDictionary<string, FinalMember> members,
+            ICollection<string> visibleKeys, AutoSectionOptions opt, out AutoSectionReport report)
+        {
+            if (opt == null) opt = new AutoSectionOptions();
+            report = new AutoSectionReport();
+            var result = new List<AutoSectionCandidate>();
+            if (members == null || members.Count == 0) return result;
+
+            var bars = new List<Bar>();
+            foreach (var kv in members)
+            {
+                if (kv.Value == null) continue;
+                var b = new Bar(kv.Key, kv.Value);
+                if (b.Length < 1.0) continue;
+                bars.Add(b);
+            }
+            report.TotalMembers = bars.Count;
+
+            var seen = new HashSet<string>();
+            var visible = new HashSet<string>(visibleKeys ?? new string[0]);
+            foreach (var b in bars)
+                if (visible.Contains(b.Key)) foreach (var g in b.MirrorKeys) seen.Add(g);
+            var hidden = bars.Where(b => !seen.Contains(b.GeoKey)).ToList();
+            report.HiddenMembers = hidden.Count;
+
+            // Bir eleman ve aynaları tek "aile" sayılır; bir kesit aileyi kapsarsa aynaları da kapsanmış olur.
+            var covered = new HashSet<string>();
+            Action<IEnumerable<Bar>> mark = list => { foreach (var b in list) covered.Add(b.Family); };
+            Func<IEnumerable<Bar>, int> gain = list => list.Where(b => !seen.Contains(b.GeoKey) && !covered.Contains(b.Family))
+                                                         .Select(b => b.Family).Distinct().Count();
+            double tol = opt.HeightTolerance;
+
+            // ---- aday yatay kotlar: gizli yatay eleman olan kotlar
+            var levels = new List<HeightCand>();
+            var hHoriz = hidden.Where(b => Math.Abs(b.A.Z - b.B.Z) <= tol).OrderBy(b => b.Mid.Z).ToList();
+            int i = 0;
+            while (i < hHoriz.Count)
+            {
+                double z0 = hHoriz[i].Mid.Z, sum = 0; int n = 0;
+                while (i < hHoriz.Count && hHoriz[i].Mid.Z - z0 <= tol) { sum += hHoriz[i].Mid.Z; n++; i++; }
+                double h = Math.Round(sum / n, 3);
+                levels.Add(new HeightCand
+                {
+                    Z = h,
+                    Bars = bars.Where(b => Math.Abs(b.A.Z - h) <= tol && Math.Abs(b.B.Z - h) <= tol).ToList()
+                });
+            }
+
+            var nodeBars = new Dictionary<string, List<Bar>>();
+            var nodePos = new Dictionary<string, V3>();
+            foreach (var b in bars) { AddNode(nodeBars, nodePos, b.KeyA, b.A, b); AddNode(nodeBars, nodePos, b.KeyB, b.B, b); }
+            double sinParallel = Math.Sin(10.0 * Math.PI / 180.0);
+            double st = opt.SymmetryTolerance;
+
+            // ---- açgözlü kapsama: her adımda en çok görünmeyen eleman ailesini kapsayan kesit
+            //      (eşitlikte yatay kesit, sonra +X / -Y tarafı tercih edilir)
+            for (int iter = 0; iter < 500; iter++)
+            {
+                var open = hidden.Where(b => !covered.Contains(b.Family)).ToList();
+                if (open.Count == 0) break;
+
+                HeightCand bestLevel = null; int levelScore = 0;
+                foreach (var lv in levels)
+                {
+                    if (lv.Used) continue;
+                    int g = gain(lv.Bars);
+                    if (g > levelScore) { levelScore = g; bestLevel = lv; }
+                }
+
+                var planeKeys = new HashSet<string>();
+                PlaneComp best = null; int bestScore = 0; int bestRank = int.MaxValue;
+                foreach (var u in open)
+                    foreach (string nk in new[] { u.KeyA, u.KeyB })
+                    {
+                        V3 p = nodePos[nk];
+                        foreach (var o in nodeBars[nk])
+                        {
+                            if (o == u) continue;
+                            V3 cr = V3.Cross(u.Dir, o.Dir);
+                            double len = cr.Length;
+                            if (len < sinParallel) continue;
+                            V3 nrm = cr / len;
+                            if (nrm.Z < 0) nrm = -nrm;
+                            double tilt = Math.Acos(Math.Min(1.0, nrm.Z)) * 180.0 / Math.PI;
+                            if (tilt < opt.MinPlaneTiltDeg || tilt > opt.MaxHiddenPlaneTiltDeg) continue;
+                            double d = V3.Dot(nrm, p);
+                            string key = Math.Round(nrm.X * 200).ToString(CultureInfo.InvariantCulture) + "|" +
+                                         Math.Round(nrm.Y * 200).ToString(CultureInfo.InvariantCulture) + "|" +
+                                         Math.Round(d / opt.PlaneTolerance).ToString(CultureInfo.InvariantCulture);
+                            if (!planeKeys.Add(key)) continue;
+
+                            var pl = new PlaneCand { N = nrm, D = d, Tilt = tilt };
+                            var inPlane = bars.Where(b => Math.Abs(V3.Dot(nrm, b.A) - d) <= opt.PlaneTolerance &&
+                                                          Math.Abs(V3.Dot(nrm, b.B) - d) <= opt.PlaneTolerance).ToList();
+                            foreach (var comp in ConnectedGroups(inPlane))
+                            {
+                                if (comp.Count < 3) continue;
+                                int score = gain(comp);
+                                if (score == 0 || score < bestScore || !HasTriangle(comp)) continue;
+                                V3 c = Centroid(comp);
+                                int rank = (c.X < -st ? 2 : 0) + (c.Y > st ? 1 : 0);   // +X / -Y tarafı tercih
+                                if (score > bestScore || rank < bestRank)
+                                {
+                                    best = new PlaneComp { Plane = pl, Bars = comp, Centroid = c };
+                                    bestScore = score; bestRank = rank;
+                                }
+                            }
+                        }
+                    }
+
+                if (bestLevel != null && levelScore >= bestScore)
+                {
+                    bestLevel.Used = true;
+                    int hid = bestLevel.Bars.Count(b => !seen.Contains(b.GeoKey));
+                    mark(bestLevel.Bars);
+                    result.Add(new AutoSectionCandidate
+                    {
+                        Kind = AutoSectionKind.Height,
+                        Height = bestLevel.Z,
+                        SortZ = bestLevel.Z,
+                        PlanMemberCount = hid,
+                        MemberKeys = bestLevel.Bars.Select(b => b.Key).ToList(),
+                        Description = string.Format(CultureInfo.InvariantCulture,
+                            "Yatay kesit Z={0:0} mm: {1} eleman, {2} tanesi ön/yan görünüşte yok", bestLevel.Z, bestLevel.Bars.Count, hid)
+                    });
+                    continue;
+                }
+                if (best == null) break;
+
+                var corners = BoundingQuad(best, opt.PolygonMargin);
+                mark(best.Bars);
+                if (corners == null) continue;
+                result.Add(new AutoSectionCandidate
+                {
+                    Kind = AutoSectionKind.Plane,
+                    Points = corners,
+                    MemberKeys = best.Bars.Select(b => b.Key).ToList(),
+                    PlanMemberCount = bestScore,
+                    TiltDeg = Math.Round(best.Plane.Tilt, 1),
+                    SortZ = best.Centroid.Z,
+                    Description = string.Format(CultureInfo.InvariantCulture,
+                        "Eğik düzlem kesiti: eğim {0:0.0}°, {1} eleman ({2} görünmeyen), merkez ({3:0}; {4:0}; {5:0})",
+                        best.Plane.Tilt, best.Bars.Count, bestScore, best.Centroid.X, best.Centroid.Y, best.Centroid.Z)
+                });
+            }
+
+            foreach (var b in hidden)
+            {
+                if (covered.Contains(b.Family)) continue;
+                report.UncoveredKeys.Add(b.Key);
+                report.UncoveredDescriptions.Add(string.Format(CultureInfo.InvariantCulture,
+                    "{0} [{1}] ({2:0}; {3:0}; {4:0}) - ({5:0}; {6:0}; {7:0})",
+                    b.Key, b.Group, b.A.X, b.A.Y, b.A.Z, b.B.X, b.B.Y, b.B.Z));
+            }
+            report.CoveredHidden = report.HiddenMembers - report.UncoveredKeys.Count;
+
+            result = opt.TopDown
+                ? result.OrderByDescending(c => c.SortZ).ThenBy(c => (int)c.Kind).ToList()
+                : result.OrderBy(c => c.SortZ).ThenBy(c => (int)c.Kind).ToList();
+            return result;
         }
 
         // =================================================================
@@ -325,15 +512,25 @@ namespace OutlineDrawing
 
         private static string NodeKey(V3 p)
         {
-            return Math.Round(p.X).ToString(CultureInfo.InvariantCulture) + "," +
-                   Math.Round(p.Y).ToString(CultureInfo.InvariantCulture) + "," +
-                   Math.Round(p.Z).ToString(CultureInfo.InvariantCulture);
+            return R(p.X) + "," + R(p.Y) + "," + R(p.Z);
+        }
+
+        /// <summary>mm'ye yuvarlar; -0 ile 0 aynı anahtarı versin diye + 0.0.</summary>
+        private static string R(double v)
+        {
+            return (Math.Round(v) + 0.0).ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>Elemanın yönsüz geometri anahtarı; fx/fy = -1 ise X=0 / Y=0'a göre aynası.</summary>
+        private static string SegKey(V3 a, V3 b, double fx, double fy)
+        {
+            string p = NodeKey(new V3(fx * a.X, fy * a.Y, a.Z)), q = NodeKey(new V3(fx * b.X, fy * b.Y, b.Z));
+            return string.CompareOrdinal(p, q) < 0 ? p + "|" + q : q + "|" + p;
         }
 
         private static string NodeKeyXY(V3 p)
         {
-            return Math.Round(p.X).ToString(CultureInfo.InvariantCulture) + "," +
-                   Math.Round(p.Y).ToString(CultureInfo.InvariantCulture);
+            return R(p.X) + "," + R(p.Y);
         }
 
         private static string GroupSignature(IEnumerable<Bar> bars)
@@ -522,7 +719,10 @@ namespace OutlineDrawing
         // ---- küçük tipler --------------------------------------------------
         private class Bar
         {
-            public string Key, Group, KeyA, KeyB, KeyAxy, KeyBxy;
+            public string Key, Group, KeyA, KeyB, KeyAxy, KeyBxy, GeoKey;
+            public string[] MirrorKeys;
+            /// <summary>Eleman + aynalarının ortak anahtarı.</summary>
+            public string Family;
             public V3 A, B, Mid, Dir;
             public double Length;
             public Bar(string key, FinalMember m)
@@ -539,10 +739,15 @@ namespace OutlineDrawing
                 KeyB = NodeKey(B);
                 KeyAxy = NodeKeyXY(A);
                 KeyBxy = NodeKeyXY(B);
+                GeoKey = SegKey(A, B, 1, 1);
+                MirrorKeys = new[] { GeoKey, SegKey(A, B, -1, 1), SegKey(A, B, 1, -1), SegKey(A, B, -1, -1) };
+                Family = MirrorKeys.OrderBy(k => k, StringComparer.Ordinal).First();
             }
         }
 
         private class PlaneCand { public V3 N; public double D; public double Tilt; }
+
+        private class HeightCand { public double Z; public List<Bar> Bars; public bool Used; }
 
         private class PlaneComp
         {
