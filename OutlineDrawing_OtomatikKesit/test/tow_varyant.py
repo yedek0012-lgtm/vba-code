@@ -14,7 +14,8 @@ Varyantlar:
              OutlineDrawing'in grup okuyucusu (tam 9 alan bekler) bu tabloyu okuyamaz; tek DLL yaması okur.
   turkce     her grup adının sonuna Windows-1254 "Çığ" eklenir (PLS dosyayı bu kod sayfasıyla yazar).
   uzunad     her 7. düğümün ve her 11. elemanın adı 15+ karaktere uzatılır (OutlineDrawing'in IsPoseLine sınırı).
-  buyuk      kule 3 kez kopyalanır (x + 40 m, x + 80 m; aynalarıyla 5 kule yan yana): hız testi.
+  buyuk      kule 3 kez üst üste kopyalanır (z + 100 m, z + 200 m): 3 kat eleman, hız ve büyük kule testi.
+             (x yönünde kopya olmaz: X / Y ayna düğümlerine başvuran ikincil düğümler kopyada yanlış tarafa düşer.)
 Bilerek bozuk (uyarı testi):
   eksikdugum ilk elemanın bitiş düğümü tanımsız bir adla değiştirilir.
   xarm       "X-Arm Connectivity" sayısı 2 yapılır (açı elemanı olmayan eleman).
@@ -202,15 +203,15 @@ def uzat(satirlar, etiketler, ek="_UZUN_AD_TESTI"):
     return satirlar
 
 
-def buyut(satirlar, etiketler, kopya=3, aralik=40.0):
-    """Düğüm ve açı elemanı kayıtlarını x yönünde kopyalar (ad sonuna _k; başvurular da)."""
+def buyut(satirlar, etiketler, kopya=3, aralik=100.0):
+    """Düğüm ve açı elemanı kayıtlarını z yönünde kopyalar (ad sonuna _k; başvurular da)."""
     def ref(r, k):
         cr = r.rstrip("\r")
         son = r[len(cr):]
         q = cr.strip().strip("'")
         for ek in ("XY", "X", "Y", "P", "S"):
             if q.endswith(ek) and q[: -len(ek)] in etiketler:
-                return cr.replace(q, q[: -len(ek)] + "_%d" % k + ek) + son
+                return cr.replace(q, q[: -len(ek)] + "_V%d" % k + ek) + son
         return r
     yeni = []
     i = 0
@@ -229,13 +230,16 @@ def buyut(satirlar, etiketler, kopya=3, aralik=40.0):
                     cr = r[0].endswith("\r")
                     ad = r[0].rstrip("\r").strip()
                     if ad.startswith("'"):
-                        r[0] = "'" + ad.strip("'") + "_%d'" % k + ("\r" if cr else "")
+                        r[0] = "'" + ad.strip("'") + "_V%d'" % k + ("\r" if cr else "")
                     else:
-                        r[0] = ad + "_%d" % k + ("\r" if cr else "")
+                        r[0] = ad + "_V%d" % k + ("\r" if cr else "")
                     if bas[0]:
                         cr2 = r[2].endswith("\r")
                         t = r[2].strip().split()
-                        t[0] = sayi(float(t[0]) + aralik * (k - 1))
+                        z = float(t[2])
+                        t[2] = sayi(z + aralik * (k - 1))
+                        if len(t) > 3 and float(t[3]) != 0 and abs(float(t[3]) - z) < 1e-9:
+                            t[3] = sayi(float(t[3]) + aralik * (k - 1))
                         r[2] = " ".join(t) + ("\r" if cr2 else "")
                         m = re.match(r"(\s*)'([^']*)'\s+'([^']*)'(.*)", r[4])
                         if m and (m.group(2) or m.group(3)):   # ikincil düğümün "from, to" başvuruları
