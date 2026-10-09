@@ -10,9 +10,13 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL.
 
+**1.8: Kesitler arası eleman paylaşımı düzeltildi.** `SectionDetection` bir elemanı yalnız son kesitte çiziyordu
+(F kesitinin iki H5 elemanı G'ye gidiyordu). Anahtar artık "kesit§eleman"; ayrıntı `STABILITE.md` A1b.
+Doğrulama: `bash test/kesit_testi.sh eklenti/bin/tek/OutlineDrawing.dll kule.tow`.
+
 **1.7: OutlineDrawing düzeltmesi dahil.** `FinalizeMember` simetri kodu 12 olan elemanların aynalarını çizmiyordu
 (Tangent Tower'da sol alt traverste 14 eleman eksikti). Tek DLL'de `FinalizeMember`'ın sonuna
-`SimetriDuzeltici.Uygula` çağrısı eklendi (`eklenti/yama/FinalizeMemberYama.cs`, Mono.Cecil). Kod 12 için yalnız
+`SimetriDuzeltici.Uygula` çağrısı eklendi (`eklenti/yama/OutlineDrawingYama.cs`, Mono.Cecil). Kod 12 için yalnız
 X aynası üretilir, geometrisi zaten var olan atlanır. Ayrıntı: `STABILITE.md` A1.
 
 Yeniden üretmek için (OutlineDrawing kaynak kodu değişip yeniden derlenirse gerekir):

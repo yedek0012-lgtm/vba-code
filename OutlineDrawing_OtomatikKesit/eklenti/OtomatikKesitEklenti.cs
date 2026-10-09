@@ -46,7 +46,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.7";
+        public const string Surum = "1.8";
         private static Timer _timer;
 
         public void Initialize()
@@ -1187,6 +1187,22 @@ namespace OtomatikKesit
             Func<double, string> R = v => (Math.Round(v) + 0.0).ToString(CultureInfo.InvariantCulture);
             string a = R(q[0]) + "," + R(q[1]) + "," + R(q[2]), b = R(q[3]) + "," + R(q[4]) + "," + R(q[5]);
             return string.CompareOrdinal(a, b) < 0 ? a + "|" + b : b + "|" + a;
+        }
+    }
+
+    /// <summary>
+    /// OutlineDrawing.SectionDetection bütün kesitlerin elemanlarını tek sözlükte eleman adıyla tutuyordu
+    /// (section[elemanAdı]); bir eleman iki kesite girerse yalnız son kesitte çiziliyordu (örn. F kesitinin
+    /// iki H5 elemanı G'ye gidiyordu). Tek DLL derlemesinde SectionDetection'daki üç anahtar yeri bu metotla
+    /// "kesit§eleman" yapılır (eklenti/yama/OutlineDrawingYama.cs). Section.name (etiket) eleman adı kalır.
+    /// </summary>
+    public static class KesitAnahtari
+    {
+        public const char Ayrac = '\u00A7';   // §
+
+        public static string Olustur(string uyeAnahtari, string kesitAdi)
+        {
+            return (kesitAdi ?? "") + Ayrac + uyeAnahtari;
         }
     }
 

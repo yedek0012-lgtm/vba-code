@@ -23,11 +23,29 @@ bool xyKopya = kod == 3;
 if (kod > 3 && kod != 12) errorList.Add("Bilinmeyen eleman simetri kodu " + kod + ": " + anahtar);
 ```
 
-**Tek DLL (1.7) bu düzeltmeyi içeriyor:** `FinalizeMember`'ın sonuna `SimetriDuzeltici.Uygula` çağrısı eklendi
-(`eklenti/yama/FinalizeMemberYama.cs`, Mono.Cecil). Tangent Tower'da 14 eleman eklenir ve 33–35 m arasında iki
+**Tek DLL (1.7+) bu düzeltmeyi içeriyor:** `FinalizeMember`'ın sonuna `SimetriDuzeltici.Uygula` çağrısı eklendi
+(`eklenti/yama/OutlineDrawingYama.cs`, Mono.Cecil). Tangent Tower'da 14 eleman eklenir ve 33–35 m arasında iki
 travers eşitlenir (101 / 101).
 
 Ayrı eklenti DLL'i (OutlineDrawing.dll'e dokunmayan) bu durumu YÜKLE ve Oto Kesit sırasında **"DİKKAT: … simetri kodu 12; aynaları çizilmiyor"** diye bildirir.
+
+### A1b. Bir eleman birden fazla kesitte çizilemiyor (eksik kesit) — KRİTİK
+`SectionDetection` bütün kesitlerin elemanlarını tek sözlükte eleman adıyla tutuyor (`section[elemanAdı] = ...`).
+Bir eleman iki kesite giriyorsa yalnız **sonra işlenen** kesitte çiziliyor. Tangent Tower'daki 12 otomatik kesitte
+OutlineDrawing'in gerçek kodu çalıştırıldığında (test/kesit_testi.sh) şu kesitler eksik çıkıyordu:
+F 10/12 (2 H5 → G), B 7/9, G 34/36, J 40/42, K 2/12.
+
+Düzeltme: anahtar `kesitAdı + "§" + elemanAdı` olmalı. Üç yerde değişiyor: yükseklik kesiti kaydı,
+nokta kesiti kaydı ve nokta kesitinin `hitKeys` listesi. `Section.name` (etiket) eleman adı kalır.
+
+```csharp
+string anahtar = row.SectionName + "§" + uyeAnahtari;
+section[anahtar] = ...;          // yükseklik ve nokta kesiti
+hitKeys.Add(anahtar);            // AlignSectionMembersToPlaneFront / RotateSectionMinus90AboutZ bu anahtarlarla çalışır
+```
+
+**Tek DLL (1.8) bu düzeltmeyi içeriyor** (`KesitAnahtari.Olustur`, `eklenti/yama/OutlineDrawingYama.cs`).
+Yamadan sonra 6 .tow dosyasının hepsinde bütün kesitler tam.
 
 ### A2. YÜKLE ve ÇALIŞTIR model alanındaki her şeyi siliyor — veri kaybı riski
 `loadtowerfile` ve `runtowerfile` model alanındaki **bütün** nesneleri siliyor. Antet, notlar ya da aynı DWG'deki başka
@@ -78,6 +96,9 @@ sürümlerde yüklenmez. Geçiş gerekirse proje SDK stiline çevrilip `net8.0-w
 ## C. Test durumu
 
 AutoCAD dışında (Mono, OutlineDrawing'in gerçek okuyucusu ve AutoCAD 2022 referanslarıyla), 6 .tow dosyasında:
+
+- OutlineDrawing'in gerçek `SectionDetection` kodu, sahte geometri kütüphaneleriyle (`test/sahte_autocad`) çalıştırılıyor
+  (`test/kesit_testi.sh`): bütün kesitler tam.
 
 - Görünmeyen elemanlar: ana kule 207/219 (kalan 12 eleman, gövde yan yüz çaprazlarının traversin arkasında kalan
   kısmı; yan düşey görünüşte zaten çiziliyor), uzatmalar 42/42, 28/28, 24/24.

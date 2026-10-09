@@ -37,7 +37,7 @@ mcs -langversion:7.2 -target:library -optimize+ -nowarn:1591 -nostdlib -noconfig
 mono "$TOOL/pkg/tools/ILRepack.exe" /targetplatform:v4,"$FW" /copyattrs \
     /lib:"$LIB" /out:"$OUT/birlesik/OutlineDrawing.dll" "$KAYNAK_DLL" "$OUT/OtomatikKesit_tek.dll"
 
-# FinalizeMember yaması: simetri kodu 12 elemanların aynaları (SimetriDuzeltici)
+# OutlineDrawing yamaları: FinalizeMember (simetri kodu 12) + SectionDetection (kesitler arası eleman paylaşımı)
 CECIL="$OUT/cecil"
 if [ ! -f "$CECIL/pkg/lib/net40/Mono.Cecil.dll" ]; then
     mkdir -p "$CECIL"
@@ -45,6 +45,6 @@ if [ ! -f "$CECIL/pkg/lib/net40/Mono.Cecil.dll" ]; then
     python3 -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$CECIL/c.nupkg" "$CECIL/pkg"
 fi
 cp -f "$CECIL/pkg/lib/net40/Mono.Cecil.dll" "$OUT/"
-mcs -out:"$OUT/FinalizeMemberYama.exe" -r:"$OUT/Mono.Cecil.dll" yama/FinalizeMemberYama.cs
-mono "$OUT/FinalizeMemberYama.exe" "$OUT/birlesik/OutlineDrawing.dll" bin/tek/OutlineDrawing.dll "$LIB" "$FW" "$FW/Facades"
+mcs -out:"$OUT/OutlineDrawingYama.exe" -r:"$OUT/Mono.Cecil.dll" yama/OutlineDrawingYama.cs
+mono "$OUT/OutlineDrawingYama.exe" "$OUT/birlesik/OutlineDrawing.dll" bin/tek/OutlineDrawing.dll "$LIB" "$FW" "$FW/Facades"
 echo "Tek DLL: $(pwd)/bin/tek/OutlineDrawing.dll"
