@@ -36,7 +36,11 @@ using AcApp = Autodesk.AutoCAD.ApplicationServices.Application;
 using AcColor = Autodesk.AutoCAD.Colors.Color;
 
 [assembly: ExtensionApplication(typeof(OtomatikKesit.Eklenti))]
+#if !TEK_DLL
+// Tek DLL (OutlineDrawing ile birleştirilmiş) derlemede bu satır olmamalı: assembly'de CommandClass varsa
+// AutoCAD yalnız listelenen sınıfları tarar ve OutlineDrawing'in DRAWOUTLINE / CONVERTO2D komutları kaybolur.
 [assembly: CommandClass(typeof(OtomatikKesit.Komutlar))]
+#endif
 
 namespace OtomatikKesit
 {

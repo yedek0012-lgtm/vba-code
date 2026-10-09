@@ -4,7 +4,18 @@
 `.tow` geometrisinden kendisi bulur ve mevcut kesit tablosuna (grid) yazar. Kesitleri çizen kod
 (SectionDetection → DrawSections) **olduğu gibi** kullanılır.
 
-## Hazır DLL ile kurulum (önerilen, kaynak koda gerek yok)
+## Tek DLL (önerilen)
+
+`eklenti/bin/tek/OutlineDrawing.dll` = OutlineDrawing v1.3 + Otomatik Kesit, tek dosya (ILRepack ile birleştirildi).
+Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
+Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL.
+
+Yeniden üretmek için (OutlineDrawing kaynak kodu değişip yeniden derlenirse gerekir):
+`bash eklenti/tek_dll.sh /yol/OutlineDrawing.dll` → `eklenti/bin/tek/OutlineDrawing.dll`.
+Tek DLL derlemesinde eklentinin `[assembly: CommandClass]` satırı kapatılır (`TEK_DLL`), yoksa AutoCAD yalnız
+eklentinin komut sınıfını tarar ve DRAWOUTLINE kaybolur; `ExtensionApplication` özniteliği `/copyattrs` ile taşınır.
+
+## Ayrı eklenti DLL ile kurulum (OutlineDrawing.dll'e dokunmadan)
 
 `eklenti/bin/OtomatikKesit.dll` ayrı bir eklentidir; OutlineDrawing.dll'e dokunmaz.
 
