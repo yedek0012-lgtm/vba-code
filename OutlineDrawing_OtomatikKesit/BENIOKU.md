@@ -49,6 +49,9 @@ Eklenti, .tow dosyasını OutlineDrawing'in kendi okuyucusuyla (`dataprocessing.
   Çizilen her çizgi, grid'deki kesit tanımıyla OutlineDrawing'in seçim kuralına göre bulunan elemanlarla
   rijit dönüşümle (döndürme, öteleme, aynalama) eşleştirilir. Ön/yan görünüş çizgileri ise OutlineDrawing'in
   frontFace/sideFace koordinatlarından birebir tanınır (2D Aktar sonrası da). Çizginin katmanı değişmez. Elle: `OTOSTIL`.
+  YÜKLE ile çizilen 3D modelde de uygulanır. Eleman isimleri (yükseklik < 250 olan, "SECTION x" / "0" katmanındaki
+  yazılar) tek renk (7) yapılır. Eğik kesitte düzlemin önünde/arkasında kalan çizgiler de kesite dahildir;
+  tanınamayan çizgi kalırsa ana eleman kabul edilir (tek renk) ve UYARI satırında sayısı yazılır.
   Kesikli çizgi tipi `OTO_KESIK` eklenti tarafından oluşturulur (150 çizgi / 75 boşluk mm, .lin dosyası gerekmez;
   global LTSCALE'e göre ayarlanır). Sonuç ve olası hatalar formdaki UYARI satırında görünür.
 - Eğik düzlem kesiti en az 6 eleman içermeli (`MinHiddenPlaneMembers`). Daha küçük düzlemler tek bir gizli

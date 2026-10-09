@@ -183,8 +183,18 @@ namespace OtomatikKesit
             var tip = new ToolTip();
             tip.SetToolTip(b, "Ön/yan görünüşte görünmeyen elemanların hepsini kapsayan kesitleri bulup tabloya yazar");
             tip.SetToolTip(chk, "ÇALIŞTIR'dan sonra kesitlere ölçü koy (komut: OTOOLCU)");
-            tip.SetToolTip(chkR, "ÇALIŞTIR'dan sonra kesitlerde ana elemanlar düz, redundant elemanlar kesikli çizilsin (komut: OTOSTIL)");
+            tip.SetToolTip(chkR, "YÜKLE ve ÇALIŞTIR'dan sonra 3D modelde, görünüşlerde ve kesitlerde ana elemanlar düz, redundant elemanlar kesikli; isimler tek renk (komut: OTOSTIL)");
             b.Click += (s, e) => TabloyuDoldur(f);
+
+            // YÜKLE (3D model) sonrasında da redundant elemanlar kesikli olsun
+            var load = Alan(f, "btnLoad") as Button;
+            if (load != null)
+                load.Click += (s, e) =>
+                {
+                    if (!chkR.Checked) return;
+                    try { Uyari(f, KesitStili.Uygula(f)); }
+                    catch (System.Exception ex) { Uyari(f, "Redundant çizgi tipi uygulanamadı: " + ex.Message); }
+                };
 
             // ÇALIŞTIR'a ikinci bir olay bağlanır; OutlineDrawing'in kendi çizimi bittikten sonra çalışır.
             var run = Alan(f, "btnRun") as Button;
@@ -344,6 +354,7 @@ namespace OtomatikKesit
     internal static class KesitCizimleri
     {
         private static readonly Regex KesitYazisi = new Regex(@"^SECTION\s+(\S+)$", RegexOptions.IgnoreCase);
+        private const double DerinlikTol = 5000;
 
         /// <summary>Model alanındaki "SECTION x" yazılarını ve her birine ait çizgileri bulur.
         /// silinecekKatman verilirse o katmandaki nesneler silinir (önceki otomatik ölçüler).</summary>
@@ -388,7 +399,9 @@ namespace OtomatikKesit
                     double ua = c[0].X, ub = c[1].X;
                     double va = e.XZ ? c[0].Z : c[0].Y, vb = e.XZ ? c[1].Z : c[1].Y;
                     double wa = e.XZ ? c[0].Y : c[0].Z, wb = e.XZ ? c[1].Y : c[1].Z;
-                    if (Math.Abs(wa - e.W) > 1 || Math.Abs(wb - e.W) > 1) continue;
+                    // Eğik kesitte OutlineDrawing düzleme 100 mm'ye kadar yakın elemanları da çizer; bunlar
+                    // çizim düzleminin önünde/arkasında kalır. Kesitler birbirinden u ile ayrıldığı için derinlik toleransı geniş.
+                    if (Math.Abs(wa - e.W) > DerinlikTol || Math.Abs(wb - e.W) > DerinlikTol) continue;
                     double um = (ua + ub) / 2, vm = (va + vb) / 2;
                     if (Math.Abs(um - e.U) > 15000 || Math.Abs(vm - e.V) > 40000) continue;
                     bool baskasi = etiketler.Any(o => o != e && o.XZ == e.XZ && Math.Abs(o.W - e.W) <= 1 &&
@@ -478,6 +491,7 @@ namespace OtomatikKesit
     {
         public static short AnaRenk = 4;               // cyan, düz çizgi
         public static short RedundantRenk = 5;         // mavi, kesikli
+        public static short MetinRenk = 7;             // eleman isimleri tek renk (beyaz/siyah)
         public const string CizgiTipiAdi = "OTO_KESIK";
         public static double Cizgi = 150, Bosluk = 75; // kesik deseni (mm, ekranda)
 
@@ -499,7 +513,7 @@ namespace OtomatikKesit
             if (kule.RedundantGruplar.Count == 0) return "Redundant stili: .tow'da açıklaması 'Redundant' olan grup yok.";
 
             Dictionary<string, KesitTanimi> tanimlar = GridTanimlari(f);
-            int ana = 0, red = 0, eslesmeyen = 0, kesit = 0, hata = 0, yuzAna = 0, yuzRed = 0;
+            int ana = 0, red = 0, eslesmeyen = 0, kesit = 0, hata = 0, yuzAna = 0, yuzRed = 0, yazi = 0;
             var tanimsiz = new List<string>();
             string ilkHata = null;
 
@@ -511,8 +525,13 @@ namespace OtomatikKesit
                 ObjectId duz = SymbolUtilityServices.GetLinetypeContinuousId(db);
                 double olcek = db.Ltscale > 1e-9 ? 1.0 / db.Ltscale : 1.0;
 
-                // ---- ön / yan görünüş: çizgiler koordinatından tanınır
-                var yuz = new YuzEslestirici(kule.OnYuz.Concat(kule.YanYuz));
+                // ---- ön / yan görünüş ve 3D model (YÜKLE): çizgiler koordinatından tanınır
+                var model = kule.Uyeler.Values.Select(m => new YuzCizgisi
+                {
+                    P = new[] { m.start_x, m.start_y, m.start_z, m.end_x, m.end_y, m.end_z },
+                    Grup = m.group_label
+                });
+                var yuz = new YuzEslestirici(kule.OnYuz.Concat(kule.YanYuz).Concat(model));
                 foreach (ObjectId id in ms)
                 {
                     var l = tr.GetObject(id, OpenMode.ForRead) as Line;
@@ -539,12 +558,18 @@ namespace OtomatikKesit
                     kesit++;
                     for (int i = 0; i < e.Ids.Count; i++)
                     {
-                        if (eslesme[i] < 0) { eslesmeyen++; continue; }
                         try
                         {
+                            var ent = (Entity)tr.GetObject(e.Ids[i], OpenMode.ForWrite);
+                            if (eslesme[i] < 0)
+                            {
+                                // Tanınamayan çizgi: tek renk olsun diye ana eleman kabul edilir
+                                Boya(ent, false, kesik, duz, olcek);
+                                eslesmeyen++;
+                                continue;
+                            }
                             FinalMember m = kule.Uyeler[anahtarlar[eslesme[i]]];
                             bool redundant = m.group_label != null && kule.RedundantGruplar.Contains(m.group_label.Trim());
-                            var ent = (Entity)tr.GetObject(e.Ids[i], OpenMode.ForWrite);
                             if (Boya(ent, redundant, kesik, duz, olcek)) red++; else ana++;
                         }
                         catch (System.Exception ex)
@@ -554,12 +579,27 @@ namespace OtomatikKesit
                         }
                     }
                 }
+                // ---- eleman isimleri: OutlineDrawing katman rengini (section label) alıyordu; hepsi tek renk
+                foreach (ObjectId id in ms)
+                {
+                    var t = tr.GetObject(id, OpenMode.ForRead) as DBText;
+                    if (t == null || t.Height >= 250) continue;
+                    string kat = t.Layer ?? "";
+                    if (!kat.StartsWith("SECTION ", StringComparison.OrdinalIgnoreCase) && kat != "0") continue;
+                    try
+                    {
+                        t.UpgradeOpen();
+                        t.Color = AcColor.FromColorIndex(Autodesk.AutoCAD.Colors.ColorMethod.ByAci, MetinRenk);
+                        yazi++;
+                    }
+                    catch (System.Exception ex) { hata++; if (ilkHata == null) ilkHata = ex.Message; }
+                }
                 tr.Commit();
             }
 
             string ozet = string.Format("Çizgi tipi: görünüşlerde {0} redundant / {1} ana, {2} kesitte {3} redundant / {4} ana",
                 yuzRed, yuzAna, kesit, red, ana);
-            if (eslesmeyen > 0) ozet += ", eşleşmeyen çizgi " + eslesmeyen;
+            if (eslesmeyen > 0) ozet += ", tanınmayan " + eslesmeyen + " çizgi ana kabul edildi";
             if (tanimsiz.Count > 0) ozet += ", tabloda bulunamayan kesit: " + string.Join(",", tanimsiz);
             if (hata > 0) ozet += string.Format(", {0} çizgide hata ({1})", hata, ilkHata);
             Komutlar.Yaz("\n" + ozet + ".\n");
@@ -731,7 +771,7 @@ namespace OtomatikKesit
             Func<double[], double> boy = s => Math.Sqrt((s[2] - s[0]) * (s[2] - s[0]) + (s[3] - s[1]) * (s[3] - s[1]));
             var capalar = Enumerable.Range(0, kaynak.Count).OrderByDescending(i => boy(kaynak[i])).Take(3).ToList();
 
-            int enIyi = -1; int[] enIyiEslesme = null;
+            int enIyi = -1; int[] enIyiEslesme = null; List<double[]> enIyiDonmus = null;
             foreach (int ci in capalar)
             {
                 double[] s = kaynak[ci];
@@ -754,12 +794,37 @@ namespace OtomatikKesit
                             var donmus = kaynak.Select(k => { var p = T(k[0], k[1]); var q = T(k[2], k[3]); return new[] { p[0], p[1], q[0], q[1] }; }).ToList();
                             int[] es = Esle(donmus, hedef, tol);
                             int skor = es.Count(x => x >= 0);
-                            if (skor > enIyi) { enIyi = skor; enIyiEslesme = es; }
+                            if (skor > enIyi) { enIyi = skor; enIyiEslesme = es; enIyiDonmus = donmus; }
                             if (enIyi == hedef.Count) return enIyiEslesme;
                         }
                 }
             }
-            return enIyiEslesme ?? sonuc;
+            if (enIyiEslesme == null) return sonuc;
+
+            // İkinci geçiş: bulunan en iyi dönüşümle eşleşmeyen çizgiler için toleranslı (GenisTol) en yakın eleman
+            for (int h = 0; h < hedef.Count; h++)
+            {
+                if (enIyiEslesme[h] >= 0) continue;
+                double[] d = hedef[h];
+                double enAz = double.MaxValue; int secilen = -1;
+                for (int i = 0; i < enIyiDonmus.Count; i++)
+                {
+                    double[] k = enIyiDonmus[i];
+                    double d1 = Math.Max(Uz(k[0], k[1], d[0], d[1]), Uz(k[2], k[3], d[2], d[3]));
+                    double d2 = Math.Max(Uz(k[0], k[1], d[2], d[3]), Uz(k[2], k[3], d[0], d[1]));
+                    double m = Math.Min(d1, d2);
+                    if (m < enAz) { enAz = m; secilen = i; }
+                }
+                if (enAz <= GenisTol) enIyiEslesme[h] = secilen;
+            }
+            return enIyiEslesme;
+        }
+
+        public static double GenisTol = 60;   // mm, ikinci geçiş
+
+        private static double Uz(double x1, double y1, double x2, double y2)
+        {
+            return Math.Sqrt((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2));
         }
 
         private static int[] Esle(List<double[]> kaynak, List<double[]> hedef, double tol)
