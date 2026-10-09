@@ -83,6 +83,16 @@ namespace OutlineDrawing
 
         /// <summary>true: A kesiti en üstte, aşağı doğru B, C, ...</summary>
         public bool TopDown = true;
+
+        /// <summary>Son çare: açgözlü seçimden sonra hâlâ hiçbir kesitte olmayan görünmeyen her eleman için yalnız o
+        /// elemanın panelini (kendisi + düğümlerine bağlanan aynı düzlemdeki elemanlar) gösteren küçük bir düzlem kesiti.
+        /// Örnek: Tangent Tower'da traversin arkasında kalan yan yüz çaprazları (CB-D1-T ...), YAA-R1'de CA-9. Bunlar
+        /// dik bir yüz düzleminde olduğu ve o düzlemin çoğu zaten görünüşte olduğu için "dik düzlem" kuralıyla eleniyordu.</summary>
+        public bool YerelKesit = true;
+        /// <summary>mm. Yerel kesit dörtgeninin elemandan en az uzaklığı (düğümler ve çapraz eşi içeride kalsın).</summary>
+        public double YerelKesitPayi = 100.0;
+        /// <summary>mm. OutlineDrawing.SectionDetection nokta kesitinde elemanın orta noktası düzleme bu kadar yakın olmalı.</summary>
+        public double KesitDuzlemMesafesi = 100.0;
     }
 
     public class AutoSectionCandidate
@@ -336,6 +346,15 @@ namespace OutlineDrawing
                 });
             }
 
+            // ---- son çare: hâlâ kapsanmayan her görünmeyen aile için yerel panel kesiti
+            if (opt.YerelKesit)
+                foreach (var u in hidden.Where(b => !covered.Contains(b.Family)).OrderByDescending(b => b.Mid.Z).ToList())
+                {
+                    if (covered.Contains(u.Family)) continue;
+                    AutoSectionCandidate yerel = YerelKesit(u, bars, nodeBars, opt, seen, covered);
+                    if (yerel != null) result.Add(yerel);
+                }
+
             foreach (var b in hidden)
             {
                 if (covered.Contains(b.Family)) continue;
@@ -350,6 +369,80 @@ namespace OutlineDrawing
                 ? result.OrderByDescending(c => c.SortZ).ThenBy(c => (int)c.Kind).ToList()
                 : result.OrderBy(c => c.SortZ).ThenBy(c => (int)c.Kind).ToList();
             return result;
+        }
+
+        /// <summary>
+        /// u elemanının paneli için düzlem kesiti. Düzlem: u ile düğümlerinden birinde birleşen ve u'ya paralel olmayan
+        /// bir elemanın belirlediği düzlemlerden, u'nun düğümlerine en çok elemanı aynı düzlemde bağlanan (panelin yüz
+        /// düzlemi). Dörtgen: u boyunca uçlardan, yana eşit pay; SectionDetection düzleme yakın ve bir ucu/ortası dörtgende
+        /// olan elemanları çizer: u, düğümlerine bağlanan komşuları ve çapraz eşi. Kapsanan aileler işaretlenir.
+        /// </summary>
+        private static AutoSectionCandidate YerelKesit(Bar u, List<Bar> bars, Dictionary<string, List<Bar>> nodeBars,
+            AutoSectionOptions opt, HashSet<string> seen, HashSet<string> covered)
+        {
+            double sinParallel = Math.Sin(10.0 * Math.PI / 180.0);
+            V3 enIyiN = new V3(0, 0, 0); int enIyiKomsu = -1;
+            foreach (string nk in new[] { u.KeyA, u.KeyB })
+            {
+                List<Bar> komsular;
+                if (!nodeBars.TryGetValue(nk, out komsular)) continue;
+                foreach (var o in komsular)
+                {
+                    if (o == u) continue;
+                    V3 cr = V3.Cross(u.Dir, o.Dir);
+                    if (cr.Length < sinParallel) continue;
+                    V3 n = cr / cr.Length;
+                    if (n.Z < 0) n = -n;
+                    if (Math.Abs(n.Z) > 0.999) continue;            // yatay düzlem: yükseklik kesitinin işi
+                    double d = V3.Dot(n, u.A);
+                    int k = 0;
+                    foreach (string nk2 in new[] { u.KeyA, u.KeyB })
+                        foreach (var w in nodeBars[nk2])
+                            if (w != u && Math.Abs(V3.Dot(n, w.A) - d) <= opt.PlaneTolerance && Math.Abs(V3.Dot(n, w.B) - d) <= opt.PlaneTolerance) k++;
+                    if (k > enIyiKomsu) { enIyiKomsu = k; enIyiN = n; }
+                }
+            }
+            if (enIyiKomsu < 0)
+            {
+                // Düğümünde paralel olmayan komşusu yok: u'yu içeren düşey düzlem
+                V3 cr = V3.Cross(u.Dir, new V3(0, 0, 1));
+                if (cr.Length < 1e-6) cr = new V3(1, 0, 0);
+                enIyiN = cr / cr.Length;
+            }
+            V3 nn = enIyiN;
+            double dd = V3.Dot(nn, u.A);
+
+            // Dörtgen: a = u doğrultusu, b = düzlemde a'ya dik
+            V3 a = u.Dir, b = V3.Cross(nn, a); b = b / b.Length;
+            double pay = Math.Max(opt.YerelKesitPayi, 0.1 * u.Length);
+            V3 p0 = u.A - a * pay - b * pay, p1 = u.B + a * pay - b * pay, p2 = u.B + a * pay + b * pay, p3 = u.A - a * pay + b * pay;
+            var kose = new List<SectionPoint3D>();
+            foreach (V3 p in new[] { p0, p1, p2, p3 }) kose.Add(new SectionPoint3D(Math.Round(p.X, 3), Math.Round(p.Y, 3), Math.Round(p.Z, 3)));
+
+            // SectionDetection'ın seçeceği elemanlar: orta nokta düzleme yakın ve orta/uç dörtgen içinde
+            Func<V3, bool> icinde = q =>
+            {
+                double s = V3.Dot(q - u.A, a), t = V3.Dot(q - u.A, b);
+                return s >= -pay - 1 && s <= u.Length + pay + 1 && Math.Abs(t) <= pay + 1;
+            };
+            var secilen = bars.Where(w => Math.Abs(V3.Dot(nn, w.Mid) - dd) <= opt.KesitDuzlemMesafesi &&
+                                          (icinde(w.Mid) || icinde(w.A) || icinde(w.B))).ToList();
+            if (!secilen.Contains(u)) secilen.Add(u);
+            foreach (var w in secilen) covered.Add(w.Family);
+            int gizli = secilen.Count(w => !seen.Contains(w.GeoKey));
+            double tilt = Math.Acos(Math.Min(1.0, Math.Abs(nn.Z))) * 180.0 / Math.PI;
+            return new AutoSectionCandidate
+            {
+                Kind = AutoSectionKind.Plane,
+                Points = kose,
+                MemberKeys = secilen.Select(w => w.Key).ToList(),
+                PlanMemberCount = gizli,
+                TiltDeg = Math.Round(tilt, 1),
+                SortZ = u.Mid.Z,
+                Description = string.Format(CultureInfo.InvariantCulture,
+                    "Yerel kesit: {0} elemanı görünüşlerde ve diğer kesitlerde yok; panel düzlemi eğim {1:0.0}°, {2} eleman ({3} görünmeyen), merkez ({4:0}; {5:0}; {6:0})",
+                    u.Group, tilt, secilen.Count, gizli, u.Mid.X, u.Mid.Y, u.Mid.Z)
+            };
         }
 
         // =================================================================
