@@ -10,6 +10,13 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL.
 
+**1.14: Görünüşlere iç elemanlar (PLS-TOWER görünüşündeki gibi).** "İç eleman" kutucuğu (varsayılan işaretli) veya
+`OTOIC`: ön/yan görünüşe, yüz düzleminde olmayan elemanların izdüşümü eklenir (kalça çaprazları, iç diyaframlar; ör.
+YAA-R1 20BE uzatmasındaki P-E1-5_20). Yalnız görünüşte yeni bir çizgi oluşturanlar eklenir: izdüşümü yüz
+çizgilerinin üstüne binenler (arka yüz, yan yüzler, yatay düzlemler), ayna kopyaları, bakış yönüne yakın olanlar ve
+gövdenin dışında kalanlar (uçtan görülen travers) eklenmez. Katman `OTO_IC_ELEMAN` (kapatılabilir), stil ana/redundant
+kuralıyla aynı. YAA-R1: ön 12, yan 80 çizgi; Tangent Tower: ön 4, yan 40.
+
 **1.13: Kesik çizgi her ölçekte görünür.** Redundant çizgilerin çizgi tipi ölçeği LTSCALE'e ek olarak anotasyon
 ölçeğini de (MSLTSCALE açıksa CANNOSCALE, ör. 1:100 → ×100) hesaba katar; önceden bu durumda 225 mm'lik desen
 100 kat büyüyüp çizgiler düz görünüyordu. Stil sonrası REGEN yapılır; kullanılan ölçek komut satırına yazılır.

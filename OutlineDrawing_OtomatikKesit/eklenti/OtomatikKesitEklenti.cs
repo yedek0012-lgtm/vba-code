@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.13";
+        public const string Surum = "1.14";
         private static Timer _timer;
 
         public void Initialize()
@@ -87,6 +87,18 @@ namespace OtomatikKesit
         public void OtoOlcu()
         {
             FormBaglayici.Guvenli(null, "Ölçü", () => KesitOlculeri.Ekle());
+        }
+
+        [CommandMethod("OTOIC", CommandFlags.Session)]
+        public void OtoIc()
+        {
+            Form f = FormBaglayici.AcikFormuBul();
+            if (f == null)
+            {
+                Yaz("\nOutlineDrawing formu açık değil. Önce OutlineDrawing'i çalıştırıp .tow dosyasını seçin.\n");
+                return;
+            }
+            FormBaglayici.Guvenli(f, "İç eleman", () => FormBaglayici.Uyari(f, IcElemanlar.Ciz(f, true)));
         }
 
         [CommandMethod("OTOSTIL", CommandFlags.Session)]
@@ -142,6 +154,7 @@ namespace OtomatikKesit
             var b = new Button { Name = ButonAdi, Text = "Oto Kesit" };
             var chk = new CheckBox { Name = OlcuKutusuAdi, Text = "Ölçü", Checked = true, AutoSize = true };
             var chkR = new CheckBox { Name = "chkRedundant", Text = "Redundant", Checked = true, AutoSize = true };
+            var chkI = new CheckBox { Name = "chkIcEleman", Text = "İç eleman", Checked = true, AutoSize = true };
             if (ornek != null)
             {
                 b.Size = ornek.Size;
@@ -167,6 +180,10 @@ namespace OtomatikKesit
                 chkR.ForeColor = kap.ForeColor;
                 chkR.Anchor = ornek.Anchor;
                 chkR.Location = new Point(ornek.Left + 2, chk.Bottom + 2);
+                chkI.Font = ornek.Font;
+                chkI.ForeColor = kap.ForeColor;
+                chkI.Anchor = ornek.Anchor;
+                chkI.Location = new Point(ornek.Left + 2, chkR.Bottom + 2);
             }
             else
             {
@@ -174,18 +191,22 @@ namespace OtomatikKesit
                 b.Location = new Point(8, 8);
                 chk.Location = new Point(8, 36);
                 chkR.Location = new Point(8, 58);
+                chkI.Location = new Point(8, 80);
             }
 
             kap.Controls.Add(b);
             kap.Controls.Add(chk);
             kap.Controls.Add(chkR);
+            kap.Controls.Add(chkI);
             b.BringToFront();
             chk.BringToFront();
             chkR.BringToFront();
+            chkI.BringToFront();
             var tip = new ToolTip();
             tip.SetToolTip(b, "Ön/yan görünüşte görünmeyen elemanların hepsini kapsayan kesitleri bulup tabloya yazar");
             tip.SetToolTip(chk, "ÇALIŞTIR'dan sonra kesitlere ölçü koy (komut: OTOOLCU)");
             tip.SetToolTip(chkR, "YÜKLE ve ÇALIŞTIR'dan sonra 3D modelde, görünüşlerde ve kesitlerde ana elemanlar düz, redundant elemanlar kesikli; isimler tek renk (komut: OTOSTIL)");
+            tip.SetToolTip(chkI, "ÇALIŞTIR'dan sonra ön/yan görünüşe yüzde olmayan iç elemanların (kalça çaprazları, diyaframlar) izdüşümünü PLS-TOWER'daki gibi ekler; katman " + IcElemanlar.Katman + " (komut: OTOIC)");
             b.Click += (s, e) => Guvenli(f, "Otomatik kesit", () => TabloyuDoldur(f));
 
             // YÜKLE ve ÇALIŞTIR model alanındaki HER ŞEYİ siler: başka katmanda çizim varsa önce sor
@@ -210,6 +231,11 @@ namespace OtomatikKesit
                 run.Click += (s, e) => Guvenli(f, "ÇALIŞTIR sonrası", () =>
                 {
                     var mesaj = new List<string>();
+                    if (chkI.Checked)
+                    {
+                        try { mesaj.Add(IcElemanlar.Ciz(f, chkR.Checked)); }
+                        catch (System.Exception ex) { mesaj.Add("İç elemanlar çizilemedi: " + IcHata(ex).Message); }
+                    }
                     if (chkR.Checked)
                     {
                         try { mesaj.Add(KesitStili.Uygula(f)); }
@@ -489,7 +515,8 @@ namespace OtomatikKesit
                     continue;
                 }
                 var l = ent as Line;
-                if (l != null && !l.Layer.StartsWith("SECTION_MARK", StringComparison.OrdinalIgnoreCase))
+                if (l != null && !l.Layer.StartsWith("SECTION_MARK", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(l.Layer, IcElemanlar.Katman, StringComparison.OrdinalIgnoreCase))
                     cizgiler.Add(new KeyValuePair<ObjectId, Point3d[]>(id, new[] { l.StartPoint, l.EndPoint }));
             }
 
@@ -618,7 +645,7 @@ namespace OtomatikKesit
 
         /// <summary>Görünüşün çizimde hangi ofsetle (0 / 50000) ve hangi halde (çizildiği gibi / 2D Aktar sonrası)
         /// durduğunu, çizgilerinin en az yarısı eşleşen seçenekle bulur.</summary>
-        private static bool GorunusBul(List<YuzCizgisi> yuz, List<Point3d[]> cizgiler, out int ofs, out bool ikiD)
+        internal static bool GorunusBul(List<YuzCizgisi> yuz, List<Point3d[]> cizgiler, out int ofs, out bool ikiD)
         {
             ofs = 0; ikiD = false;
             int enIyi = 0;
@@ -695,7 +722,7 @@ namespace OtomatikKesit
                 foreach (ObjectId id in ms)
                 {
                     var l = tr.GetObject(id, OpenMode.ForRead) as Line;
-                    if (l == null) continue;
+                    if (l == null || string.Equals(l.Layer, IcElemanlar.Katman, StringComparison.OrdinalIgnoreCase)) continue;
                     Point3d a = l.StartPoint, b = l.EndPoint;
                     string grup;
                     if (!yuz.Bul(a.X, a.Y, a.Z, b.X, b.Y, b.Z, out grup)) continue;
@@ -771,7 +798,7 @@ namespace OtomatikKesit
         /// <summary>Kesik desenin ekranda her zaman 150/75 mm görünmesi için çizgi tipi ölçeği. Model alanında görünen desen
         /// = LTSCALE × nesne ölçeği × (MSLTSCALE açıksa anotasyon ölçeğinin çarpanı, ör. 1:100 → 100). Bu iki ayar
         /// büyükse 150 mm'lik desen çizgi boyundan uzun olur ve AutoCAD çizgiyi düz gösterir.</summary>
-        private static double DesenOlcegi(Database db)
+        internal static double DesenOlcegi(Database db)
         {
             double lts = db.Ltscale > 1e-9 ? db.Ltscale : 1.0, anno = 1.0;
             try
@@ -785,7 +812,7 @@ namespace OtomatikKesit
         }
 
         /// <returns>redundant ise true</returns>
-        private static bool Boya(Entity ent, bool redundant, ObjectId kesik, ObjectId duz, double olcek)
+        internal static bool Boya(Entity ent, bool redundant, ObjectId kesik, ObjectId duz, double olcek)
         {
             if (redundant)
             {
@@ -802,7 +829,7 @@ namespace OtomatikKesit
         }
 
         /// <summary>Dosyaya (acad.lin) bağımlı olmadan kesikli çizgi tipini oluşturur.</summary>
-        private static ObjectId KesikCizgiTipi(Database db, Transaction tr)
+        internal static ObjectId KesikCizgiTipi(Database db, Transaction tr)
         {
             var ltt = (LinetypeTable)tr.GetObject(db.LinetypeTableId, OpenMode.ForRead);
             if (ltt.Has(CizgiTipiAdi)) return ltt[CizgiTipiAdi];
@@ -1192,6 +1219,190 @@ namespace OtomatikKesit
         }
     }
 
+    // =================================================================
+    //  Görünüşlere iç elemanların izdüşümü (PLS-TOWER görünüşündeki gibi)
+    // =================================================================
+    internal static class IcElemanlar
+    {
+        internal const string Katman = "OTO_IC_ELEMAN";
+
+        /// <summary>Ön ve yan görünüşe, yüzde olmayan elemanların görünüşte yeni çizgi oluşturan izdüşümlerini ekler.
+        /// Önceki çalıştırmanın çizgileri silinir.</summary>
+        internal static string Ciz(Form f, bool stil)
+        {
+            Document doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) return "İç eleman: açık çizim yok.";
+            Database db = doc.Database;
+            string yol = FormBaglayici.YolAl(f);
+            if (yol.Length == 0 || !File.Exists(yol)) return "İç eleman: .tow dosyası seçili değil.";
+            KuleVerisi kule = KuleOkuyucu.Oku(f.GetType().Assembly, yol);
+            if (kule == null) return "İç eleman: .tow okunamadı.";
+            int adet = 0, gorunus = 0;
+
+            using (doc.LockDocument())
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForWrite);
+                var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                if (!lt.Has(Katman))
+                {
+                    lt.UpgradeOpen();
+                    var ltr = new LayerTableRecord { Name = Katman };
+                    lt.Add(ltr);
+                    tr.AddNewlyCreatedDBObject(ltr, true);
+                }
+                var katman = (LayerTableRecord)tr.GetObject(lt[Katman], OpenMode.ForRead);
+                if (katman.IsLocked) { katman.UpgradeOpen(); katman.IsLocked = false; }
+
+                var cizgiler = new List<Point3d[]>();
+                foreach (ObjectId id in ms)
+                {
+                    var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (ent == null) continue;
+                    if (string.Equals(ent.Layer, Katman, StringComparison.OrdinalIgnoreCase))
+                    {
+                        try { ent.UpgradeOpen(); ent.Erase(); } catch { }
+                        continue;
+                    }
+                    var l = ent as Line;
+                    if (l != null) cizgiler.Add(new[] { l.StartPoint, l.EndPoint });
+                }
+
+                ObjectId kesik = stil ? KesitStili.KesikCizgiTipi(db, tr) : ObjectId.Null;
+                ObjectId duz = SymbolUtilityServices.GetLinetypeContinuousId(db);
+                double olcek = stil ? KesitStili.DesenOlcegi(db) : 1;
+                foreach (bool yan in new[] { false, true })
+                {
+                    List<YuzCizgisi> yuz = yan ? kule.YanYuz : kule.OnYuz;
+                    if (yuz.Count == 0) continue;
+                    int ofs; bool ikiD;
+                    if (!KesitOlculeri.GorunusBul(yuz, cizgiler, out ofs, out ikiD)) continue;
+                    gorunus++;
+                    foreach (YuzCizgisi c in IcElemanPlani.Hesapla(kule.Uyeler, yuz, yan))
+                    {
+                        var line = new Line(Nokta(c.P, 0, ofs, ikiD), Nokta(c.P, 3, ofs, ikiD));
+                        line.SetDatabaseDefaults(db);
+                        line.Layer = Katman;
+                        if (stil) KesitStili.Boya(line, c.Grup != null && kule.RedundantGruplar.Contains(c.Grup.Trim()), kesik, duz, olcek);
+                        ms.AppendEntity(line);
+                        tr.AddNewlyCreatedDBObject(line, true);
+                        adet++;
+                    }
+                }
+                tr.Commit();
+            }
+            Komutlar.Yaz(string.Format("\nİç eleman: {0} görünüşe {1} izdüşüm çizgisi (katman {2}).\n", gorunus, adet, Katman));
+            return string.Format("İç eleman: {0} çizgi", adet);
+        }
+
+        // OutlineDrawing görünüşü Point3d(x + ofset, y, z) ile çizer; 2D Aktar sonrası (x, z, -y)
+        private static Point3d Nokta(double[] p, int i, int ofs, bool ikiD)
+        {
+            double u = p[i] + ofs, d = p[i + 1], z = p[i + 2];
+            return ikiD ? new Point3d(u, z, -d) : new Point3d(u, d, z);
+        }
+    }
+
+    /// <summary>
+    /// Görünüşte (ön: bakış +Y, yan: bakış -X yönü, OutlineDrawing'in sideFace dönüşümü (x, y) -> (y, -x)) yüz düzleminde
+    /// olmayan elemanların izdüşümü. PLS-TOWER görünüşü kulenin tamamını izdüşürür; OutlineDrawing yalnız yüz düzlemini çizer.
+    /// İzdüşümü bir noktaya düşen (bakış yönündeki), yüz çizgilerinin veya daha önce eklenen bir izdüşümün üstüne binen
+    /// (aynı doğru üzerinde, onlarca kapsanan) elemanlar eklenmez; arka yüz, yan yüzler ve yatay düzlemler böylece elenir,
+    /// kalça çaprazları ve iç diyaframlar kalır. Ayna kopyalardan yalnız biri (aynı izdüşüm) eklenir.
+    /// </summary>
+    public static class IcElemanPlani
+    {
+        public static double EnKisa = 20;        // bundan kısa izdüşüm (bakış yönündeki eleman) eklenmez (mm)
+        public static double MesafeTol = 5;      // aynı doğru üzerinde sayılma (mm)
+        public static double AciTol = 0.005;     // ~0.3°
+        /// <summary>İzdüşüm boyu / gerçek boy bundan küçükse (eleman bakış yönüne yakın; ör. yan görünüşte
+        /// uçtan görülen travers elemanları) eklenmez; yoksa kol uçtan bakışta okunmaz bir yığın olur.</summary>
+        public static double EnAzOran = 0.3;
+        public static double DerinlikTol = 50;   // gövde içi sayılma payı (mm)
+
+        /// <returns>görünüş koordinatlarında (ofset hariç) çizgiler: P = { u, derinlik, z, u, derinlik, z }</returns>
+        public static List<YuzCizgisi> Hesapla(IDictionary<string, FinalMember> uyeler, List<YuzCizgisi> yuz, bool yan)
+        {
+            var sonuc = new List<YuzCizgisi>();
+            var yuzdeki = new HashSet<string>(yuz.Where(c => c.Anahtar != null).Select(c => c.Anahtar));
+            var mevcut = yuz.Select(c => new[] { c.P[0], c.P[2], c.P[3], c.P[5] }).ToList();
+            var adaylar = new List<YuzCizgisi>();
+            foreach (var kv in uyeler)
+            {
+                if (yuzdeki.Contains(kv.Key)) continue;
+                FinalMember m = kv.Value;
+                double[] p = yan
+                    ? new[] { m.start_y, -m.start_x, m.start_z, m.end_y, -m.end_x, m.end_z }
+                    : new[] { m.start_x, m.start_y, m.start_z, m.end_x, m.end_y, m.end_z };
+                double izd = Boy(p[0], p[2], p[3], p[5]);
+                double gercek = Math.Sqrt(izd * izd + (p[4] - p[1]) * (p[4] - p[1]));
+                if (izd < EnKisa || izd < EnAzOran * gercek) continue;
+                // Gövdenin dışında (bakış yönünde yüz düzleminden öteye taşan) elemanlar: uçtan görülen travers/tepe
+                if (Math.Abs(p[1]) > Derinlik(yuz, p[2]) + DerinlikTol || Math.Abs(p[4]) > Derinlik(yuz, p[5]) + DerinlikTol) continue;
+                adaylar.Add(new YuzCizgisi { P = p, Grup = m.group_label, Kesim = m.section_label, Anahtar = kv.Key });
+            }
+            // Uzun izdüşümler önce: kısa olanlar onların üstüne biniyorsa elenir. Eşit boyda önde (bakana yakın) olan.
+            foreach (var c in adaylar.OrderByDescending(c => Math.Round(Boy(c.P[0], c.P[2], c.P[3], c.P[5])))
+                                     .ThenBy(c => Math.Min(c.P[1], c.P[4])).ThenBy(c => c.Anahtar, StringComparer.Ordinal))
+            {
+                double[] s = { c.P[0], c.P[2], c.P[3], c.P[5] };
+                if (Kapsaniyor(s, mevcut)) continue;
+                mevcut.Add(s);
+                sonuc.Add(c);
+            }
+            return sonuc;
+        }
+
+        /// <summary>z kotunda görünüş yüzünün bakış yönündeki en büyük |derinliği| (gövde yarı genişliği); yüz o kotta yoksa 0.</summary>
+        private static double Derinlik(List<YuzCizgisi> yuz, double z)
+        {
+            double d = 0;
+            foreach (var c in yuz)
+            {
+                double z1 = c.P[2], z2 = c.P[5];
+                if (z < Math.Min(z1, z2) - 1 || z > Math.Max(z1, z2) + 1) continue;
+                double v = Math.Abs(z2 - z1) < 1 ? Math.Max(Math.Abs(c.P[1]), Math.Abs(c.P[4]))
+                                                 : Math.Abs(c.P[1] + (c.P[4] - c.P[1]) * (z - z1) / (z2 - z1));
+                d = Math.Max(d, v);
+            }
+            return d;
+        }
+
+        private static double Boy(double u1, double v1, double u2, double v2)
+        {
+            return Math.Sqrt((u2 - u1) * (u2 - u1) + (v2 - v1) * (v2 - v1));
+        }
+
+        /// <summary>s, kendisiyle aynı doğru üzerindeki çizgilerin birleşimi tarafından tamamen örtülüyor mu?</summary>
+        public static bool Kapsaniyor(double[] s, List<double[]> cizgiler)
+        {
+            double du = s[2] - s[0], dv = s[3] - s[1], L = Math.Sqrt(du * du + dv * dv);
+            if (L < 1e-9) return true;
+            double eu = du / L, ev = dv / L;
+            var araliklar = new List<double[]>();
+            foreach (var c in cizgiler)
+            {
+                double cu = c[2] - c[0], cv = c[3] - c[1], cl = Math.Sqrt(cu * cu + cv * cv);
+                if (cl < 1e-9 || Math.Abs(eu * cv - ev * cu) / cl > AciTol) continue;
+                // c'nin uçlarının s doğrusuna uzaklığı
+                if (Math.Abs((c[0] - s[0]) * ev - (c[1] - s[1]) * eu) > MesafeTol) continue;
+                if (Math.Abs((c[2] - s[0]) * ev - (c[3] - s[1]) * eu) > MesafeTol) continue;
+                double t1 = (c[0] - s[0]) * eu + (c[1] - s[1]) * ev, t2 = (c[2] - s[0]) * eu + (c[3] - s[1]) * ev;
+                double a = Math.Min(t1, t2), b = Math.Max(t1, t2);
+                if (b < -MesafeTol || a > L + MesafeTol) continue;
+                araliklar.Add(new[] { a, b });
+            }
+            double kapali = 0;
+            foreach (var r in araliklar.OrderBy(r => r[0]))
+            {
+                if (r[0] > kapali + MesafeTol) return false;
+                kapali = Math.Max(kapali, r[1]);
+                if (kapali >= L - MesafeTol) return true;
+            }
+            return kapali >= L - MesafeTol;
+        }
+    }
+
     /// <summary>
     /// Ön (TRANSVERSE) / yan (LONGITUDINAL) görünüş ölçüleri, görünüş koordinatlarında (u = x + ofset, v = z):
     ///  - sağda düşey zincir: PLS-TOWER kısımlarının (Leg Ext., Body Ext., Basic Body, Crossarms, Pikes ...) sınır
@@ -1322,6 +1533,7 @@ namespace OtomatikKesit
             return katman == "0"
                 || katman.StartsWith("SECTION", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(katman, KesitOlculeri.Katman, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(katman, IcElemanlar.Katman, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(katman, "Defpoints", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -1528,6 +1740,7 @@ namespace OtomatikKesit
         public double[] P;      // { sx, sy, sz, ex, ey, ez }
         public string Grup;
         public string Kesim;    // PLS-TOWER section (Basic Body 1, 35.0 Leg Ext. ...)
+        public string Anahtar;  // finalMember anahtarı (g338, g338X ...)
     }
 
     /// <summary>Ön/yan görünüş çizgilerini koordinatından tanır. OutlineDrawing görünüşü
@@ -1655,7 +1868,8 @@ namespace OtomatikKesit
                 {
                     P = p.Select(x => Convert.ToDouble(x.GetValue(v, null))).ToArray(),
                     Grup = g != null ? g.GetValue(v, null) as string : null,
-                    Kesim = ks != null ? ks.GetValue(v, null) as string : null
+                    Kesim = ks != null ? ks.GetValue(v, null) as string : null,
+                    Anahtar = Convert.ToString(de.Key, CultureInfo.InvariantCulture)
                 });
             }
             return sonuc;
