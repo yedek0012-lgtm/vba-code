@@ -32,10 +32,12 @@ Eklenti, .tow dosyasını OutlineDrawing'in kendi okuyucusuyla (`dataprocessing.
   Üstte zincir ölçü (gövde köşeleri ve kol uçları), sağda toplam derinlik. Ölçüler `OTO_KESIT_OLCU`
   katmanına konur ve her çalıştırmada yenilenir. Elle: `OTOOLCU`. "2D Aktar" ölçüleri de birlikte döndürür.
 
-- **Redundant** kutucuğu (varsayılan işaretli): ÇALIŞTIR'dan sonra kesitlerdeki ana elemanlar düz çizgi ve
+- **Redundant** kutucuğu (varsayılan işaretli): ÇALIŞTIR'dan sonra ön görünüş (TRANSVERSE FACE), yan görünüş
+  (LONGITUDINAL FACE) ve kesitlerdeki ana elemanlar düz çizgi ve
   cyan (4), redundant elemanlar (grup açıklaması "Redundant" olanlar) kesikli (DASHED) ve mavi (5) olur.
   Çizilen her çizgi, grid'deki kesit tanımıyla OutlineDrawing'in seçim kuralına göre bulunan elemanlarla
-  rijit dönüşümle (döndürme, öteleme, aynalama) eşleştirilir; çizginin katmanı değişmez. Elle: `OTOSTIL`.
+  rijit dönüşümle (döndürme, öteleme, aynalama) eşleştirilir. Ön/yan görünüş çizgileri ise OutlineDrawing'in
+  frontFace/sideFace koordinatlarından birebir tanınır (2D Aktar sonrası da). Çizginin katmanı değişmez. Elle: `OTOSTIL`.
   Kesikli çizgi tipi `OTO_KESIK` eklenti tarafından oluşturulur (150 çizgi / 75 boşluk mm, .lin dosyası gerekmez;
   global LTSCALE'e göre ayarlanır). Sonuç ve olası hatalar formdaki UYARI satırında görünür.
 - Eğik düzlem kesiti en az 6 eleman içermeli (`MinHiddenPlaneMembers`). Daha küçük düzlemler tek bir gizli

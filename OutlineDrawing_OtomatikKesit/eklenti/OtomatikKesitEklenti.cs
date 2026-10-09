@@ -9,8 +9,8 @@
 //      ve dataGridView1'e yazar. Kapsanamayan eleman kalırsa komut satırında listeler.
 //    - "Ölçü" kutucuğu: işaretliyse ÇALIŞTIR'dan sonra her "SECTION x" çizimine
 //      ölçü koyar (üstte zincir ölçü, sağda toplam derinlik).
-//    - "Redundant" kutucuğu: işaretliyse ÇALIŞTIR'dan sonra kesitlerde ana elemanlar
-//      düz/cyan, redundant elemanlar (grup açıklaması "Redundant") kesikli/mavi olur.
+//    - "Redundant" kutucuğu: işaretliyse ÇALIŞTIR'dan sonra ön/yan görünüşte ve kesitlerde
+//      ana elemanlar düz/cyan, redundant elemanlar (grup açıklaması "Redundant") kesikli/mavi olur.
 //
 //  OutlineDrawing'in iç tiplerine yansıtma (reflection) ile erişilir, bu yüzden
 //  OutlineDrawing.dll'in yeniden derlenmesi gerekmez.
@@ -495,7 +495,7 @@ namespace OtomatikKesit
             if (kule.RedundantGruplar.Count == 0) return "Redundant stili: .tow'da açıklaması 'Redundant' olan grup yok.";
 
             Dictionary<string, KesitTanimi> tanimlar = GridTanimlari(f);
-            int ana = 0, red = 0, eslesmeyen = 0, kesit = 0, hata = 0;
+            int ana = 0, red = 0, eslesmeyen = 0, kesit = 0, hata = 0, yuzAna = 0, yuzRed = 0;
             var tanimsiz = new List<string>();
             string ilkHata = null;
 
@@ -506,6 +506,23 @@ namespace OtomatikKesit
                 ObjectId kesik = KesikCizgiTipi(db, tr);
                 ObjectId duz = SymbolUtilityServices.GetLinetypeContinuousId(db);
                 double olcek = db.Ltscale > 1e-9 ? 1.0 / db.Ltscale : 1.0;
+
+                // ---- ön / yan görünüş: çizgiler koordinatından tanınır
+                var yuz = new YuzEslestirici(kule.OnYuz.Concat(kule.YanYuz));
+                foreach (ObjectId id in ms)
+                {
+                    var l = tr.GetObject(id, OpenMode.ForRead) as Line;
+                    if (l == null) continue;
+                    Point3d a = l.StartPoint, b = l.EndPoint;
+                    string grup;
+                    if (!yuz.Bul(a.X, a.Y, a.Z, b.X, b.Y, b.Z, out grup)) continue;
+                    try
+                    {
+                        l.UpgradeOpen();
+                        if (Boya(l, grup != null && kule.RedundantGruplar.Contains(grup.Trim()), kesik, duz, olcek)) yuzRed++; else yuzAna++;
+                    }
+                    catch (System.Exception ex) { hata++; if (ilkHata == null) ilkHata = ex.Message; }
+                }
 
                 foreach (KesitCizimi e in KesitCizimleri.Topla(tr, ms, null))
                 {
@@ -524,19 +541,7 @@ namespace OtomatikKesit
                             FinalMember m = kule.Uyeler[anahtarlar[eslesme[i]]];
                             bool redundant = m.group_label != null && kule.RedundantGruplar.Contains(m.group_label.Trim());
                             var ent = (Entity)tr.GetObject(e.Ids[i], OpenMode.ForWrite);
-                            if (redundant)
-                            {
-                                ent.Color = AcColor.FromColorIndex(Autodesk.AutoCAD.Colors.ColorMethod.ByAci, RedundantRenk);
-                                ent.LinetypeId = kesik;
-                                ent.LinetypeScale = olcek;
-                                red++;
-                            }
-                            else
-                            {
-                                ent.Color = AcColor.FromColorIndex(Autodesk.AutoCAD.Colors.ColorMethod.ByAci, AnaRenk);
-                                ent.LinetypeId = duz;
-                                ana++;
-                            }
+                            if (Boya(ent, redundant, kesik, duz, olcek)) red++; else ana++;
                         }
                         catch (System.Exception ex)
                         {
@@ -548,12 +553,30 @@ namespace OtomatikKesit
                 tr.Commit();
             }
 
-            string ozet = string.Format("Çizgi tipi: {0} kesit, {1} redundant kesikli, {2} ana düz", kesit, red, ana);
+            string ozet = string.Format("Çizgi tipi: görünüşlerde {0} redundant / {1} ana, {2} kesitte {3} redundant / {4} ana",
+                yuzRed, yuzAna, kesit, red, ana);
             if (eslesmeyen > 0) ozet += ", eşleşmeyen çizgi " + eslesmeyen;
             if (tanimsiz.Count > 0) ozet += ", tabloda bulunamayan kesit: " + string.Join(",", tanimsiz);
             if (hata > 0) ozet += string.Format(", {0} çizgide hata ({1})", hata, ilkHata);
             Komutlar.Yaz("\n" + ozet + ".\n");
             return ozet;
+        }
+
+        /// <returns>redundant ise true</returns>
+        private static bool Boya(Entity ent, bool redundant, ObjectId kesik, ObjectId duz, double olcek)
+        {
+            if (redundant)
+            {
+                ent.Color = AcColor.FromColorIndex(Autodesk.AutoCAD.Colors.ColorMethod.ByAci, RedundantRenk);
+                ent.LinetypeId = kesik;
+                ent.LinetypeScale = olcek;
+            }
+            else
+            {
+                ent.Color = AcColor.FromColorIndex(Autodesk.AutoCAD.Colors.ColorMethod.ByAci, AnaRenk);
+                ent.LinetypeId = duz;
+            }
+            return redundant;
         }
 
         /// <summary>Dosyaya (acad.lin) bağımlı olmadan kesikli çizgi tipini oluşturur.</summary>
@@ -894,6 +917,71 @@ namespace OtomatikKesit
         public List<string> GorunenAnahtarlar;
         /// <summary>Açıklaması "Redundant" içeren gruplar (grpLabel.description).</summary>
         public HashSet<string> RedundantGruplar = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>Ön görünüş (frontFace) ve yan görünüş (sideFace) çizgileri, OutlineDrawing'in çizdiği koordinatlarla.</summary>
+        public List<YuzCizgisi> OnYuz = new List<YuzCizgisi>(), YanYuz = new List<YuzCizgisi>();
+    }
+
+    public class YuzCizgisi
+    {
+        public double[] P;      // { sx, sy, sz, ex, ey, ez }
+        public string Grup;
+    }
+
+    /// <summary>Ön/yan görünüş çizgilerini koordinatından tanır. OutlineDrawing görünüşü
+    /// Point3d(x + offset, y, z) ile çizer (ön: offset 0, yan: ön de çizildiyse 50000);
+    /// "2D Aktar" sonrası hali X ekseni etrafında -90° döndürülmüştür: (x, z, -y).
+    /// Arama, orta noktanın 10 mm'lik hücresi ve komşularında, uçlar 0.5 mm toleransla yapılır.</summary>
+    public class YuzEslestirici
+    {
+        public static readonly int[] Ofsetler = { 0, 50000 };
+        private const double Hucre = 10, Tol = 0.5;
+        private readonly Dictionary<string, List<KeyValuePair<double[], string>>> _idx = new Dictionary<string, List<KeyValuePair<double[], string>>>();
+
+        public YuzEslestirici(IEnumerable<YuzCizgisi> cizgiler)
+        {
+            foreach (var c in cizgiler)
+                foreach (int ofs in Ofsetler)
+                {
+                    double o = ofs;
+                    double ax = c.P[0] + o, bx = c.P[3] + o;   // OutlineDrawing ile aynı toplama
+                    Ekle(new[] { ax, c.P[1], c.P[2], bx, c.P[4], c.P[5] }, c.Grup);
+                    Ekle(new[] { ax, c.P[2], -c.P[1], bx, c.P[5], -c.P[4] }, c.Grup);   // 2D Aktar sonrası
+                }
+        }
+
+        private static long G(double v) { return (long)Math.Floor(v / Hucre); }
+        private static string K(long x, long y, long z) { return x + "," + y + "," + z; }
+
+        private void Ekle(double[] p, string grup)
+        {
+            string k = K(G((p[0] + p[3]) / 2), G((p[1] + p[4]) / 2), G((p[2] + p[5]) / 2));
+            List<KeyValuePair<double[], string>> l;
+            if (!_idx.TryGetValue(k, out l)) { l = new List<KeyValuePair<double[], string>>(); _idx[k] = l; }
+            l.Add(new KeyValuePair<double[], string>(p, grup));
+        }
+
+        public bool Bul(double ax, double ay, double az, double bx, double by, double bz, out string grup)
+        {
+            long gx = G((ax + bx) / 2), gy = G((ay + by) / 2), gz = G((az + bz) / 2);
+            for (long i = gx - 1; i <= gx + 1; i++)
+                for (long j = gy - 1; j <= gy + 1; j++)
+                    for (long k = gz - 1; k <= gz + 1; k++)
+                    {
+                        List<KeyValuePair<double[], string>> l;
+                        if (!_idx.TryGetValue(K(i, j, k), out l)) continue;
+                        foreach (var kv in l)
+                        {
+                            double[] p = kv.Key;
+                            bool ayni = (Y(p[0], ax) && Y(p[1], ay) && Y(p[2], az) && Y(p[3], bx) && Y(p[4], by) && Y(p[5], bz)) ||
+                                        (Y(p[0], bx) && Y(p[1], by) && Y(p[2], bz) && Y(p[3], ax) && Y(p[4], ay) && Y(p[5], az));
+                            if (ayni) { grup = kv.Value; return true; }
+                        }
+                    }
+            grup = null;
+            return false;
+        }
+
+        private static bool Y(double a, double b) { return Math.Abs(a - b) <= Tol; }
     }
 
     /// <summary>OutlineDrawing'in kendi .tow okuyucusunu (dataprocessing.Run) çağırıp sonuçları kopyalar.</summary>
@@ -908,7 +996,37 @@ namespace OtomatikKesit
             if (run == null) throw new MissingMethodException("OutlineDrawing.dataprocessing", "Run");
             object data = run.Invoke(null, new object[] { towPath });
             if (data == null) return null;
-            return new KuleVerisi { Uyeler = Kopyala(data), GorunenAnahtarlar = Gorunenler(data), RedundantGruplar = Redundantlar(data) };
+            return new KuleVerisi
+            {
+                Uyeler = Kopyala(data),
+                GorunenAnahtarlar = Gorunenler(data),
+                RedundantGruplar = Redundantlar(data),
+                OnYuz = Yuz(data, "frontFace"),
+                YanYuz = Yuz(data, "sideFace")
+            };
+        }
+
+        /// <summary>frontFace / sideFace sözlüğündeki çizgiler (OutlineDrawing'in çizdiği değerler).</summary>
+        public static List<YuzCizgisi> Yuz(object data, string ad)
+        {
+            var sonuc = new List<YuzCizgisi>();
+            PropertyInfo pi = data.GetType().GetProperty(ad, Hepsi);
+            var d = pi != null ? pi.GetValue(data, null) as IDictionary : null;
+            if (d == null) return sonuc;
+            string[] adlar = { "start_x", "start_y", "start_z", "end_x", "end_y", "end_z" };
+            PropertyInfo[] p = null; PropertyInfo g = null;
+            foreach (DictionaryEntry de in d)
+            {
+                object v = de.Value;
+                if (v == null) continue;
+                if (p == null) { p = adlar.Select(a => v.GetType().GetProperty(a, Hepsi)).ToArray(); g = v.GetType().GetProperty("group_label", Hepsi); }
+                sonuc.Add(new YuzCizgisi
+                {
+                    P = p.Select(x => Convert.ToDouble(x.GetValue(v, null))).ToArray(),
+                    Grup = g != null ? g.GetValue(v, null) as string : null
+                });
+            }
+            return sonuc;
         }
 
         /// <summary>grpLabel'de açıklaması "redundant" içeren grup adları.</summary>
