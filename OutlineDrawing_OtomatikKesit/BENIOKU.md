@@ -10,6 +10,10 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC.
 
+**1.20: Kesit harfleri kendiliğinden sıralanır.** Tablodan bir kesit satırı silinince (satırı seçip Delete) veya bir
+satırın içi boşaltılınca harfler yeniden dağıtılır: verisi olan satırlar sırayla A, B, C … (Z'den sonra AA, AB …), içi
+boş satırın harfi silinir. OutlineDrawing harfleri yalnız Nokta / Yükseklik ile satır eklenince yeniliyordu.
+
 **1.19: Sistem denetimi — hiçbir eleman atlanmasın.**
 - *Yerel panel kesiti:* açgözlü kesit seçiminden sonra hâlâ hiçbir kesitte olmayan görünmeyen eleman için yalnız onun
   panelini gösteren küçük bir düzlem kesiti eklenir (Tangent Tower CB-D1/D3/D9-T, YAA-R1 CA-9). Görünmeyen eleman

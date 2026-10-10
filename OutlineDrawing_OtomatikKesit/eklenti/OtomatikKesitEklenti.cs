@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.19";
+        public const string Surum = "1.20";
         private static Timer _timer;
 
         public void Initialize()
@@ -231,6 +231,24 @@ namespace OtomatikKesit
             tip.SetToolTip(chkI, "ÇALIŞTIR'dan sonra ön/yan görünüşe yüzde olmayan iç elemanların (kalça çaprazları, diyaframlar) izdüşümünü PLS-TOWER'daki gibi ekler; katman " + IcElemanlar.Katman + " (komut: OTOIC)");
             b.Click += (s, e) => Guvenli(f, "Otomatik kesit", () => TabloyuDoldur(f));
 
+            // Kesit satırı silinince / içi boşaltılınca harfler (A, B, C ...) yeniden sıralanır. OutlineDrawing
+            // harfleri yalnız Nokta / Yükseklik ile satır eklenince yeniliyordu.
+            var tablo = Alan(f, "dataGridView1") as DataGridView;
+            if (tablo != null)
+            {
+                Action yenile = () =>
+                {
+                    if (_harfYenileniyor || f.IsDisposed) return;
+                    try { f.BeginInvoke((Action)(() => Guvenli(f, "Kesit harfleri", () => HarfleriYenile(f)))); } catch { }
+                };
+                tablo.RowsRemoved += (s, e) => yenile();
+                tablo.CellValueChanged += (s, e) =>
+                {
+                    if (e.ColumnIndex < 0 || tablo.Columns[e.ColumnIndex].Name == "ColumnSection") return;
+                    yenile();
+                };
+            }
+
             // YÜKLE ve ÇALIŞTIR model alanındaki HER ŞEYİ siler: başka katmanda çizim varsa önce sor
             var load = Alan(f, "btnLoad") as Button;
             var run = Alan(f, "btnRun") as Button;
@@ -311,6 +329,47 @@ namespace OtomatikKesit
                 return k != null ? k.Uyeler.Keys : null;
             }
             catch { return null; }
+        }
+
+        private static bool _harfYenileniyor;
+
+        /// <summary>Verisi olan kesit satırlarına sırayla A, B, C ... (OutlineDrawing'in IndexToLetters'ı: Z'den sonra AA ...);
+        /// içi tamamen boş satırın harfi silinir (OutlineDrawing harfli boş satırı da "dolu" sayıyor).</summary>
+        internal static void HarfleriYenile(Form f)
+        {
+            var grid = Alan(f, "dataGridView1") as DataGridView;
+            if (grid == null || !grid.Columns.Contains("ColumnSection") || _harfYenileniyor) return;
+            MethodInfo harf = f.GetType().GetMethod("IndexToLetters", BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+                null, new[] { typeof(int) }, null);
+            _harfYenileniyor = true;
+            try
+            {
+                int i = 0;
+                foreach (DataGridViewRow row in grid.Rows)
+                {
+                    if (row.IsNewRow) continue;
+                    bool dolu = row.Cells.Cast<DataGridViewCell>().Any(c => c.OwningColumn.Name != "ColumnSection" &&
+                                                                            c.Value != null && c.Value.ToString().Trim().Length > 0);
+                    string yeni = "";
+                    if (dolu)
+                    {
+                        yeni = harf != null ? Convert.ToString(harf.Invoke(harf.IsStatic ? null : f, new object[] { i }), CultureInfo.InvariantCulture)
+                                            : HarfAdi(i);
+                        i++;
+                    }
+                    object eski = row.Cells["ColumnSection"].Value;
+                    if (!string.Equals(eski == null ? "" : eski.ToString(), yeni, StringComparison.Ordinal))
+                        row.Cells["ColumnSection"].Value = yeni;
+                }
+            }
+            finally { _harfYenileniyor = false; }
+        }
+
+        private static string HarfAdi(int i)
+        {
+            string s = "";
+            for (i++; i > 0; i = (i - 1) / 26) s = (char)('A' + (i - 1) % 26) + s;
+            return s;
         }
 
         internal static string YolAl(Form f)
@@ -433,7 +492,7 @@ namespace OtomatikKesit
                     satirlar.Add(c.Description);
                 }
 
-                Cagir(f, "RefreshSectionLetters");
+                HarfleriYenile(f);
 
                 string ozet = string.Format("{0} kesit eklendi", bulunan.Count);
                 if (rapor != null)
