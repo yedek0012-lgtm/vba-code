@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.23";
+        public const string Surum = "1.24";
         private static Timer _timer;
 
         public void Initialize()
@@ -142,6 +142,7 @@ namespace OtomatikKesit
     {
         private const string FormTipi = "OutlineDrawing.mainform";
         private const string ButonAdi = "btnAutoSection";
+        private const string HepsiButonAdi = "btnHepsiniCiz";
         private const string OlcuKutusuAdi = "chkAutoDim";
         private const BindingFlags Hepsi = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
         private static readonly string[] NoktaSutunlari = { "ColumnFirstPoint", "ColumnSecondPoint", "ColumnThirdPoint", "ColumnFourthPoint" };
@@ -168,6 +169,7 @@ namespace OtomatikKesit
             Control kap = ornek != null ? ornek.Parent : (Control)f;
 
             var b = new Button { Name = ButonAdi, Text = "Oto Kesit" };
+            var bh = new Button { Name = HepsiButonAdi, Text = "Hepsini Çiz" };
             var chk = new CheckBox { Name = OlcuKutusuAdi, Text = "Ölçü", Checked = true, AutoSize = true };
             var chkR = new CheckBox { Name = "chkRedundant", Text = "Redundant", Checked = true, AutoSize = true };
             var chkI = new CheckBox { Name = "chkIcEleman", Text = "İç eleman", Checked = true, AutoSize = true };
@@ -188,10 +190,16 @@ namespace OtomatikKesit
                              .Where(c => c is Button && Math.Abs(c.Left - ornek.Left) <= 3)
                              .Max(c => c.Bottom);
                 b.Location = new Point(ornek.Left, alt + 6);
+                bh.Size = ornek.Size; bh.Font = new System.Drawing.Font(ornek.Font, FontStyle.Bold); bh.FlatStyle = ornek.FlatStyle;
+                bh.BackColor = ornek.BackColor; bh.ForeColor = ornek.ForeColor; bh.UseVisualStyleBackColor = ornek.UseVisualStyleBackColor;
+                bh.Cursor = ornek.Cursor; bh.Anchor = ornek.Anchor;
+                bh.FlatAppearance.BorderColor = ornek.FlatAppearance.BorderColor; bh.FlatAppearance.BorderSize = ornek.FlatAppearance.BorderSize;
+                // Oto Kesit'in sağına; sığmazsa altına
+                bh.Location = b.Right + 6 + bh.Width <= kap.ClientSize.Width ? new Point(b.Right + 6, b.Top) : new Point(b.Left, b.Bottom + 4);
                 chk.Font = ornek.Font;
                 chk.ForeColor = kap.ForeColor;
                 chk.Anchor = ornek.Anchor;
-                chk.Location = new Point(ornek.Left + 2, b.Bottom + 4);
+                chk.Location = new Point(ornek.Left + 2, Math.Max(b.Bottom, bh.Bottom) + 4);
                 chkR.Font = ornek.Font;
                 chkR.ForeColor = kap.ForeColor;
                 chkR.Anchor = ornek.Anchor;
@@ -213,16 +221,20 @@ namespace OtomatikKesit
             {
                 b.Size = new Size(70, 24);
                 b.Location = new Point(8, 8);
+                bh.Size = new Size(90, 24);
+                bh.Location = new Point(84, 8);
                 chk.Location = new Point(8, 36);
                 chkR.Location = new Point(8, 58);
                 chkI.Location = new Point(8, 80);
             }
 
             kap.Controls.Add(b);
+            kap.Controls.Add(bh);
             kap.Controls.Add(chk);
             kap.Controls.Add(chkR);
             kap.Controls.Add(chkI);
             b.BringToFront();
+            bh.BringToFront();
             chk.BringToFront();
             chkR.BringToFront();
             chkI.BringToFront();
@@ -232,6 +244,19 @@ namespace OtomatikKesit
             tip.SetToolTip(chkR, "YÜKLE ve ÇALIŞTIR'dan sonra 3D modelde, görünüşlerde ve kesitlerde ana elemanlar düz, redundant elemanlar kesikli; isimler tek renk (komut: OTOSTIL)");
             tip.SetToolTip(chkI, "ÇALIŞTIR'dan sonra ön/yan görünüşe yüzde olmayan iç elemanların (kalça çaprazları, diyaframlar) izdüşümünü PLS-TOWER'daki gibi ekler; katman " + IcElemanlar.Katman + " (komut: OTOIC)");
             b.Click += (s, e) => Guvenli(f, "Otomatik kesit", () => TabloyuDoldur(f));
+            tip.SetToolTip(bh, "Tek tık: otomatik kesitleri bulup tabloya yazar ve ÇALIŞTIR'ı çalıştırır (görünüşler, kesitler, iç eleman, ölçü, redundant)");
+            bh.Click += (s, e) => Guvenli(f, "Hepsini Çiz", () =>
+            {
+                Ayarlar.Kaydet(f);
+                TabloyuDoldur(f);
+                if (!_sonDoldurmaTamam) return;
+                var calistir = Alan(f, "btnRun") as Button;
+                if (calistir != null) calistir.PerformClick();
+            });
+
+            // Son kullanılan .tow, görünüş / metin seçenekleri ve kutucuklar hatırlanır
+            Ayarlar.Yukle(f);
+            f.FormClosing += (s, e) => Ayarlar.Kaydet(f);
 
             // Kesit satırı silinince / içi boşaltılınca harfler (A, B, C ...) yeniden sıralanır. OutlineDrawing
             // harfleri yalnız Nokta / Yükseklik ile satır eklenince yeniliyordu.
@@ -271,8 +296,9 @@ namespace OtomatikKesit
 
             // ÇALIŞTIR'a ikinci bir olay bağlanır; OutlineDrawing'in kendi çizimi bittikten sonra çalışır.
             if (run != null)
-                run.Click += (s, e) => Guvenli(f, "ÇALIŞTIR sonrası", () =>
+                run.Click += (s, e) => { GorunusYeri.OnbellekAc(); try { Guvenli(f, "ÇALIŞTIR sonrası", () =>
                 {
+                    Ayarlar.Kaydet(f);
                     if (runSarili && !_sonCizdi)
                     {
                         // Tablo hatası vb.: OutlineDrawing çizmedi. Eski çizime dokunulmaz, sebebi gözden kaçmasın.
@@ -307,7 +333,7 @@ namespace OtomatikKesit
                     if (mesaj.Count > 0) Uyari(f, string.Join(" | ", mesaj));
                     if (denetim != null)
                         MessageBox.Show(f, denetim + "\n\n(Ayrıntı komut satırında.)", "Otomatik Kesit - eksik kesit", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                });
+                }); } finally { GorunusYeri.OnbellekKapat(); } };
         }
 
         // ---------------- güvenlik yardımcıları ----------------
@@ -546,8 +572,11 @@ namespace OtomatikKesit
             return l;
         }
 
+        private static bool _sonDoldurmaTamam;   // son Oto Kesit tabloyu hazırladı mı (Hepsini Çiz için)
+
         internal static void TabloyuDoldur(Form f)
         {
+            _sonDoldurmaTamam = false;
             try
             {
                 var txt = Alan(f, "txtTowerPath") as TextBox;
@@ -581,6 +610,7 @@ namespace OtomatikKesit
 
                 if (bulunan.Count == 0)
                 {
+                    _sonDoldurmaTamam = rapor != null && rapor.HiddenMembers == 0;
                     Uyari(f, rapor != null && rapor.HiddenMembers == 0
                         ? "Bütün elemanlar ön/yan görünüşte görünüyor; kesit gerekmiyor."
                         : "Otomatik kesit bulunamadı.");
@@ -645,6 +675,7 @@ namespace OtomatikKesit
                     foreach (string d in rapor.UncoveredDescriptions) log += "  KAPSANMAYAN: " + d + "\n";
                 }
                 Komutlar.Yaz(log);
+                _sonDoldurmaTamam = true;
             }
             catch (System.Exception ex)
             {
@@ -728,9 +759,97 @@ namespace OtomatikKesit
     /// son REGEN'dekinden belirgin biçimde yakınlaşıp durduğunda (VIEWSIZE 1/Oran'dan küçük, iki tik aynı) REGEN yapar.
     /// Uzaklaşınca yalnız taban güncellenir; komut çalışırken (CMDACTIVE) bir şey yapılmaz.
     /// </summary>
+    /// <summary>Form ayarlarını (son .tow, görünüş / metin seçenekleri, eklenti kutucukları) %APPDATA%\OtomatikKesit\ayarlar.txt'de
+    /// saklar. Okunamazsa / yazılamazsa sessizce geçer.</summary>
+    internal static class Ayarlar
+    {
+        private static string Dosya
+        {
+            get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OtomatikKesit", "ayarlar.txt"); }
+        }
+
+        private static IEnumerable<FieldInfo> Alanlar(Form f, Type tip)
+        {
+            return f.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    .Where(x => tip.IsAssignableFrom(x.FieldType));
+        }
+
+        internal static void Kaydet(Form f)
+        {
+            try
+            {
+                var satir = new List<string>();
+                var txt = FormBaglayici.Alan(f, "txtTowerPath") as TextBox;
+                if (txt != null) satir.Add("tow=" + (txt.Text ?? "").Trim());
+                foreach (FieldInfo fi in Alanlar(f, typeof(CheckBox)))
+                {
+                    var c = fi.GetValue(f) as CheckBox;
+                    if (c != null) satir.Add("kutu:" + fi.Name + "=" + (c.Checked ? "1" : "0"));
+                }
+                foreach (FieldInfo fi in Alanlar(f, typeof(RadioButton)))
+                {
+                    var r = fi.GetValue(f) as RadioButton;
+                    if (r != null && r.Checked) satir.Add("secim:" + fi.Name + "=1");
+                }
+                foreach (string ad in new[] { "chkAutoDim", "chkRedundant", "chkIcEleman" })
+                {
+                    var c = f.Controls.Find(ad, true).FirstOrDefault() as CheckBox;
+                    if (c != null) satir.Add("eklenti:" + ad + "=" + (c.Checked ? "1" : "0"));
+                }
+                Directory.CreateDirectory(Path.GetDirectoryName(Dosya));
+                File.WriteAllLines(Dosya, satir, System.Text.Encoding.UTF8);
+            }
+            catch { }
+        }
+
+        internal static void Yukle(Form f)
+        {
+            try
+            {
+                if (!File.Exists(Dosya)) return;
+                foreach (string s in File.ReadAllLines(Dosya, System.Text.Encoding.UTF8))
+                {
+                    int e = s.IndexOf('=');
+                    if (e <= 0) continue;
+                    string k = s.Substring(0, e), v = s.Substring(e + 1);
+                    if (k == "tow")
+                    {
+                        var txt = FormBaglayici.Alan(f, "txtTowerPath") as TextBox;
+                        if (txt != null && (txt.Text ?? "").Trim().Length == 0 && v.Length > 0 && File.Exists(v))
+                        {
+                            txt.Text = v;
+                            PropertyInfo sp = f.GetType().GetProperty("SelectedFilePath", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                            if (sp != null && sp.CanWrite && sp.PropertyType == typeof(string)) sp.SetValue(f, v, null);
+                        }
+                    }
+                    else if (k.StartsWith("kutu:"))
+                    {
+                        var c = FormBaglayici.Alan(f, k.Substring(5)) as CheckBox;
+                        if (c != null) c.Checked = v == "1";
+                    }
+                    else if (k.StartsWith("secim:"))
+                    {
+                        var r = FormBaglayici.Alan(f, k.Substring(6)) as RadioButton;
+                        if (r != null) r.Checked = true;
+                    }
+                    else if (k.StartsWith("eklenti:"))
+                    {
+                        var c = f.Controls.Find(k.Substring(8), true).FirstOrDefault() as CheckBox;
+                        if (c != null) c.Checked = v == "1";
+                    }
+                }
+            }
+            catch { }
+        }
+    }
+
     internal static class KesikIzleyici
     {
-        public static double Oran = 1.5;
+        /// <summary>Son REGEN'e göre bu kat yakınlaşınca yeniden üretilir (büyük çizimde her REGEN takılma yapar).</summary>
+        public static double Oran = 2.5;
+        /// <summary>Yakınlaştırma bittikten sonra bu kadar tik (700 ms) beklenir; tekerlek dönerken REGEN olmaz.</summary>
+        public static int BekleTik = 2;
+        private static int _sabit;
         private static readonly HashSet<string> _belgeler = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private static string _belge;
         private static double _taban = -1, _onceki = -1;
@@ -752,7 +871,8 @@ namespace OtomatikKesit
             if (!string.Equals(_belge, doc.Name, StringComparison.OrdinalIgnoreCase)) { _belge = doc.Name; _taban = _onceki = v; return; }
             bool durdu = Math.Abs(v - _onceki) <= 1e-9 * Math.Max(1.0, v);
             _onceki = v;
-            if (!durdu) return;                       // tekerlekle yakınlaştırma sürüyor
+            if (!durdu) { _sabit = 0; return; }       // tekerlekle yakınlaştırma sürüyor
+            if (++_sabit < BekleTik) return;
             if (v > _taban) { _taban = v; return; }   // uzaklaştı: bir sonraki yakınlaşmada yeniden üret
             if (v < _taban / Oran)
             {
@@ -1683,7 +1803,23 @@ namespace OtomatikKesit
 
         /// <summary>Model alanındaki çizgi ve görünüş başlıklarından ön/yan görünüşün yerini bulur (bkz. GorunusKonumBulucu).
         /// İç eleman katmanındaki çizgiler hesaba katılmaz.</summary>
+        private static List<GorunusKonumu> _onbellek;
+        private static bool _onbellekAcik;
+
+        /// <summary>ÇALIŞTIR sonrası adımlar boyunca görünüş yerleri bir kez bulunur (adımlar yalnız kendi katmanlarına
+        /// çizgi / ölçü ekler ve çizgi tipi değiştirir; görünüş çizgileri değişmez).</summary>
+        internal static void OnbellekAc() { _onbellekAcik = true; _onbellek = null; }
+        internal static void OnbellekKapat() { _onbellekAcik = false; _onbellek = null; }
+
         internal static List<GorunusKonumu> Bul(Transaction tr, BlockTableRecord ms, KuleVerisi kule)
+        {
+            if (_onbellekAcik && _onbellek != null) return new List<GorunusKonumu>(_onbellek);
+            List<GorunusKonumu> l = BulTara(tr, ms, kule);
+            if (_onbellekAcik) _onbellek = new List<GorunusKonumu>(l);
+            return l;
+        }
+
+        private static List<GorunusKonumu> BulTara(Transaction tr, BlockTableRecord ms, KuleVerisi kule)
         {
             var cizgiler = new List<double[]>();
             var basliklar = new List<GorunusBasligi>();
