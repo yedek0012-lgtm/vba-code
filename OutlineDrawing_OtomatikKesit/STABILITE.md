@@ -193,7 +193,7 @@ yalnız Türkçe harfte farklı eleman adları ve bunların birleşimi) üzerind
 | `gorunus_testi.sh` | Her elemanın önden / yandan izdüşümü çizimde var mı (yüz çizgileri + iç eleman izdüşümleri) |
 | `gorunus_konum_testi.sh` | Ön / yan görünüş her durumda (yalnız ön / yalnız yan / ikisi, başlıklı / başlıksız, 2D Aktar, araya kesitler) doğru yerde bulunuyor mu |
 
-Sonuç (1.19): 7 gerçek kule + 63 yapay varyant = 70 dosya, dört testin hepsi TAMAM (3,5 dakika).
+Sonuç (1.22): 7 gerçek kule + 84 yapay varyant = 91 dosya, dört testin hepsi TAMAM; ayna parçası testi TAMAM.
 
 AutoCAD içinde test edilemeyenler: forma buton / kutucuk ekleme, ÇALIŞTIR'a bağlanma, silme onayı, ölçülerin ve
 kesik çizginin ekranda görünüşü, yakınlaştırınca REGEN. Bunlar kullanımda bir kez doğrulanmalı.
