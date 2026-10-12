@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.22";
+        public const string Surum = "1.23";
         private static Timer _timer;
 
         public void Initialize()
@@ -162,6 +162,8 @@ namespace OtomatikKesit
 
         private static void KontrolleriEkle(Form f)
         {
+            // Ekran ölçeği / monitör değişince form küçük ya da boş görünüyordu: her açılışta ekranı kaplasın
+            try { f.WindowState = FormWindowState.Maximized; } catch { }
             var ornek = f.Controls.Find("btnHeight", true).FirstOrDefault() as Button;
             Control kap = ornek != null ? ornek.Parent : (Control)f;
 
