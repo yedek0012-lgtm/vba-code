@@ -10,6 +10,28 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC.
 
+**1.22: Son denetim — okuma, kesit ve görünüş güvenceleri.**
+- *Tablo sonu kayıt sayısından:* düğüm / ikincil düğüm / eleman tabloları başlıktaki kayıt sayısıyla ("128 ; Joints
+  Geometry") okunur. 1.19–1.21'de Secondary Joints'ten sonraki .blt yolu boşluksuzsa (ör. `D:\PROJE\bolt.blt`)
+  düğüm adı sanılıp okuma çöküyor, hiçbir şey çizilmiyordu.
+- *Okunamayan .tow:* OutlineDrawing dosyayı okuyamazsa YÜKLE / ÇALIŞTIR model alanını silmeden durur ve sebebi gösterir.
+- *Kesit etiketi tablosu:* "tam 15 alan" yerine kayıt sayısı + en az 15 alan (yeni PLS sürümünde katmanlar oluşmuyor,
+  ön / yan görünüş hiç çizilmiyordu).
+- *tow_section_dump.txt yazılamazsa* (salt okunur klasör, Excel'de açık) bütün kesitlerin atlanması düzeltildi.
+- *Kod sayfası:* .tow UTF-8 değilse Windows-1254 okunur; yalnız Türkçe harfte farklı iki etiket artık tek anahtara inip
+  birini kaybettirmiyor.
+- *Ayna parçası:* tek parça kesiti için parçaların ayna olduğu uç noktalarıyla denetlenir (yalnız orta noktaya bakınca
+  ters köşegen ayna sanılıp hiçbir kesitte çizilmiyordu).
+- *Ön / Yan Yüz kutucukları:* Oto Kesit yalnız işaretli görünüşleri "görünür" sayar; ikisi de işaretsizse ikisini
+  işaretler (işaretsiz görünüşün elemanları hiçbir yerde çizilmiyordu).
+- *ÇALIŞTIR çizmezse* (tabloda hatalı satır, silme uyarısında Hayır) eklenti eski çizime dokunmaz ve OutlineDrawing'in
+  hata mesajını ezmez; "ÇİZİM YENİLENMEDİ" kutusu çıkar.
+- *ÇALIŞTIR sonrası kesit denetimi:* tablodaki her kesit çizildi mi (elemanı olmayan satır sessizce atlanıyordu) ve
+  çizilen görünüşlerde görünmeyen her eleman (aynasıyla) bir kesitte mi; değilse uyarı kutusu + komut satırında liste.
+- *2D Aktar sonrası* görünüşler gerçek dönüşümle, (x, z, 0), bulunur; görünüş bulunamazsa iç eleman çizgileri ve
+  ölçüler silinmez. Bu katmanlarda yalnız çizgi / ölçü silinir; geçerli katman eklentinin katmanıysa ÇALIŞTIR öncesi
+  "0" yapılır (başlıklar o katmana düşüp silinmesin).
+
 **1.20: Kesit harfleri kendiliğinden sıralanır.** Tablodan bir kesit satırı silinince (satırı seçip Delete) veya bir
 satırın içi boşaltılınca harfler yeniden dağıtılır: verisi olan satırlar sırayla A, B, C … (Z'den sonra AA, AB …), içi
 boş satırın harfi silinir. OutlineDrawing harfleri yalnız Nokta / Yükseklik ile satır eklenince yeniliyordu.
@@ -225,14 +247,15 @@ Bütün sistem (önerilen, her değişiklikten sonra; AutoCAD gerekmez, Mono yet
 
 ```
 bash eklenti/tek_dll.sh /yol/OutlineDrawingv1.3.dll                     # tek DLL'i üret
-bash test/hepsi.sh eklenti/bin/tek/OutlineDrawing.dll kule1.tow kule2.tow # her .tow + 9 yapay varyantı
+bash test/hepsi.sh eklenti/bin/tek/OutlineDrawing.dll kule1.tow kule2.tow # her .tow + 12 yapay varyantı
 ```
 
 Her dosyada dört test (ayrıntı STABILITE.md C): `detay_testi.sh` (okuma = bağımsız okuyucu, kapsama, her eleman
 etiketli çiziliyor mu), `kesit_testi.sh` (gerçek SectionDetection, eşleşme, stil), `gorunus_testi.sh` (izdüşüm),
 `gorunus_konum_testi.sh` (görünüş yeri). Yapay varyantlar `test/tow_varyant.py` ile üretilir (döndürme, dikdörtgen
-gövde, eksi kot, yeni grup sütunu, Türkçe ad, uzun ad, büyük kule; ayrıca bilerek bozuk dosyalar: `eksikdugum`,
-`xarm`, `grupeksik`).
+gövde, eksi kot, yeni grup sütunu, Türkçe ad, uzun ad, büyük kule, boşluksuz .blt yolu, yeni kesit etiketi sütunu,
+yalnız Türkçe harfte farklı eleman adları; ayrıca bilerek bozuk dosyalar: `eksikdugum`, `xarm`, `grupeksik`).
+Ayrıca bir kez `ayna_parca_testi.sh` (sentetik, ayna olmayan kopuk parça).
 
 Eski / tek tek testler:
 

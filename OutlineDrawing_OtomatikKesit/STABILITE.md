@@ -115,14 +115,27 @@ bool IsPoseLine(string s) {
 // Daha iyisi: başlıktaki kayıt sayısını (ör. "128 ; Joints Geometry") kullanmak.
 ```
 
-**Tek DLL (1.19) bu düzeltmeyi içeriyor** (`TowYama.PozSatiri`). Ayrıca eklenti her YÜKLE / ÇALIŞTIR / Oto Kesit'te
+**Tek DLL 1.22'den beri tablo sonunu başlıktaki kayıt sayısından belirliyor** (`TowYama.KayitVar`, üç Parse_*
+döngüsünde `IsPoseLine` yerine). 1.19–1.21'deki `PozSatiri` (boşluk yoksa ad) Secondary Joints'ten sonraki boşluksuz .blt
+yolunu (`D:\PROJE\bolt_metric.blt`) ad sanıyordu: `Parse_SecondaryJoints` dizinin dışına taşıp okuma çöküyor, hiçbir
+şey çizilmiyordu (v1.3'te 15 karakter sınırı bunu gizliyordu). `PozSatiri` artık yol gibi satırları da reddediyor ve
+yalnız başlıkta sayı yoksa kullanılıyor. Aynı biçimde `Parse_SectionLabel` "tam 15 alan" yerine kayıt sayısı + en az 15
+alan (`TowYama.KesitEtiketSatiri`): yeni bir PLS sürümü kesit tablosuna alan eklerse kesit katmanları oluşmuyor ve
+AutoCAD'de ön / yan görünüş hiç çizilmiyordu. Ayrıca eklenti her YÜKLE / ÇALIŞTIR / Oto Kesit'te
 .tow'daki açı elemanlarını kendisi sayıp OutlineDrawing'in okuduklarıyla karşılaştırıyor; okunmayan eleman varsa
 adlarıyla uyarıyor (`TowKontrol.OkumaKontrol`). Ayrı eklenti DLL'inde yama yok, uyarı var.
 
 ### A10. .tow kod sayfası
 `File.ReadAllLines(path)` UTF-8 varsayıyor; PLS dosyayı Windows-1254 (Türkçe ANSI) yazıyor. Türkçe karakterler
-(ç, ğ, ı, ş ...) `�` olarak okunuyor: açıklama ve grup adlarında görünür bozulma. Okuma `Encoding.GetEncoding(1254)` ile
-yapılmalı. (Eklenti grup tiplerini OutlineDrawing ile aynı kod çözmeyle okuyor ki anahtarlar eşleşsin.)
+(ç, ğ, ı, ş ...) `�` olarak okunuyor: açıklama ve grup adlarında görünür bozulma. Daha kötüsü: yalnız Türkçe harfte farklı iki
+etiket (ör. `ÇAP1` / `ŞAP1`) aynı anahtara iner, biri sessizce kaybolur. **Tek DLL 1.22**: `datapreprocessing`'deki
+`File.ReadAllLines` yerine `TowYama.Satirlar` (geçerli UTF-8 ise UTF-8, değilse Windows-1254); eklentinin bütün .tow
+okumaları da aynı yardımcıyı kullanır ki anahtarlar eşleşsin.
+
+### A13. tow_section_dump.txt yazılamazsa bütün kesitler atlanıyor
+`SectionDetection` sonunda .tow klasörüne döküm yazıyor (try/catch yok). Klasör salt okunursa veya dosya başka bir
+programda açıksa istisna `runtowerfile`'ın catch'ine düşer ve `DrawSections` hiç çağrılmaz. **Tek DLL 1.22**: çağrı
+`TowYama.DumpGuvenli` ile hatası yutularak yapılır.
 
 ### A12. Sabit görünüş ve kesit aralığı
 `runtowerfile` görünüşleri 50000, kesitleri 30000 mm arayla diziyor. 30 m'den geniş bir kesit (YAA-R1'in kol kotu
@@ -152,16 +165,30 @@ OutlineDrawing yalnız "Angle Member Connectivity" tablosunu okuyor; kablo, gerg
 | Eksik eleman | A1 fark edilmiyordu | YÜKLE / Oto Kesit sırasında uyarı |
 | Uyarı satırı | `PrintErrorLabel` hatası olay zincirini kırabilirdi | Korumalı, olmazsa komut satırı |
 
+## B2. Eklentide düzeltilenler (1.22)
+
+| Konu | Önceki risk | Düzeltme |
+|---|---|---|
+| Okunamayan .tow | Model alanı silinip hiçbir şey çizilmiyordu | Önce okunur; okunamıyorsa sebep gösterilir, çizime geçilmez |
+| ÇALIŞTIR çizmeyince | Eklenti eski çizimde adımlarını yapıp OutlineDrawing'in hata mesajını eziyordu | Çizildi mi (yeni nesne + uyarı etiketi) bakılır; çizilmediyse dokunulmaz, "ÇİZİM YENİLENMEDİ" |
+| Elemansız kesit satırı | OutlineDrawing başlığıyla birlikte atlıyordu, uyarı yoktu | ÇALIŞTIR sonrası tablo ile çizimdeki "SECTION x" başlıkları karşılaştırılır |
+| Kapsama | Kesit silinince / görünüş seçimi değişince eksik fark edilmiyordu | ÇALIŞTIR sonrası `KesitDenetimi`: görünmeyen her eleman (aynasıyla) bir kesitte mi |
+| Ön / Yan Yüz kutucuğu | Oto Kesit iki görünüşü de çizilecek sayıyordu | Yalnız işaretli görünüşler; ikisi de işaretsizse ikisi işaretlenir |
+| Ayna parçası | Orta nokta eşleşmesi ters köşegeni "ayna" sayıyordu | Uç noktaları karşılaştırılır |
+| 2D Aktar | (x, z, -y) varsayılıyordu; gerçek (x, z, 0): görünüş bulunamayıp iç eleman / ölçüler silinip geri konmuyordu | Gerçek dönüşüm; görünüş bulunamazsa silinmez |
+| Geçerli katman | CLAYER eklenti katmanıysa başlıklar o katmana düşüp siliniyordu | Yalnız çizgi / ölçü silinir; ÇALIŞTIR öncesi CLAYER "0" |
+
 ## C. Test durumu
 
 Tek komut: `bash test/hepsi.sh eklenti/bin/tek/OutlineDrawing.dll kule1.tow kule2.tow ...` (AutoCAD'siz; Mono,
 OutlineDrawing'in gerçek okuyucusu ve gerçek `SectionDetection`'ı, sahte geometri kütüphaneleriyle). Verilen her .tow
 ve ondan üretilen yapay varyantlar (`test/tow_varyant.py`: 90° / 180° döndürülmüş, dikdörtgen gövde, eksi kot, yeni
-grup sütunu, Türkçe grup adı, 15+ karakter ad, 3 kat büyük kule ve bunların birleşimi) üzerinde dört test:
+grup sütunu, Türkçe grup adı, 15+ karakter ad, 3 kat büyük kule, boşluksuz .blt yolu, yeni kesit etiketi sütunu,
+yalnız Türkçe harfte farklı eleman adları ve bunların birleşimi) üzerinde dört test (+ bir kez sentetik ayna parçası testi):
 
 | Test | Ne doğrulanıyor |
 |---|---|
-| `detay_testi.sh` | Bağımsız .tow okuyucusu ile OutlineDrawing aynı elemanları (geometri olarak) okuyor mu; otomatik kesitler görünmeyen her elemanı kapsıyor mu; **her eleman ailesi (aynalarıyla) görünüşte veya bir kesitte etiketiyle çiziliyor mu** |
+| `detay_testi.sh` | Bağımsız .tow okuyucusu ile OutlineDrawing aynı elemanları (geometri olarak) ve bütün kesit etiketlerini okuyor mu; otomatik kesitler görünmeyen her elemanı kapsıyor mu; ÇALIŞTIR sonrası denetim (ön+yan, yalnız ön, yalnız yan) kapsanmayan bulmuyor mu; **her eleman ailesi (aynalarıyla) görünüşte veya bir kesitte etiketiyle çiziliyor mu** |
 | `kesit_testi.sh` | Gerçek SectionDetection her kesitte beklenen bütün elemanları çiziyor mu; çizilen her çizgi tanınıyor mu; redundant stili doğru mu |
 | `gorunus_testi.sh` | Her elemanın önden / yandan izdüşümü çizimde var mı (yüz çizgileri + iç eleman izdüşümleri) |
 | `gorunus_konum_testi.sh` | Ön / yan görünüş her durumda (yalnız ön / yalnız yan / ikisi, başlıklı / başlıksız, 2D Aktar, araya kesitler) doğru yerde bulunuyor mu |

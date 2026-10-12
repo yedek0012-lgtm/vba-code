@@ -16,6 +16,13 @@ Varyantlar:
   uzunad     her 7. düğümün ve her 11. elemanın adı 15+ karaktere uzatılır (OutlineDrawing'in IsPoseLine sınırı).
   buyuk      kule 3 kez üst üste kopyalanır (z + 100 m, z + 200 m): 3 kat eleman, hız ve büyük kule testi.
              (x yönünde kopya olmaz: X / Y ayna düğümlerine başvuran ikincil düğümler kopyada yanlış tarafa düşer.)
+  bltyolu    tablolardan sonraki .blt (bolt kütüphanesi) yolu boşluksuz yazılır (D:\\PROJE\\TOWER\\bolt_metric.blt).
+             OutlineDrawing v1.3'ün IsPoseLine'ı 15+ karakterde durduğu için sorun yoktu; yalnız boşluğa bakan bir
+             tablo sonu bu satırı düğüm adı sanıp okumayı çökertir (hiçbir şey çizilmez).
+  kesitsutun kesit etiketi tablosunun satırlarına fazladan bir alan (daha yeni PLS sürümü taklidi). OutlineDrawing
+             tam 15 alan bekler; okuyamazsa kesit katmanları oluşmaz, AutoCAD'de ön / yan görünüş çizilmez.
+  turkceetiket her 13. elemanla bir sonrakine yalnız Türkçe harfte farklı adlar (1254: "ÇT<n>" / "ŞT<n>"). UTF-8
+             okuyan OutlineDrawing ikisini aynı anahtara indirip birini sessizce kaybeder.
 Bilerek bozuk (uyarı testi):
   eksikdugum ilk elemanın bitiş düğümü tanımsız bir adla değiştirilir.
   xarm       "X-Arm Connectivity" sayısı 2 yapılır (açı elemanı olmayan eleman).
@@ -109,6 +116,11 @@ def main(giris, cikis, varyantlar):
                 k = i + 1 + 8 * j
                 satirlar[k + 1] = basvuru(satirlar[k + 1])
                 satirlar[k + 2] = basvuru(satirlar[k + 2])
+                if "turkceetiket" in v and j % 13 in (0, 1) and j + 1 < n - (j % 13):
+                    cr = satirlar[k].endswith("\r")
+                    ad = ("\u00c7" if j % 13 == 0 else "\u00de") + "T%d" % (j - j % 13)   # 1254: Ç / Ş
+                    q = satirlar[k].strip().startswith("'")
+                    satirlar[k] = ("'%s'" % ad if q else ad) + ("\r" if cr else "")
                 if "eksikdugum" in v and j == 0:
                     cr = satirlar[k + 2].endswith("\r")
                     satirlar[k + 2] = "YOK_DUGUM_1P" + ("\r" if cr else "")
@@ -130,6 +142,13 @@ def main(giris, cikis, varyantlar):
                 if "grupeksik" in v and k == i + 3:
                     del t[3]
                 satirlar[k] = " ".join(t) + ("\r" if cr else "")
+        if "kesitsutun" in v and "; section label" in s:
+            n = int(s.split()[0])
+            for k in range(i + 1, i + 1 + n):
+                cr = satirlar[k].endswith("\r")
+                satirlar[k] = satirlar[k].rstrip("\r") + " 0" + ("\r" if cr else "")
+            i += 1 + n
+            continue
         if "xarm" in v and re.match(r"^\s*0\s*; X-Arm Connectivity", s):
             satirlar[i] = s.replace("0", "2", 1)
         if "; group label, description, size" in s and "grupsutun" in v:
@@ -143,6 +162,10 @@ def main(giris, cikis, varyantlar):
             i += 1 + n
             continue
         i += 1
+    if "bltyolu" in v:
+        for k, s in enumerate(satirlar):
+            if s.rstrip("\r").lower().endswith(".blt") and ";" not in s and "=" not in s:
+                satirlar[k] = "D:\\PROJE\\TOWER\\bolt_metric.blt" + ("\r" if s.endswith("\r") else "")
     if "buyuk" in v:
         satirlar = buyut(satirlar, etiketler)
     if "uzunad" in v:

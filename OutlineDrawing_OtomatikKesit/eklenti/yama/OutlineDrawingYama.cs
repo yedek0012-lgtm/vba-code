@@ -9,7 +9,14 @@
 //  4) dataprocessing.IsPoseLine: düğüm / eleman tablolarında "sonraki kayıt var mı" denetimi adın 15 karakterden kısa
 //     ve boşluksuz olmasını istiyordu; 15+ karakterli bir ad (ör. PLS'in ürettiği uzun kesir düğümü adları) tablonun
 //     geri kalanını sessizce düşürüyordu. Gövde TowYama.PozSatiri(satır) çağrısıyla değiştirilir: boş değil, ';' yok,
-//     tek ad (tırnaklı adda boşluk olabilir). Tablo sonu yine ';' içeren başlık satırından anlaşılır.
+//     tek ad (tırnaklı adda boşluk olabilir), dosya yolu değil.
+//  4b) Parse_JointsGeometry / Parse_SecondaryJoints / Parse_AngleMemberConnectivity: döngü koşulu IsPoseLine(satır)
+//     yerine TowYama.KayitVar(satırlar, i, başlık, adım): tablo sonu başlıktaki kayıt sayısından ("128 ; Joints
+//     Geometry ...") anlaşılır. Secondary Joints'ten sonraki .blt yolu boşluksuzsa ad gibi görünüp okumayı
+//     çökertiyordu (hiçbir şey çizilmiyordu).
+//  4c) Parse_SectionLabel: "tam 15 alan" yerine başlıktaki kayıt sayısı + en az 15 alan (TowYama.KesitEtiketSatiri).
+//  4d) SectionDetection: dump(.tow klasörüne döküm) yerine TowYama.DumpGuvenli: yazılamazsa kesitler yine çizilir.
+//  4e) datapreprocessing: File.ReadAllLines (UTF-8) yerine TowYama.Satirlar (UTF-8 değilse Windows-1254).
 //  5) main.runtowerfile: görünüşler arası sabit 50000 ve kesitler arası sabit 30000 yerine kule genişliğine göre
 //     TowYama.GorunusAraligi / KesitAraligi (en az 50000 / 30000). 30 m'den geniş kesitler komşusunun üstüne
 //     biniyordu (YAA-R1'in kol kotu kesiti 28,7 m; daha geniş traversli kulede üst üste).
@@ -34,6 +41,10 @@ public static class OutlineDrawingYama
         SectionDetection(mod, dp);
         GrupTablosu(dp);
         PozSatiri(mod, dp);
+        TabloSonu(mod, dp);
+        KesitEtiketi(mod, dp);
+        DumpGuvenli(mod, dp);
+        KodSayfasi(mod, dp);
         Araliklar(mod);
 
         asm.Write(a[1]);
@@ -118,6 +129,86 @@ public static class OutlineDrawingYama
         il.Append(il.Create(OpCodes.Call, mod.ImportReference(yeni)));
         il.Append(il.Create(OpCodes.Ret));
         Console.WriteLine("IsPoseLine yamalandı (uzun / boşluklu ad).");
+    }
+
+    private static void TabloSonu(ModuleDefinition mod, TypeDefinition dp)
+    {
+        MethodDefinition kv = mod.GetType("OtomatikKesit.TowYama").Methods.Single(m => m.Name == "KayitVar");
+        foreach (var t in new[] { Tuple.Create("Parse_JointsGeometry", 5), Tuple.Create("Parse_SecondaryJoints", 5),
+                                  Tuple.Create("Parse_AngleMemberConnectivity", 8) })
+        {
+            MethodDefinition m = dp.Methods.Single(x => x.Name == t.Item1);
+            if (m.Body.Instructions.Any(i => Cagri(i, "KayitVar"))) { Console.WriteLine(t.Item1 + " zaten yamalı."); continue; }
+            if (m.Parameters.Count != 2 || m.IsStatic) throw new Exception(t.Item1 + ": beklenmeyen imza");
+            var ins = m.Body.Instructions;
+            var cagrilar = ins.Where(i => Cagri(i, "IsPoseLine")).ToList();
+            if (cagrilar.Count != 1) throw new Exception(t.Item1 + ": IsPoseLine çağrısı " + cagrilar.Count);
+            int k = ins.IndexOf(cagrilar[0]);
+            // beklenen: ldarg.0(this) ldarg.1(satırlar) ldloc.0(i) ldelem.ref call IsPoseLine
+            Instruction a0 = ins[k - 4], a1 = ins[k - 3], l0 = ins[k - 2], el = ins[k - 1];
+            if (a0.OpCode != OpCodes.Ldarg_0 || a1.OpCode != OpCodes.Ldarg_1 || l0.OpCode != OpCodes.Ldloc_0 || el.OpCode != OpCodes.Ldelem_Ref)
+                throw new Exception(t.Item1 + ": beklenmeyen IL");
+            ILProcessor il = m.Body.GetILProcessor();
+            a0.OpCode = OpCodes.Nop; a0.Operand = null;           // this artık gerekmiyor (dal hedefi olabilir: Nop kalır)
+            el.OpCode = OpCodes.Ldarg_2;                           // başlık satırı indeksi
+            // tek baytlık ldc.i4.N: önündeki bge.s'in kısa dal mesafesi yalnız 1 bayt büyür
+            il.InsertBefore(cagrilar[0], il.Create(t.Item2 == 5 ? OpCodes.Ldc_I4_5 : OpCodes.Ldc_I4_8));
+            cagrilar[0].Operand = mod.ImportReference(kv);
+            Console.WriteLine(t.Item1 + " yamalandı (tablo sonu başlıktaki kayıt sayısından).");
+        }
+    }
+
+    private static MethodReference Yardimci(ModuleDefinition mod, string ad)
+    {
+        return mod.ImportReference(mod.GetType("OtomatikKesit.TowYama").Methods.Single(m => m.Name == ad));
+    }
+
+    // Parse_SectionLabel: "ldloc.1 ldlen conv.i4 ldc.i4.s 15 ceq" -> "ldarg.1 ldloc.0 ldarg.2 ldloc.1 call KesitEtiketSatiri"
+    // (ardındaki "ldc.i4.0 ceq" olduğu gibi kalır: false -> dur).
+    private static void KesitEtiketi(ModuleDefinition mod, TypeDefinition dp)
+    {
+        MethodDefinition m = dp.Methods.Single(x => x.Name == "Parse_SectionLabel");
+        if (m.Body.Instructions.Any(i => Cagri(i, "KesitEtiketSatiri"))) { Console.WriteLine("Parse_SectionLabel zaten yamalı."); return; }
+        var ins = m.Body.Instructions;
+        int k = -1;
+        for (int j = 0; j + 4 < ins.Count; j++)
+            if (ins[j].OpCode == OpCodes.Ldloc_1 && ins[j + 1].OpCode == OpCodes.Ldlen && ins[j + 2].OpCode == OpCodes.Conv_I4
+                && ins[j + 3].OpCode == OpCodes.Ldc_I4_S && Convert.ToInt32(ins[j + 3].Operand) == 15 && ins[j + 4].OpCode == OpCodes.Ceq)
+            { if (k >= 0) throw new Exception("Parse_SectionLabel: birden fazla 15 denetimi"); k = j; }
+        if (k < 0) throw new Exception("Parse_SectionLabel: 15 alan denetimi bulunamadı");
+        ILProcessor il = m.Body.GetILProcessor();
+        Instruction[] yeni = { il.Create(OpCodes.Ldarg_1), il.Create(OpCodes.Ldloc_0), il.Create(OpCodes.Ldarg_2),
+                               il.Create(OpCodes.Ldloc_1), il.Create(OpCodes.Call, Yardimci(mod, "KesitEtiketSatiri")) };
+        // ilk komut dal hedefi olabilir: yerinde değiştirilir, kalanlar sonrasına eklenir
+        Instruction ilk = ins[k];
+        for (int j = 4; j >= 1; j--) il.Remove(ins[k + j]);
+        ilk.OpCode = yeni[0].OpCode; ilk.Operand = null;
+        Instruction son = ilk;
+        for (int j = 1; j < yeni.Length; j++) { il.InsertAfter(son, yeni[j]); son = yeni[j]; }
+        Console.WriteLine("Parse_SectionLabel yamalandı (kayıt sayısı başlıktan, en az 15 alan).");
+    }
+
+    private static void DumpGuvenli(ModuleDefinition mod, TypeDefinition dp)
+    {
+        MethodDefinition m = dp.Methods.Single(x => x.Name == "SectionDetection");
+        var c = m.Body.Instructions.Where(i => Cagri(i, "dump")).ToList();
+        if (c.Count == 0 && m.Body.Instructions.Any(i => Cagri(i, "DumpGuvenli"))) { Console.WriteLine("SectionDetection dump zaten yamalı."); return; }
+        if (c.Count != 1) throw new Exception("SectionDetection: dump çağrısı " + c.Count);
+        var d = (MethodReference)c[0].Operand;
+        if (d.Parameters.Count != 1 || d.ReturnType.FullName != "System.Void" || !d.HasThis) throw new Exception("dump: beklenmeyen imza");
+        c[0].OpCode = OpCodes.Call;
+        c[0].Operand = Yardimci(mod, "DumpGuvenli");   // (this, yol) yığında: statik (object, string)
+        Console.WriteLine("SectionDetection yamalandı (dump yazılamazsa kesitler yine çizilir).");
+    }
+
+    private static void KodSayfasi(ModuleDefinition mod, TypeDefinition dp)
+    {
+        MethodDefinition m = dp.Methods.Single(x => x.Name == "datapreprocessing");
+        var c = m.Body.Instructions.Where(i => Cagri(i, "ReadAllLines")).ToList();
+        if (c.Count == 0 && m.Body.Instructions.Any(i => Cagri(i, "Satirlar"))) { Console.WriteLine("datapreprocessing zaten yamalı."); return; }
+        if (c.Count != 1 || ((MethodReference)c[0].Operand).Parameters.Count != 1) throw new Exception("datapreprocessing: ReadAllLines(string) bulunamadı");
+        c[0].Operand = Yardimci(mod, "Satirlar");
+        Console.WriteLine("datapreprocessing yamalandı (.tow kod sayfası: UTF-8 değilse Windows-1254).");
     }
 
     private static void GrupTablosu(TypeDefinition dp)

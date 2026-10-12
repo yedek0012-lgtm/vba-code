@@ -3,7 +3,7 @@
 using System; using System.Linq; using System.Collections.Generic; using OtomatikKesit;
 class P {
   static List<double[]> Ciz(List<YuzCizgisi> F, int ofs, bool ikiD) {
-    return F.Select(c => ikiD ? new[]{ c.P[0]+ofs, c.P[2], -c.P[1], c.P[3]+ofs, c.P[5], -c.P[4] }
+    return F.Select(c => ikiD ? YuzEslestirici.IkiD(c.P[0]+ofs, c.P[1], c.P[2], c.P[3]+ofs, c.P[4], c.P[5])
                               : new[]{ c.P[0]+ofs, c.P[1], c.P[2], c.P[3]+ofs, c.P[4], c.P[5] }).ToList();
   }
   static double Orta(List<YuzCizgisi> F) { return (F.Min(c => Math.Min(c.P[0], c.P[3])) + F.Max(c => Math.Max(c.P[0], c.P[3]))) / 2; }
@@ -14,7 +14,7 @@ class P {
       int o = ofs + 30000 * i++;
       foreach (var m in u.Values.Where(m => Math.Abs(m.start_z - z) < 15 && Math.Abs(m.end_z - z) < 15)) {
         double[] p = { m.start_y + o, -m.start_x, m.start_z, m.end_y + o, -m.end_x, m.end_z };
-        l.Add(ikiD ? new[]{ p[0], p[2], -p[1], p[3], p[5], -p[4] } : p);
+        l.Add(ikiD ? YuzEslestirici.IkiD(p[0], p[1], p[2], p[3], p[4], p[5]) : p);
       }
     }
     return l;

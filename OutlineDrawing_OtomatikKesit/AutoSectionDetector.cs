@@ -173,6 +173,26 @@ namespace OutlineDrawing
         //          (açgözlü seçim; bir düzlem aynalarını da kapsar)
         //     Kapsanamayanlar raporda listelenir.
         // =================================================================
+        /// <summary>Çizim sonrası denetim: görünür elemanlar (çizilen görünüşler) ve kesitlerdeki elemanlar verildiğinde,
+        /// ne görünüşte ne de (aynasıyla birlikte) bir kesitte yer alan elemanların anahtarları. DetectHidden ile aynı
+        /// görünürlük ve aile kuralı.</summary>
+        public static List<string> Kapsanmayanlar(IDictionary<string, FinalMember> members, ICollection<string> visibleKeys,
+            IEnumerable<string> kesittekiler)
+        {
+            var sonuc = new List<string>();
+            if (members == null) return sonuc;
+            var bars = members.Where(kv => kv.Value != null).Select(kv => new Bar(kv.Key, kv.Value)).Where(b => b.Length >= 1.0).ToList();
+            var seen = new HashSet<string>();
+            var visible = new HashSet<string>(visibleKeys ?? new string[0]);
+            foreach (var b in bars)
+                if (visible.Contains(b.Key)) foreach (var g in b.MirrorKeys) seen.Add(g);
+            var kes = new HashSet<string>(kesittekiler ?? new string[0]);
+            var covered = new HashSet<string>(bars.Where(b => kes.Contains(b.Key)).Select(b => b.Family));
+            foreach (var b in bars)
+                if (!seen.Contains(b.GeoKey) && !covered.Contains(b.Family)) sonuc.Add(b.Key);
+            return sonuc;
+        }
+
         public static List<AutoSectionCandidate> DetectHidden(IDictionary<string, FinalMember> members,
             ICollection<string> visibleKeys, AutoSectionOptions opt, out AutoSectionReport report)
         {
@@ -692,12 +712,7 @@ namespace OutlineDrawing
                 double fx = signs[s, 0], fy = signs[s, 1];
                 V3 mc = new V3(fx * b.Centroid.X, fy * b.Centroid.Y, b.Centroid.Z);
                 if ((mc - a.Centroid).Length > tol) continue;
-                bool all = b.Bars.All(bb =>
-                {
-                    V3 m = new V3(fx * bb.Mid.X, fy * bb.Mid.Y, bb.Mid.Z);
-                    return a.Bars.Any(ab => (ab.Mid - m).Length <= tol);
-                });
-                if (all) return true;
+                if (b.Bars.All(bb => a.Bars.Any(ab => AynaEleman(ab, bb, fx, fy, tol)))) return true;
             }
             return false;
         }
@@ -721,9 +736,17 @@ namespace OutlineDrawing
             for (int s = 0; s < 3; s++)
             {
                 double fx = isaret[s, 0], fy = isaret[s, 1];
-                if (b.All(bb => a.Any(ab => (ab.Mid - new V3(fx * bb.Mid.X, fy * bb.Mid.Y, bb.Mid.Z)).Length <= tol))) return true;
+                if (b.All(bb => a.Any(ab => AynaEleman(ab, bb, fx, fy, tol)))) return true;
             }
             return false;
+        }
+
+        /// <summary>bb'nin (fx, fy) aynası ab ile aynı eleman mı? İki uç da eşleşmeli (yalnız orta nokta yetmez: bir
+        /// panelin iki köşegeninin orta noktası aynıdır, ters köşegen ayna sanılıp hiçbir kesitte çizilmiyordu).</summary>
+        private static bool AynaEleman(Bar ab, Bar bb, double fx, double fy, double tol)
+        {
+            V3 a = new V3(fx * bb.A.X, fy * bb.A.Y, bb.A.Z), b = new V3(fx * bb.B.X, fy * bb.B.Y, bb.B.Z);
+            return ((ab.A - a).Length <= tol && (ab.B - b).Length <= tol) || ((ab.A - b).Length <= tol && (ab.B - a).Length <= tol);
         }
 
         /// <summary>Ortak düğümü olan elemanları gruplar. planXY = true: düğüm yalnız (x,y) ile eşlenir

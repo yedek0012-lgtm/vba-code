@@ -128,6 +128,12 @@ public static class DetayTesti
         foreach (var u in dusen.Take(ayrinti ? 1000 : 5)) Console.WriteLine("       OutlineDrawing'de yok: {0} ({1})", u.Ad, u.Grup);
         if (diger.Count > 0) Console.WriteLine("     UYARI: açı elemanı olmayan elemanlar (OutlineDrawing çizmez): " + string.Join(", ", diger.Select(kv => kv.Key + " " + kv.Value)));
         hata += dusen.Count + eksikDugum;
+        // kesit etiketi tablosu: her etiket okunmalı (okunmazsa katman oluşmaz, AutoCAD'de görünüşler çizilmez)
+        var scn = t.GetProperty("scnLabel", H).GetValue(o, null) as ICollection;
+        int scnBek = File.ReadAllLines(yol, System.Text.Encoding.GetEncoding(28591)).Where(x => x.Contains("; section label"))
+            .Select(x => int.Parse(x.Substring(0, x.IndexOf(';')).Trim(), CultureInfo.InvariantCulture)).FirstOrDefault();
+        Console.WriteLine("     Kesit etiketleri: .tow {0}, OutlineDrawing {1}", scnBek, scn != null ? scn.Count : -1);
+        if (scn == null || scn.Count != scnBek) hata++;
 
         // ---- 2. otomatik kesitler + gerçek SectionDetection
         var gorunen = KuleOkuyucu.Gorunenler(o);
@@ -157,8 +163,29 @@ public static class DetayTesti
             kesitte.Add(i >= 0 ? k.Substring(i + 1) : k);
         }
 
-        // ---- 3. görünüşler ve iç eleman izdüşümleri
+        // ---- 2b. ÇALIŞTIR sonrası denetimin (KesitDenetimi: KesitSecici + Kapsanmayanlar) Oto Kesit tablosunu temiz
+        //          bulması; yalnız ön / yalnız yan görünüş seçiliyken Oto Kesit'in o seçime göre tam tablo üretmesi
         var on = KuleOkuyucu.Yuz(o, "frontFace"); var yan = KuleOkuyucu.Yuz(o, "sideFace");
+        foreach (var secim in new[] { "on+yan", "on", "yan" })
+        {
+            ICollection<string> gor = secim == "on+yan" ? (ICollection<string>)gorunen
+                : new HashSet<string>((secim == "on" ? on : yan).Select(c => c.Anahtar));
+            AutoSectionReport r2;
+            var s2 = secim == "on+yan" ? secs : AutoSectionDetector.DetectHidden(uyeler, gor, new AutoSectionOptions(), out r2);
+            var kes2 = new HashSet<string>();
+            foreach (var c in s2)
+            {
+                var tn = new KesitTanimi();
+                if (c.Kind == AutoSectionKind.Height) tn.Yukseklik = c.Height.Value;
+                else foreach (var p in c.Points) tn.Noktalar.Add(new[] { p.X, p.Y, p.Z });
+                List<string> a2; KesitSecici.Sec(uyeler, tn, out a2); kes2.UnionWith(a2);
+            }
+            int kap2 = AutoSectionDetector.Kapsanmayanlar(uyeler, gor, kes2).Count;
+            Console.WriteLine("     Çizim sonrası denetim ({0}): {1} kesit, kapsanmayan {2}", secim, s2.Count, kap2);
+            hata += kap2;
+        }
+
+        // ---- 3. görünüşler ve iç eleman izdüşümleri
         var onda = new HashSet<string>(on.Select(c => c.Anahtar)); var yanda = new HashSet<string>(yan.Select(c => c.Anahtar));
         var ic = new HashSet<string>(IcElemanPlani.Hesapla(uyeler, on, false).Concat(IcElemanPlani.Hesapla(uyeler, yan, true)).Select(c => c.Anahtar));
 

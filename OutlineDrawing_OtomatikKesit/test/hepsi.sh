@@ -3,6 +3,7 @@
 #   detay   : okuma (bağımsız okuyucu = OutlineDrawing), otomatik kesit kapsaması, her eleman ailesi etiketli çiziliyor mu
 #   kesit   : OutlineDrawing'in gerçek SectionDetection'ı; her kesit tam mı, çizgi eşleşmesi ve redundant stili doğru mu
 #   gorunus : her elemanın önden/yandan izdüşümü çizimde var mı (yüz çizgileri + iç eleman izdüşümleri)
+#   (ayrıca bir kez: ayna_parca_testi.sh, sentetik kopuk ayna parçaları)
 #   konum   : ön/yan görünüş her çizim durumunda (yalnız ön/yan/ikisi, başlıklı/başlıksız, 2D) doğru yerde mi
 #
 #   bash test/hepsi.sh eklenti/bin/tek/OutlineDrawing.dll kule1.tow [kule2.tow ...]
@@ -16,7 +17,7 @@ for f in "$@"; do DOSYALAR+=("$(realpath "$f")"); done
 if [ "${VARYANT:-1}" != "0" ]; then
   for f in "$@"; do
     ad="$(basename "$f" | sed 's/\.[^.]*$//' | cut -c1-24)"
-    for var in dondur90 dondur180 dikdortgen eksiz grupsutun turkce uzunad buyuk "dondur90,dikdortgen,eksiz,grupsutun,turkce,uzunad"; do
+    for var in dondur90 dondur180 dikdortgen eksiz grupsutun turkce uzunad buyuk bltyolu kesitsutun turkceetiket "dondur90,dikdortgen,eksiz,grupsutun,turkce,uzunad,bltyolu,kesitsutun,turkceetiket"; do
       o="$OUT/varyant/${ad}__$(echo "$var" | tr ',' '+').tow"
       python3 tow_varyant.py "$f" "$o" "$var" && DOSYALAR+=("$o")
     done
@@ -24,6 +25,9 @@ if [ "${VARYANT:-1}" != "0" ]; then
 fi
 
 hata=0
+# sentetik ayna parçası testi (kuleden bağımsız, bir kez)
+a=$(bash ayna_parca_testi.sh "$DLL" 2>&1)
+echo "$a" | grep -q "SONUC: ayna parca testi TAMAM" && echo "ayna parca testi: TAMAM" || { echo "$a"; hata=$((hata+1)); }
 printf "%-58s %-8s %-8s %-8s %-8s\n" "dosya" "detay" "kesit" "gorunus" "konum"
 for f in "${DOSYALAR[@]}"; do
   d=$(bash detay_testi.sh "$DLL" "$f" 2>&1); k=$(bash kesit_testi.sh "$DLL" "$f" 2>&1)
