@@ -32,7 +32,7 @@ for f in "${DOSYALAR[@]}"; do
   sk=$(echo "$k" | grep -q "SONUC: butun kesitler tam" && echo "$k" | grep -q "eslesmeyen 0, yanlis stil 0" && echo TAMAM || echo HATA)
   # görünüş: ön veya yan görünüşten en az biri tam olmalı; öbüründe eksik yalnız uçtan görülen traversler (detay testi
   # her elemanın etiketli çizildiğini ayrıca doğrular)
-  sg=$(echo "$g" | grep -qE "(on|yan): izdusum [0-9]+, cizimde var [0-9]+, yok 0" && echo TAMAM || echo HATA)
+  sg=$( [ "$(echo "$g" | grep -cE "(on|yan): izdusum [0-9]+, cizimde var [0-9]+, yok 0")" = 2 ] && echo TAMAM || echo HATA)
   sc=$(echo "$c" | grep -q "SONUC: hicbir gorunus yanlis yere konmadi" && echo TAMAM || echo HATA)
   printf "%-58s %-8s %-8s %-8s %-8s\n" "$(basename "$f" | cut -c1-58)" "$sd" "$sk" "$sg" "$sc"
   for s in "$sd" "$sk" "$sg" "$sc"; do [ "$s" = TAMAM ] || hata=$((hata+1)); done
