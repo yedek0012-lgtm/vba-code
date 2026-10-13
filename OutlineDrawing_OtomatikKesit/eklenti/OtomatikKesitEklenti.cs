@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.25";
+        public const string Surum = "1.26";
         private static Timer _timer;
 
         public void Initialize()
@@ -279,6 +279,9 @@ namespace OtomatikKesit
             // YÜKLE ve ÇALIŞTIR model alanındaki HER ŞEYİ siler: başka katmanda çizim varsa önce sor
             var load = Alan(f, "btnLoad") as Button;
             var run = Alan(f, "btnRun") as Button;
+            var iki = Alan(f, "btnConvertto2D") as Button;
+            // 2D Aktar her şeyi XY düzlemine çevirir: UCS de dünya koordinatına döner
+            if (iki != null) iki.Click += (s, e) => Guvenli(f, "2D Aktar sonrası", () => Koordinat.Dunya());
             bool loadSarili = SilmeKorumasiEkle(f, load, "YÜKLE");
             bool runSarili = SilmeKorumasiEkle(f, run, "ÇALIŞTIR");
 
@@ -330,6 +333,8 @@ namespace OtomatikKesit
                         catch (System.Exception ex) { mesaj.Add("Ölçü eklenemedi: " + IcHata(ex).Message); }
                     }
                     if (chkI.Checked || chkR.Checked || chk.Checked) Goruntu.Yenile();
+                    // Görünüş / kesit düzlemi (XZ) UCS olsun: ölçü ve yazılar tutamaçla düzenlenebilsin
+                    if (Koordinat.Kesit()) mesaj.Add("UCS: kesit düzlemi");
                     if (mesaj.Count > 0) Uyari(f, string.Join(" | ", mesaj));
                     if (denetim != null)
                         MessageBox.Show(f, denetim + "\n\n(Ayrıntı komut satırında.)", "Otomatik Kesit - eksik kesit", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -840,6 +845,32 @@ namespace OtomatikKesit
                 }
             }
             catch { }
+        }
+    }
+
+    /// <summary>UCS ayarı. OutlineDrawing görünüş ve kesitleri XZ düzlemine (normal -Y) çizer; UCS dünya (XY) iken AutoCAD bu
+    /// düzlemdeki ölçü / yazıların tutamaçlarıyla yalnız taşımaya izin veriyordu.</summary>
+    internal static class Koordinat
+    {
+        /// <summary>UCS: X = dünya X, Y = dünya Z (normal -Y), başlangıç (0,0,0).</summary>
+        internal static bool Kesit()
+        {
+            return Ayarla(Matrix3d.AlignCoordinateSystem(Point3d.Origin, Vector3d.XAxis, Vector3d.YAxis, Vector3d.ZAxis,
+                                                          Point3d.Origin, Vector3d.XAxis, Vector3d.ZAxis, -Vector3d.YAxis));
+        }
+
+        internal static bool Dunya() { return Ayarla(Matrix3d.Identity); }
+
+        private static bool Ayarla(Matrix3d m)
+        {
+            try
+            {
+                Document doc = AcApp.DocumentManager.MdiActiveDocument;
+                if (doc == null) return false;
+                using (doc.LockDocument()) { doc.Editor.CurrentUserCoordinateSystem = m; }
+                return true;
+            }
+            catch { return false; }
         }
     }
 
