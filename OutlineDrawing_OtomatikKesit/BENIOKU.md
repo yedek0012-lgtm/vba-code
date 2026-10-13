@@ -10,6 +10,30 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC.
 
+**2.0: Ölçülmüş, daha güvenli ve daha pratik sürüm.** (Önceki sürüm `eklenti/bin/yedek_1.26/OutlineDrawing.dll`'de;
+bir sorun olursa onunla değiştirilebilir.)
+- *UCS güvenliği:* 1.26'dan beri ÇALIŞTIR sonrası UCS kesit düzlemine (XZ) alınıyor. OutlineDrawing'in Nokta / Yükseklik
+  seçimi `GetPoint` sonucunu UCS'den dünyaya çevirmeden kullandığı için, sonradan 3D modelden seçilen noktalar yanlış
+  koordinat verirdi. Artık YÜKLE, ÇALIŞTIR, Nokta ve Yükseklik'ten hemen önce UCS dünya yapılır; ÇALIŞTIR bitince
+  yeniden kesit düzlemine alınır.
+- *ÇALIŞTIR özeti:* uyarı satırında iç eleman / redundant / ölçü sonuçları ve süre (OutlineDrawing'in kendi çizimi +
+  eklentinin adımları); komut satırında adım adım süreler. İç eleman kapalıysa "İç eleman: kapalı" yazar.
+- *Sorunlar tek kutuda:* çizilmeyen kesit, kesitte olmayan eleman, iç eleman çizgisi eklenemedi / görünüş bulunamadı,
+  bir adımın hatası ve **kapalı / dondurulmuş eklenti katmanı** (OTO_IC_ELEMAN, OTO_IC_ELEMAN_UC, OTO_KESIT_OLCU: çizgiler
+  çizilir ama görünmez) artık 8 saniyede kaybolan etiket yerine bir uyarı kutusunda gösterilir.
+- *İç eleman çizgileri tek tek korunur:* bir çizgideki hata (ör. çizgi tipi) öbürlerini düşürmez; kaç tanesinin
+  eklenemediği bildirilir.
+- *Hepsini Çiz:* tablo bu .tow ve görünüş seçimi için Oto Kesit'in yazdığı haliyle duruyorsa yeniden hesaplanıp
+  "silinsin mi?" diye sorulmaz, doğrudan çizilir; tabloyu elle değiştirince yine sorar.
+- *Önbellekler:* Oto Kesit sonucu (aynı .tow + görünüş seçimi) ve .tow kontrolü dosya değişmedikçe yeniden hesaplanmaz;
+  model alanı taramalarında yalnız çizgi / yazı nesneleri açılır.
+- *Test:* ölçü yazısı çakışma testi (`olcu_testi.sh`) eklendi; test programları bir kez derlenir ve dosyalar paralel
+  çalışır (tam test 30 dakikadan birkaç dakikaya indi).
+
+Ölçümler (AutoCAD dışında, en büyük kule YAA-R1, 1386 eleman): .tow okuma 0,16 s, Oto Kesit 0,57 s, iç eleman
+hesabı 0,03 s, kesit denetimi 0,06 s, .tow kontrolü 0,08 s. Eklentinin hesapları 1 saniyenin altında; ÇALIŞTIR'da
+hissedilen süre büyük ölçüde AutoCAD'in çizimi ve REGEN'dir (artık özette ayrı ayrı görünür).
+
 **1.22: Son denetim — okuma, kesit ve görünüş güvenceleri.**
 - *Tablo sonu kayıt sayısından:* düğüm / ikincil düğüm / eleman tabloları başlıktaki kayıt sayısıyla ("128 ; Joints
   Geometry") okunur. 1.19–1.21'de Secondary Joints'ten sonraki .blt yolu boşluksuzsa (ör. `D:\PROJE\bolt.blt`)
@@ -247,12 +271,12 @@ Bütün sistem (önerilen, her değişiklikten sonra; AutoCAD gerekmez, Mono yet
 
 ```
 bash eklenti/tek_dll.sh /yol/OutlineDrawingv1.3.dll                     # tek DLL'i üret
-bash test/hepsi.sh eklenti/bin/tek/OutlineDrawing.dll kule1.tow kule2.tow # her .tow + 12 yapay varyantı
+bash test/hepsi.sh eklenti/bin/tek/OutlineDrawing.dll kule1.tow kule2.tow # her .tow + 12 yapay varyantı (paralel)
 ```
 
-Her dosyada dört test (ayrıntı STABILITE.md C): `detay_testi.sh` (okuma = bağımsız okuyucu, kapsama, her eleman
+Her dosyada beş test (ayrıntı STABILITE.md C): `detay_testi.sh` (okuma = bağımsız okuyucu, kapsama, her eleman
 etiketli çiziliyor mu), `kesit_testi.sh` (gerçek SectionDetection, eşleşme, stil), `gorunus_testi.sh` (izdüşüm),
-`gorunus_konum_testi.sh` (görünüş yeri). Yapay varyantlar `test/tow_varyant.py` ile üretilir (döndürme, dikdörtgen
+`gorunus_konum_testi.sh` (görünüş yeri), `olcu_testi.sh` (ölçü yazıları sığıyor / çakışmıyor mu). Yapay varyantlar `test/tow_varyant.py` ile üretilir (döndürme, dikdörtgen
 gövde, eksi kot, yeni grup sütunu, Türkçe ad, uzun ad, büyük kule, boşluksuz .blt yolu, yeni kesit etiketi sütunu,
 yalnız Türkçe harfte farklı eleman adları; ayrıca bilerek bozuk dosyalar: `eksikdugum`, `xarm`, `grupeksik`).
 Ayrıca bir kez `ayna_parca_testi.sh` (sentetik, ayna olmayan kopuk parça).

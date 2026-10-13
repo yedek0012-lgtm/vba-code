@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.26";
+        public const string Surum = "2.0";
         private static Timer _timer;
 
         public void Initialize()
@@ -248,8 +248,12 @@ namespace OtomatikKesit
             bh.Click += (s, e) => Guvenli(f, "Hepsini Çiz", () =>
             {
                 Ayarlar.Kaydet(f);
-                TabloyuDoldur(f);
-                if (!_sonDoldurmaTamam) return;
+                // Tablo bu .tow için Oto Kesit'in yazdığı haliyle duruyorsa yeniden hesaplanıp "silinsin mi?" diye sorulmaz
+                if (!TabloOtoHalinde(f))
+                {
+                    TabloyuDoldur(f);
+                    if (!_sonDoldurmaTamam) return;
+                }
                 var calistir = Alan(f, "btnRun") as Button;
                 if (calistir != null) calistir.PerformClick();
             });
@@ -268,10 +272,11 @@ namespace OtomatikKesit
                     if (_harfYenileniyor || f.IsDisposed) return;
                     try { f.BeginInvoke((Action)(() => Guvenli(f, "Kesit harfleri", () => HarfleriYenile(f)))); } catch { }
                 };
-                tablo.RowsRemoved += (s, e) => yenile();
+                tablo.RowsRemoved += (s, e) => { if (!_tabloYaziliyor) _otoTabloAnahtari = null; yenile(); };
                 tablo.CellValueChanged += (s, e) =>
                 {
                     if (e.ColumnIndex < 0 || tablo.Columns[e.ColumnIndex].Name == "ColumnSection") return;
+                    if (!_tabloYaziliyor) _otoTabloAnahtari = null;
                     yenile();
                 };
             }
@@ -284,6 +289,8 @@ namespace OtomatikKesit
             if (iki != null) iki.Click += (s, e) => Guvenli(f, "2D Aktar sonrası", () => Koordinat.Dunya());
             bool loadSarili = SilmeKorumasiEkle(f, load, "YÜKLE");
             bool runSarili = SilmeKorumasiEkle(f, run, "ÇALIŞTIR");
+            DunyaUcsIleSec(Alan(f, "btnSelectMultiplePoint") as Button);
+            DunyaUcsIleSec(Alan(f, "btnHeight") as Button);
 
             // YÜKLE (3D model) sonrasında: redundant kesikli + .tow kontrolü
             if (load != null)
@@ -309,35 +316,67 @@ namespace OtomatikKesit
                             MessageBox.Show(f, "ÇİZİM YENİLENMEDİ.\n\n" + _sonOdMesaji, "Otomatik Kesit", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
-                    var mesaj = new List<string>();
+                    var mesaj = new List<string>();     // uyarı etiketine kısa özet
+                    var sorun = new List<string>();     // tek uyarı kutusunda gösterilecek sorunlar
+                    var sureler = new List<string>();   // komut satırına adım süreleri
+                    var toplam = System.Diagnostics.Stopwatch.StartNew();
+                    Func<string, Func<string>, string> adim = (ad, is_) =>
+                    {
+                        var sw = System.Diagnostics.Stopwatch.StartNew();
+                        try { return is_(); }
+                        finally { sureler.Add(string.Format(CultureInfo.InvariantCulture, "{0} {1:0.00} s", ad, sw.Elapsed.TotalSeconds)); }
+                    };
                     if (runSarili && _sonOdMesaji != null) mesaj.Add(_sonOdMesaji.StartsWith("UYARI: ") ? _sonOdMesaji.Substring(7) : _sonOdMesaji);
-                    string denetim = null;
-                    try { denetim = KesitDenetimi.Yap(f); }
-                    catch (System.Exception ex) { Komutlar.Yaz("\nKesit denetimi yapılamadı: " + IcHata(ex).Message + "\n"); }
-                    if (denetim != null) mesaj.Add(denetim);
-                    string towUyari = TowKontrol.Uyari(YolAl(f), OkunanUyeler(f));
+                    string denetim = adim("denetim", () =>
+                    {
+                        try { return KesitDenetimi.Yap(f); }
+                        catch (System.Exception ex) { Komutlar.Yaz("\nKesit denetimi yapılamadı: " + IcHata(ex).Message + "\n"); return null; }
+                    });
+                    if (denetim != null) { mesaj.Add(denetim); sorun.Add(denetim); }
+                    string towUyari = adim(".tow kontrol", () => TowKontrol.Uyari(YolAl(f), OkunanUyeler(f)));
                     if (towUyari != null) mesaj.Add(towUyari);
                     if (chkI.Checked)
                     {
-                        try { mesaj.Add(IcElemanlar.Ciz(f, chkR.Checked)); }
-                        catch (System.Exception ex) { mesaj.Add("İç elemanlar çizilemedi: " + IcHata(ex).Message); }
+                        string r = adim("iç eleman", () =>
+                        {
+                            try { return IcElemanlar.Ciz(f, chkR.Checked); }
+                            catch (System.Exception ex) { sorun.Add("İç eleman çizgileri çizilemedi: " + IcHata(ex).Message); return null; }
+                        });
+                        if (r != null) mesaj.Add(r);
+                        if (IcElemanlar.SonUyari != null) sorun.Add(IcElemanlar.SonUyari);
                     }
+                    else mesaj.Add("İç eleman: kapalı");
                     if (chkR.Checked)
                     {
-                        try { mesaj.Add(KesitStili.Uygula(f)); }
-                        catch (System.Exception ex) { mesaj.Add("Redundant çizgi tipi uygulanamadı: " + IcHata(ex).Message); }
+                        string r = adim("redundant stil", () =>
+                        {
+                            try { return KesitStili.Uygula(f); }
+                            catch (System.Exception ex) { sorun.Add("Redundant çizgi tipi uygulanamadı: " + IcHata(ex).Message); return null; }
+                        });
+                        if (r != null) mesaj.Add(r);
                     }
                     if (chk.Checked)
                     {
-                        try { mesaj.Add(KesitOlculeri.Ekle()); }
-                        catch (System.Exception ex) { mesaj.Add("Ölçü eklenemedi: " + IcHata(ex).Message); }
+                        string r = adim("ölçü", () =>
+                        {
+                            try { return KesitOlculeri.Ekle(); }
+                            catch (System.Exception ex) { sorun.Add("Ölçü eklenemedi: " + IcHata(ex).Message); return null; }
+                        });
+                        if (r != null) mesaj.Add(r);
                     }
-                    if (chkI.Checked || chkR.Checked || chk.Checked) Goruntu.Yenile();
+                    if (chkI.Checked || chkR.Checked || chk.Checked) adim("REGEN", () => { Goruntu.Yenile(); return null; });
+                    string kapali = KatmanDurumu.Kapalilar(chkI.Checked, chk.Checked);
+                    if (kapali != null) sorun.Add(kapali);
                     // Görünüş / kesit düzlemi (XZ) UCS olsun: ölçü ve yazılar tutamaçla düzenlenebilsin
-                    if (Koordinat.Kesit()) mesaj.Add("UCS: kesit düzlemi");
-                    if (mesaj.Count > 0) Uyari(f, string.Join(" | ", mesaj));
-                    if (denetim != null)
-                        MessageBox.Show(f, denetim + "\n\n(Ayrıntı komut satırında.)", "Otomatik Kesit - eksik kesit", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    Koordinat.Kesit();
+                    string sureOzet = string.Format(CultureInfo.InvariantCulture, "Süre: OutlineDrawing {0:0.0} s + eklenti {1:0.0} s",
+                        Math.Max(0, _sonCizimSuresi), toplam.Elapsed.TotalSeconds);
+                    Komutlar.Yaz("\n" + sureOzet + " (" + string.Join(", ", sureler) + ").\n");
+                    mesaj.Add(sureOzet);
+                    Uyari(f, string.Join(" | ", mesaj));
+                    if (sorun.Count > 0)
+                        MessageBox.Show(f, string.Join("\n\n", sorun) + "\n\n(Ayrıntı komut satırında, F2.)", "Otomatik Kesit - kontrol edin",
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }); } finally { GorunusYeri.OnbellekKapat(); } };
         }
 
@@ -431,9 +470,11 @@ namespace OtomatikKesit
         /// <summary>Butonun mevcut (OutlineDrawing) Click olayını, önce silme kontrolü yapan bir olayın içine alır.
         /// OutlineDrawing'in runtowerfile / loadtowerfile'ı model alanındaki tüm nesneleri siliyor.</summary>
         /// <returns>true: sarmalandı (çizip çizmediği _sonCizdi'de); false: olaylar okunamadı, OutlineDrawing olduğu gibi</returns>
-        private static bool SilmeKorumasiEkle(Form f, Button btn, string ad)
+        /// <summary>Butonun OutlineDrawing'in bağladığı Click olayını listeden çıkarıp döndürür (okunamazsa null; o zaman
+        /// buton olduğu gibi kalır).</summary>
+        private static EventHandler AsilOlayiAl(Button btn)
         {
-            if (btn == null) return false;
+            if (btn == null) return null;
             try
             {
                 PropertyInfo ep = typeof(System.ComponentModel.Component).GetProperty("Events", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -441,13 +482,35 @@ namespace OtomatikKesit
                             ?? typeof(Control).GetField("ClickEvent", BindingFlags.Static | BindingFlags.NonPublic);   // Mono
                 var liste = ep != null ? ep.GetValue(btn, null) as System.ComponentModel.EventHandlerList : null;
                 object anahtar = kf != null ? kf.GetValue(null) : null;
-                if (liste == null || anahtar == null) return false;
+                if (liste == null || anahtar == null) return null;
                 var asil = liste[anahtar] as EventHandler;
-                if (asil == null) return false;
+                if (asil == null) return null;
                 liste.RemoveHandler(anahtar, asil);
+                return asil;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>OutlineDrawing'in Nokta / Yükseklik seçimi Editor.GetPoint sonucunu UCS'den dünyaya çevirmeden kullanıyor:
+        /// seçimden önce UCS dünya yapılır (ÇALIŞTIR sonrası UCS kesit düzleminde kalmış olabilir).</summary>
+        private static void DunyaUcsIleSec(Button btn)
+        {
+            if (btn == null) return;
+            EventHandler asil = AsilOlayiAl(btn);
+            if (asil != null) btn.Click += (s, e) => { Koordinat.Dunya(); asil(s, e); };
+            else btn.MouseDown += (s, e) => Koordinat.Dunya();   // olay listesi okunamazsa: fareye basınca (Click'ten önce)
+        }
+
+        private static bool SilmeKorumasiEkle(Form f, Button btn, string ad)
+        {
+            if (btn == null) return false;
+            try
+            {
+                EventHandler asil = AsilOlayiAl(btn);
+                if (asil == null) return false;
                 btn.Click += (s, e) =>
                 {
-                    _sonCizdi = false; _sonOdMesaji = null;
+                    _sonCizdi = false; _sonOdMesaji = null; _sonCizimSuresi = -1;
                     bool devam = true;
                     try { devam = SilmeOnayi(f, ad); } catch { devam = true; }
                     if (devam) devam = OkunabiliyorMu(f, ad);
@@ -455,7 +518,10 @@ namespace OtomatikKesit
                     long once = Tohum();
                     HataEtiketi(f, "");
                     KatmaniSifirla();
+                    Koordinat.Dunya();   // OutlineDrawing dünya koordinatıyla çalışır (nokta seçimi, 3D model)
+                    var sure = System.Diagnostics.Stopwatch.StartNew();
                     asil(s, e);
+                    _sonCizimSuresi = sure.Elapsed.TotalSeconds;
                     // OutlineDrawing gerçekten çizdi mi? YÜKLE / ÇALIŞTIR uyarı etiketine yalnız çizmeden döndüğünde yazar
                     // (dosya / seçenek yok, kesit tablosunda hata, istisna); ayrıca çizim yoksa yeni nesne eklenmez.
                     long sonra = Tohum();
@@ -469,6 +535,7 @@ namespace OtomatikKesit
         }
 
         private static bool _sonCizdi;       // son YÜKLE / ÇALIŞTIR'da OutlineDrawing çizim yaptı mı
+        private static double _sonCizimSuresi = -1;   // OutlineDrawing'in kendi çizim süresi (s)
         private static string _sonOdMesaji;  // OutlineDrawing'in o tıklamada uyarı etiketine yazdığı mesaj
 
         /// <summary>Veritabanının sonraki tutamaç değeri: yeni nesne eklenince artar (okunamazsa -1).</summary>
@@ -578,6 +645,31 @@ namespace OtomatikKesit
         }
 
         private static bool _sonDoldurmaTamam;   // son Oto Kesit tabloyu hazırladı mı (Hepsini Çiz için)
+        private static string _otoHesapAnahtar;  // son hesaplanan otomatik kesitler (aynı anahtar: yeniden hesaplanmaz)
+        private static List<AutoSectionCandidate> _otoHesapBulunan;
+        private static AutoSectionReport _otoHesapRapor;
+        private static string _otoTabloAnahtari; // tablo Oto Kesit'ten beri değişmediyse onun anahtarı, yoksa null
+        private static bool _tabloYaziliyor;     // tabloyu eklenti yazıyor (kullanıcı değişikliği sayılmaz)
+
+        /// <summary>.tow (yol + zaman + boyut) ve görünüş seçimi; okunamazsa null.</summary>
+        internal static string OtoAnahtar(string path, bool on, bool yan)
+        {
+            try
+            {
+                var fi = new FileInfo(path);
+                return fi.Exists ? fi.FullName + "|" + fi.LastWriteTimeUtc.Ticks + "|" + fi.Length + "|" + on + "|" + yan : null;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>Tablo, şu anki .tow ve görünüş seçimi için Oto Kesit'in yazdığı haliyle mi duruyor?</summary>
+        internal static bool TabloOtoHalinde(Form f)
+        {
+            if (_otoTabloAnahtari == null) return false;
+            bool on, yan;
+            GorunusSecimi(f, out on, out yan);
+            return _otoTabloAnahtari == OtoAnahtar(YolAl(f), on, yan);
+        }
 
         internal static void TabloyuDoldur(Form f)
         {
@@ -608,10 +700,19 @@ namespace OtomatikKesit
                 bool otoIsaret = !onSecili && !yanSecili;
                 if (otoIsaret) { GorunusIsaretle(f); onSecili = yanSecili = true; }
                 ICollection<string> gorunen = GorunenAnahtarlar(kule, onSecili, yanSecili);
-                if (gorunen != null && gorunen.Count > 0)
-                    bulunan = AutoSectionDetector.DetectHidden(kule.Uyeler, gorunen, new AutoSectionOptions(), out rapor);
+                string anahtar = OtoAnahtar(path, onSecili, yanSecili);
+                if (anahtar != null && anahtar == _otoHesapAnahtar)
+                {
+                    bulunan = _otoHesapBulunan; rapor = _otoHesapRapor;   // aynı .tow ve görünüş seçimi: yeniden hesaplanmaz
+                }
                 else
-                    bulunan = AutoSectionDetector.Detect(kule.Uyeler, new AutoSectionOptions());
+                {
+                    if (gorunen != null && gorunen.Count > 0)
+                        bulunan = AutoSectionDetector.DetectHidden(kule.Uyeler, gorunen, new AutoSectionOptions(), out rapor);
+                    else
+                        bulunan = AutoSectionDetector.Detect(kule.Uyeler, new AutoSectionOptions());
+                    _otoHesapAnahtar = anahtar; _otoHesapBulunan = bulunan; _otoHesapRapor = rapor;
+                }
 
                 if (bulunan.Count == 0)
                 {
@@ -638,10 +739,12 @@ namespace OtomatikKesit
                         "Tablodaki mevcut kesitler silinsin mi?\n\nEvet = sil, otomatik kesitleri yaz\nHayır = mevcutların altına ekle",
                         "Otomatik Kesit", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
                     if (cevap == DialogResult.Cancel) return;
-                    if (cevap == DialogResult.Yes) grid.Rows.Clear();
+                    _tabloYaziliyor = true;
+                    try { if (cevap == DialogResult.Yes) grid.Rows.Clear(); } finally { _tabloYaziliyor = false; }
                 }
-
                 var satirlar = new List<string>();
+                _tabloYaziliyor = true;
+                try {
                 foreach (AutoSectionCandidate c in bulunan)
                 {
                     int idx = grid.Rows.Add();
@@ -661,6 +764,8 @@ namespace OtomatikKesit
                 }
 
                 HarfleriYenile(f);
+                } finally { _tabloYaziliyor = false; }
+                _otoTabloAnahtari = OtoAnahtar(path, onSecili, yanSecili);   // tablo bu .tow + seçim için Oto Kesit'in ürettiği hal
 
                 string ozet = string.Format("{0} kesit eklendi", bulunan.Count);
                 string onAd = KutuYazisi(f, "chkFrontFace", "Ön Yüz"), yanAd = KutuYazisi(f, "chkSideFace", "Yan Yüz");
@@ -848,6 +953,62 @@ namespace OtomatikKesit
         }
     }
 
+    /// <summary>Nesneyi açmadan sınıfını kontrol eder (model alanı taramalarında yalnız ilgili nesneler açılır). Sınıf
+    /// okunamazsa true (nesne açılıp eski yoldan denetlenir).</summary>
+    internal static class Sinif
+    {
+        internal static bool Cizgi(ObjectId id) { return Ad(id, "LINE"); }
+        internal static bool Yazi(ObjectId id) { return Ad(id, "TEXT"); }
+
+        private static bool Ad(ObjectId id, string dxf)
+        {
+            try
+            {
+                var c = id.ObjectClass;
+                return c == null || string.Equals(c.DxfName, dxf, StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return true; }
+        }
+    }
+
+    /// <summary>Eklentinin katmanları kapalı / dondurulmuşsa çizgiler çizilir ama ekranda görünmez; kullanıcı fark etsin.</summary>
+    internal static class KatmanDurumu
+    {
+        private static readonly HashSet<string> _uyarildi = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Açık olan özelliğin (iç eleman / ölçü) katmanı kapalı ya da dondurulmuşsa uyarı; her katman için oturumda bir
+        /// kez. OTO_IC_ELEMAN_UC (uçtan görülenler) kalabalık bulunup bilerek kapatılabildiği için uyarılmaz.</summary>
+        internal static string Kapalilar(bool icEleman, bool olcu)
+        {
+            try
+            {
+                Document doc = AcApp.DocumentManager.MdiActiveDocument;
+                if (doc == null) return null;
+                var adlar = new List<string>();
+                if (icEleman) adlar.Add(IcElemanlar.Katman);
+                if (olcu) adlar.Add(KesitOlculeri.Katman);
+                var l = new List<string>();
+                using (doc.LockDocument())
+                using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+                {
+                    var lt = (LayerTable)tr.GetObject(doc.Database.LayerTableId, OpenMode.ForRead);
+                    foreach (string ad in adlar)
+                    {
+                        if (!lt.Has(ad)) continue;
+                        var k = (LayerTableRecord)tr.GetObject(lt[ad], OpenMode.ForRead);
+                        if ((k.IsOff || k.IsFrozen) && _uyarildi.Add(doc.Name + "|" + ad))
+                            l.Add(ad + (k.IsFrozen ? " (dondurulmuş)" : " (kapalı)"));
+                    }
+                    tr.Commit();
+                }
+                return l.Count == 0 ? null
+                    : "Şu katman(lar) kapalı, çizgileri / ölçüleri ekranda GÖRÜNMEZ: " + string.Join(", ", l) +
+                      ". Görmek için LAYER ile açın (OTO_IC_ELEMAN: iç eleman çizgileri, OTO_KESIT_OLCU: ölçüler).";
+            }
+            catch { return null; }
+        }
+    }
+
     /// <summary>UCS ayarı. OutlineDrawing görünüş ve kesitleri XZ düzlemine (normal -Y) çizer; UCS dünya (XY) iken AutoCAD bu
     /// düzlemdeki ölçü / yazıların tutamaçlarıyla yalnız taşımaya izin veriyordu.</summary>
     internal static class Koordinat
@@ -855,19 +1016,21 @@ namespace OtomatikKesit
         /// <summary>UCS: X = dünya X, Y = dünya Z (normal -Y), başlangıç (0,0,0).</summary>
         internal static bool Kesit()
         {
-            return Ayarla(Matrix3d.AlignCoordinateSystem(Point3d.Origin, Vector3d.XAxis, Vector3d.YAxis, Vector3d.ZAxis,
-                                                          Point3d.Origin, Vector3d.XAxis, Vector3d.ZAxis, -Vector3d.YAxis));
+            return Ayarla(() => Matrix3d.AlignCoordinateSystem(Point3d.Origin, Vector3d.XAxis, Vector3d.YAxis, Vector3d.ZAxis,
+                                                                Point3d.Origin, Vector3d.XAxis, Vector3d.ZAxis, -Vector3d.YAxis));
         }
 
-        internal static bool Dunya() { return Ayarla(Matrix3d.Identity); }
+        internal static bool Dunya() { return Ayarla(() => Matrix3d.Identity); }
 
-        private static bool Ayarla(Matrix3d m)
+        /// <summary>Hiçbir durumda hata fırlatmaz (OutlineDrawing'in butonlarından önce çağrılıyor).</summary>
+        private static bool Ayarla(Func<Matrix3d> m)
         {
             try
             {
                 Document doc = AcApp.DocumentManager.MdiActiveDocument;
                 if (doc == null) return false;
-                using (doc.LockDocument()) { doc.Editor.CurrentUserCoordinateSystem = m; }
+                Matrix3d u = m();
+                using (doc.LockDocument()) { doc.Editor.CurrentUserCoordinateSystem = u; }
                 return true;
             }
             catch { return false; }
@@ -968,6 +1131,7 @@ namespace OtomatikKesit
                     var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(doc.Database), OpenMode.ForRead);
                     foreach (ObjectId id in ms)
                     {
+                        if (!Sinif.Yazi(id)) continue;   // nesneyi açmadan sınıfına bak (hız)
                         var t = tr.GetObject(id, OpenMode.ForRead) as DBText;
                         if (t == null || t.TextString == null) continue;
                         Match m = KesitYazisi.Match(t.TextString.Trim());
@@ -1212,6 +1376,8 @@ namespace OtomatikKesit
             dim.Dimgap = 0.25 * o.Yazi;
             dim.Dimdec = 0;
             dim.Dimtad = 1;
+            dim.Dimatfit = 1;   // yer yoksa önce oklar dışarı (yazı ortada kalır); kullanıcının ölçü stilinden bağımsız
+            dim.Dimtix = false;
             dim.Dimtih = false;
             dim.Dimtoh = false;
             dim.DimfxlenOn = o.SabitUzatma;   // uzatma çizgisi sabit boy yalnız geometriden uzaktaki köşelerde
@@ -1756,6 +1922,13 @@ namespace OtomatikKesit
             return sonuc;
         }
 
+        /// <summary>Yazı iki uzatma çizgisi arasına sığar mı (yazı + iki yandaki boşluk + pay). Oklar sığmazsa AutoCAD
+        /// okları dışarı alır, yazı ortada kalır (DIMATFIT = 1); yazı da sığmıyorsa yeri elle verilir.</summary>
+        public static bool YaziSigar(OlcuTanimi o)
+        {
+            return o.Deger >= YaziGenisligi(o) + 0.7 * o.Yazi;
+        }
+
         /// <summary>Yazı genişliği tahmini (mm): rakam başına ~0,75 yazı yüksekliği.</summary>
         public static double YaziGenisligi(OlcuTanimi o)
         {
@@ -1771,8 +1944,8 @@ namespace OtomatikKesit
             for (int i = 0; i < zincir.Count; i++)
             {
                 OlcuTanimi o = zincir[i];
-                double w = YaziGenisligi(o), gerek = w + 2 * 0.75 * o.Yazi + 0.5 * o.Yazi;
-                if (o.Deger >= gerek) { kat = 0; continue; }
+                double w = YaziGenisligi(o);
+                if (YaziSigar(o)) { kat = 0; continue; }
                 double sol = Math.Min(o.U1, o.U2), sag = Math.Max(o.U1, o.U2);
                 if (i == 0 && zincir.Count > 1) { o.YaziU = sol - 0.75 * o.Yazi - w / 2; o.YaziV = vd + 0.5 * o.Yazi; kat = 0; }
                 else if (i == zincir.Count - 1 && zincir.Count > 1) { o.YaziU = sag + 0.75 * o.Yazi + w / 2; o.YaziV = vd + 0.5 * o.Yazi; }
@@ -1896,6 +2069,7 @@ namespace OtomatikKesit
             foreach (ObjectId id in ms)
             {
                 if (id.IsErased) continue;
+                if (!Sinif.Cizgi(id) && !Sinif.Yazi(id)) continue;   // ölçü, blok vb. açılmaz (hız)
                 var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
                 if (ent == null) continue;
                 var l = ent as Line;
@@ -2052,8 +2226,12 @@ namespace OtomatikKesit
 
         /// <summary>Ön ve yan görünüşe, yüzde olmayan elemanların görünüşte yeni çizgi oluşturan izdüşümlerini ekler.
         /// Önceki çalıştırmanın çizgileri silinir.</summary>
+        /// <summary>Son Ciz'de kullanıcının görmesi gereken bir durum (görünüş bulunamadı, çizgi eklenemedi); yoksa null.</summary>
+        internal static string SonUyari;
+
         internal static string Ciz(Form f, bool stil)
         {
+            SonUyari = null;
             Document doc = AcApp.DocumentManager.MdiActiveDocument;
             if (doc == null) return "İç eleman: açık çizim yok.";
             Database db = doc.Database;
@@ -2061,7 +2239,8 @@ namespace OtomatikKesit
             if (yol.Length == 0 || !File.Exists(yol)) return "İç eleman: .tow dosyası seçili değil.";
             KuleVerisi kule = KuleOkuyucu.Oku(f.GetType().Assembly, yol);
             if (kule == null) return "İç eleman: .tow okunamadı.";
-            int adet = 0, adetUc = 0, gorunus = 0;
+            int adet = 0, adetUc = 0, gorunus = 0, plan = 0, hatali = 0;
+            string ilkHata = null;
 
             using (doc.LockDocument())
             using (Transaction tr = db.TransactionManager.StartTransaction())
@@ -2086,9 +2265,10 @@ namespace OtomatikKesit
                 if (konumlar.Count == 0 || GorunusYeri.EksikBulundu(konumlar))
                 {
                     tr.Commit();
-                    return konumlar.Count == 0 && GorunusYeri.SonBaslikSayisi == 0
-                        ? "İç eleman: çizimde görünüş yok."
-                        : "İç eleman: görünüşün yeri bulunamadı (seçili .tow bu çizimin .tow'u mu?); mevcut iç eleman çizgilerine dokunulmadı.";
+                    if (konumlar.Count == 0 && GorunusYeri.SonBaslikSayisi == 0) return "İç eleman: çizimde görünüş yok.";
+                    SonUyari = "İç eleman çizgileri eklenmedi: görünüşün yeri bulunamadı (seçili .tow bu çizimin .tow'u mu?). " +
+                               "Görünüşte bazı elemanlar eksik görünebilir.";
+                    return "İç eleman: görünüşün yeri bulunamadı (seçili .tow bu çizimin .tow'u mu?); mevcut iç eleman çizgilerine dokunulmadı.";
                 }
 
                 // Yalnız çizgiler silinir: geçerli katman (CLAYER) bizim katmanımızken OutlineDrawing'in koyduğu
@@ -2109,20 +2289,40 @@ namespace OtomatikKesit
                     gorunus++;
                     foreach (YuzCizgisi c in IcElemanPlani.Hesapla(kule.Uyeler, yuz, k.Yan))
                     {
-                        var line = new Line(Nokta(c.P, 0, k.Ofs, k.IkiD), Nokta(c.P, 3, k.Ofs, k.IkiD));
-                        line.SetDatabaseDefaults(db);
-                        line.Layer = c.Uc ? KatmanUc : Katman;
-                        if (stil) KesitStili.Boya(line, c.Grup != null && kule.RedundantGruplar.Contains(c.Grup.Trim()), kesik, duz, olcek);
-                        ms.AppendEntity(line);
-                        tr.AddNewlyCreatedDBObject(line, true);
-                        adet++;
-                        if (c.Uc) adetUc++;
+                        plan++;
+                        // Bir çizgideki hata (ör. çizgi tipi) öbürlerini düşürmesin: her çizgi ayrı korunur
+                        Line line = null;
+                        try
+                        {
+                            line = new Line(Nokta(c.P, 0, k.Ofs, k.IkiD), Nokta(c.P, 3, k.Ofs, k.IkiD));
+                            line.SetDatabaseDefaults(db);
+                            line.Layer = c.Uc ? KatmanUc : Katman;
+                            if (stil)
+                            {
+                                try { KesitStili.Boya(line, c.Grup != null && kule.RedundantGruplar.Contains(c.Grup.Trim()), kesik, duz, olcek); }
+                                catch (System.Exception ex) { if (ilkHata == null) ilkHata = ex.Message; }
+                            }
+                            ms.AppendEntity(line);
+                            tr.AddNewlyCreatedDBObject(line, true);
+                            adet++;
+                            if (c.Uc) adetUc++;
+                        }
+                        catch (System.Exception ex)
+                        {
+                            hatali++;
+                            if (ilkHata == null) ilkHata = ex.Message;
+                            if (line != null && line.ObjectId.IsNull) line.Dispose();
+                        }
                     }
                 }
                 tr.Commit();
             }
             Komutlar.Yaz(string.Format("\nİç eleman: {0} görünüşe {1} izdüşüm çizgisi (katman {2}; {3} tanesi uçtan görülen, katman {4}).\n",
                 gorunus, adet, Katman, adetUc, KatmanUc));
+            if (hatali > 0)
+                SonUyari = string.Format("İç eleman: {0} / {1} çizgi eklenemedi ({2}).", hatali, plan, ilkHata);
+            else if (ilkHata != null)
+                Komutlar.Yaz("\nİç eleman çizgi tipi uyarısı: " + ilkHata + "\n");
             return string.Format("İç eleman: {0} çizgi", adet);
         }
 
@@ -2286,12 +2486,15 @@ namespace OtomatikKesit
             }
             kotlar = Birlestir(kotlar);
             double uz = maxU + Aralik;
+            var zincir = new List<OlcuTanimi>();
             for (int i = 0; i + 1 < kotlar.Count; i++)
-                sonuc.Add(t(new OlcuTanimi
+                zincir.Add(t(new OlcuTanimi
                 {
                     U1 = Sag(segs, kotlar[i]), V1 = kotlar[i], U2 = Sag(segs, kotlar[i + 1]), V2 = kotlar[i + 1],
                     UD = uz, VD = (kotlar[i] + kotlar[i + 1]) / 2, Rotation = Math.PI / 2
                 }));
+            DuseyZincirYerlestir(zincir, uz);
+            sonuc.AddRange(zincir);
             if (kotlar.Count > 2)
                 sonuc.Add(t(new OlcuTanimi
                 {
@@ -2323,10 +2526,35 @@ namespace OtomatikKesit
                 // Ucun üstünde bu aralıkta çizgi yoksa ölçü üste, varsa alta
                 bool ustBos = !segs.Any(s => Math.Max(s[1], s[3]) > v + BirlesmeTol && Math.Max(s[0], s[2]) > bas && Math.Min(s[0], s[2]) < son);
                 double vd = ustBos ? v + Aralik : v - Aralik;
-                if (solUc) sonuc.Add(t(new OlcuTanimi { U1 = ul, V1 = v, U2 = eksen, V2 = v, UD = (ul + eksen) / 2, VD = vd, Rotation = 0 }));
-                if (sagUc) sonuc.Add(t(new OlcuTanimi { U1 = eksen, V1 = v, U2 = ur, V2 = v, UD = (ur + eksen) / 2, VD = vd, Rotation = 0 }));
+                if (solUc) sonuc.Add(TekYerlestir(t(new OlcuTanimi { U1 = ul, V1 = v, U2 = eksen, V2 = v, UD = (ul + eksen) / 2, VD = vd, Rotation = 0 }), false));
+                if (sagUc) sonuc.Add(TekYerlestir(t(new OlcuTanimi { U1 = eksen, V1 = v, U2 = ur, V2 = v, UD = (ur + eksen) / 2, VD = vd, Rotation = 0 }), true));
             }
             return sonuc;
+        }
+
+        /// <summary>Yatay tek ölçü (uç): yazı sığmıyorsa eksenden uzak tarafa, uzatma çizgisinin dışına.</summary>
+        private static OlcuTanimi TekYerlestir(OlcuTanimi o, bool saga)
+        {
+            if (OlcuPlani.YaziSigar(o)) return o;
+            double w = OlcuPlani.YaziGenisligi(o);
+            o.YaziU = saga ? Math.Max(o.U1, o.U2) + 0.75 * o.Yazi + w / 2 : Math.Min(o.U1, o.U2) - 0.75 * o.Yazi - w / 2;
+            o.YaziV = o.VD + 0.5 * o.Yazi;
+            return o;
+        }
+
+        /// <summary>Düşey zincirde yazısı sığmayan kısa parçalar: en alttaki aşağıya, en üstteki yukarıya, aradakiler ölçü
+        /// çizgisinin dış (sağ) yanına.</summary>
+        private static void DuseyZincirYerlestir(List<OlcuTanimi> zincir, double uz)
+        {
+            for (int i = 0; i < zincir.Count; i++)
+            {
+                OlcuTanimi o = zincir[i];
+                if (OlcuPlani.YaziSigar(o)) continue;
+                double w = OlcuPlani.YaziGenisligi(o), alt = Math.Min(o.V1, o.V2), ust = Math.Max(o.V1, o.V2);
+                if (i == 0 && zincir.Count > 1) { o.YaziU = uz - 0.5 * o.Yazi; o.YaziV = alt - 0.75 * o.Yazi - w / 2; }
+                else if (i == zincir.Count - 1 && zincir.Count > 1) { o.YaziU = uz - 0.5 * o.Yazi; o.YaziV = ust + 0.75 * o.Yazi + w / 2; }
+                else if (zincir.Count > 1) { o.YaziU = uz + 0.75 * o.Yazi; o.YaziV = (alt + ust) / 2; }
+            }
         }
 
         private static List<int> YerelEnBuyuk(List<double> r)
@@ -2692,7 +2920,25 @@ namespace OtomatikKesit
         /// <returns>Kullanıcıya gösterilecek uyarı, sorun yoksa null</returns>
         /// <param name="okunan">OutlineDrawing'in okuduğu eleman anahtarları (finalMember); verilirse .tow'daki elemanlarla
         /// karşılaştırılır ve okunmayan eleman varsa uyarılır.</param>
+        private static string _uyariAnahtar, _uyariSonuc;
+
+        /// <summary>Aynı .tow (yol + değişme zamanı + boyut) ve aynı okunan eleman sayısı için son sonuç döner.</summary>
         public static string Uyari(string towPath, ICollection<string> okunan = null)
+        {
+            string anahtar = null;
+            try
+            {
+                var fi = new FileInfo(towPath);
+                if (fi.Exists) anahtar = fi.FullName + "|" + fi.LastWriteTimeUtc.Ticks + "|" + fi.Length + "|" + (okunan == null ? -1 : okunan.Count);
+            }
+            catch { }
+            if (anahtar != null && anahtar == _uyariAnahtar) return _uyariSonuc;
+            string sonuc = UyariHesapla(towPath, okunan);
+            if (anahtar != null) { _uyariAnahtar = anahtar; _uyariSonuc = sonuc; }
+            return sonuc;
+        }
+
+        private static string UyariHesapla(string towPath, ICollection<string> okunan)
         {
             try
             {

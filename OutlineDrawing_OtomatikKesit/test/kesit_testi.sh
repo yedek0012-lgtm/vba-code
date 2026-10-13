@@ -6,10 +6,6 @@
 set -euo pipefail
 DLL="$(realpath "$1")"; TOW="$(realpath "$2")"
 cd "$(dirname "$0")"
-OUT="${TMPDIR:-/tmp}/kesit_testi"; rm -rf "$OUT"; mkdir -p "$OUT"
-mcs -target:library -out:"$OUT/Acdbmgd.dll" sahte_autocad/Acdbmgd.cs
-mcs -target:library -out:"$OUT/accoremgd.dll" sahte_autocad/accoremgd.cs
-mcs -target:library -r:"$OUT/accoremgd.dll" -out:"$OUT/Acmgd.dll" sahte_autocad/Acmgd.cs
-cp "$DLL" "$OUT/OutlineDrawing.dll"; cp "$TOW" "$OUT/kule.tow"
-mcs -r:"$OUT/OutlineDrawing.dll" -out:"$OUT/SD.exe" SectionDetectionTest.cs 2>&1 | grep -v "custom attr" || true
-cd "$OUT" && mono SD.exe kule.tow 2>&1 | grep -v "custom attr"
+source ./ortak.sh; hazirla kesit_testi SectionDetectionTest.cs SD.exe
+IS=$(mktemp -d "${TMPDIR:-/tmp}/kesit_is.XXXXXX"); trap 'rm -rf "$IS"' EXIT; cp "$TOW" "$IS/kule.tow"
+cd "$OUT" && mono SD.exe "$IS/kule.tow" 2>&1 | grep -v "custom attr"

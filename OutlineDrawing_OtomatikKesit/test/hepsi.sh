@@ -4,10 +4,12 @@
 #   kesit   : OutlineDrawing'in gerçek SectionDetection'ı; her kesit tam mı, çizgi eşleşmesi ve redundant stili doğru mu
 #   gorunus : her elemanın önden/yandan izdüşümü çizimde var mı (yüz çizgileri + iç eleman izdüşümleri)
 #   (ayrıca bir kez: ayna_parca_testi.sh, sentetik kopuk ayna parçaları)
+#   olcu    : kesit ve görünüş ölçü yazıları sığıyor / çakışmıyor mu
 #   konum   : ön/yan görünüş her çizim durumunda (yalnız ön/yan/ikisi, başlıklı/başlıksız, 2D) doğru yerde mi
 #
 #   bash test/hepsi.sh eklenti/bin/tek/OutlineDrawing.dll kule1.tow [kule2.tow ...]
 #   VARYANT=0 bash test/hepsi.sh ...      -> yalnız verilen dosyalar
+#   PARALEL=1 bash test/hepsi.sh ...      -> dosyaları sırayla (varsayılan: çekirdek sayısı kadar paralel)
 set -uo pipefail
 DLL="$(realpath "$1")"; shift
 cd "$(dirname "$0")"
@@ -28,19 +30,22 @@ hata=0
 # sentetik ayna parçası testi (kuleden bağımsız, bir kez)
 a=$(bash ayna_parca_testi.sh "$DLL" 2>&1)
 echo "$a" | grep -q "SONUC: ayna parca testi TAMAM" && echo "ayna parca testi: TAMAM" || { echo "$a"; hata=$((hata+1)); }
-printf "%-58s %-8s %-8s %-8s %-8s\n" "dosya" "detay" "kesit" "gorunus" "konum"
-for f in "${DOSYALAR[@]}"; do
-  d=$(bash detay_testi.sh "$DLL" "$f" 2>&1); k=$(bash kesit_testi.sh "$DLL" "$f" 2>&1)
-  g=$(bash gorunus_testi.sh "$DLL" "$f" 2>&1); c=$(bash gorunus_konum_testi.sh "$DLL" "$f" 2>&1)
-  sd=$(echo "$d" | grep -q "SONUC: atlanan eleman yok" && echo TAMAM || echo HATA)
-  sk=$(echo "$k" | grep -q "SONUC: butun kesitler tam" && echo "$k" | grep -q "eslesmeyen 0, yanlis stil 0" && echo TAMAM || echo HATA)
-  # görünüş: ön veya yan görünüşten en az biri tam olmalı; öbüründe eksik yalnız uçtan görülen traversler (detay testi
-  # her elemanın etiketli çizildiğini ayrıca doğrular)
-  sg=$( [ "$(echo "$g" | grep -cE "(on|yan): izdusum [0-9]+, cizimde var [0-9]+, yok 0")" = 2 ] && echo TAMAM || echo HATA)
-  sc=$(echo "$c" | grep -q "SONUC: hicbir gorunus yanlis yere konmadi" && echo TAMAM || echo HATA)
-  printf "%-58s %-8s %-8s %-8s %-8s\n" "$(basename "$f" | cut -c1-58)" "$sd" "$sk" "$sg" "$sc"
-  for s in "$sd" "$sk" "$sg" "$sc"; do [ "$s" = TAMAM ] || hata=$((hata+1)); done
-  if [ "$sd$sk$sg$sc" != TAMAMTAMAMTAMAMTAMAM ]; then echo "$d"; echo "$k" | tail -5; echo "$g"; echo "$c" | tail -3; fi
+
+# test programlarını bir kez derle (paralel çalışmada her iş beklemesin)
+for t in "detay_testi DetayTesti.cs DT.exe" "kesit_testi SectionDetectionTest.cs SD.exe" "gorunus_testi GorunusKontrol.cs GK.exe" \
+         "gorunus_konum_testi GorunusKonumTest.cs GKT.exe" "olcu_testi OlcuCakismaTesti.cs OCT.exe"; do
+  ( source ./ortak.sh; hazirla $t )
+done
+
+# dosyalar paralel (çekirdek sayısı kadar); çıktılar sırayla yazılır
+SONUC="$OUT/sonuc"; rm -rf "$SONUC"; mkdir -p "$SONUC"
+for i in "${!DOSYALAR[@]}"; do printf "%s\0%s\0" "$i" "${DOSYALAR[$i]}"; done |
+  xargs -0 -n 2 -P "${PARALEL:-$(nproc)}" sh -c 'bash tek_dosya.sh "$0" "$3" > "$1/$(printf %04d "$2").txt" 2>&1' "$DLL" "$SONUC" 2>/dev/null || true
+printf "%-58s %-8s %-8s %-8s %-8s %-8s\n" "dosya" "detay" "kesit" "gorunus" "konum" "olcu"
+for i in "${!DOSYALAR[@]}"; do
+  r="$SONUC/$(printf %04d "$i").txt"
+  if [ -f "$r" ]; then cat "$r"; else echo "$(basename "${DOSYALAR[$i]}"): SONUC YOK"; hata=$((hata+1)); continue; fi
+  n=$(head -1 "$r" | grep -o "HATA" | wc -l); hata=$((hata+n))
 done
 echo
 [ $hata -eq 0 ] && echo "SONUC: ${#DOSYALAR[@]} dosyada bütün testler TAMAM" || echo "SONUC: $hata test HATALI"

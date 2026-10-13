@@ -192,8 +192,9 @@ yalnız Türkçe harfte farklı eleman adları ve bunların birleşimi) üzerind
 | `kesit_testi.sh` | Gerçek SectionDetection her kesitte beklenen bütün elemanları çiziyor mu; çizilen her çizgi tanınıyor mu; redundant stili doğru mu |
 | `gorunus_testi.sh` | Her elemanın önden / yandan izdüşümü çizimde var mı (yüz çizgileri + iç eleman izdüşümleri) |
 | `gorunus_konum_testi.sh` | Ön / yan görünüş her durumda (yalnız ön / yalnız yan / ikisi, başlıklı / başlıksız, 2D Aktar, araya kesitler) doğru yerde bulunuyor mu |
+| `olcu_testi.sh` | Bütün otomatik kesitlerin ve ön / yan görünüşün ölçülerinde yazı iki uzatma çizgisi arasına sığıyor ya da dışarı / üste alınmış mı; hiçbir ölçü yazısı bir başkasına binmiyor mu |
 
-Sonuç (1.22): 7 gerçek kule + 84 yapay varyant = 91 dosya, dört testin hepsi TAMAM; ayna parçası testi TAMAM.
+Sonuç (2.0): 7 gerçek kule + 84 yapay varyant = 91 dosya, beş testin hepsi TAMAM; ayna parçası testi TAMAM (paralel, 2 dakika).
 
 AutoCAD içinde test edilemeyenler: forma buton / kutucuk ekleme, ÇALIŞTIR'a bağlanma, silme onayı, ölçülerin ve
 kesik çizginin ekranda görünüşü, yakınlaştırınca REGEN. Bunlar kullanımda bir kez doğrulanmalı.
