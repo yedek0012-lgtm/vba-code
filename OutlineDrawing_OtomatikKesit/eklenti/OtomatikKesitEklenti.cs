@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "1.24";
+        public const string Surum = "1.25";
         private static Timer _timer;
 
         public void Initialize()
@@ -1183,13 +1183,18 @@ namespace OtomatikKesit
             dim.Dimtad = 1;
             dim.Dimtih = false;
             dim.Dimtoh = false;
-            dim.DimfxlenOn = true;   // uzatma çizgisi sabit boy: geometriden uzaktaki köşelerde
-            dim.Dimfxlen = o.Uzatma; // çizim boyunca uzanan uzun çizgi olmasın
+            dim.DimfxlenOn = o.SabitUzatma;   // uzatma çizgisi sabit boy yalnız geometriden uzaktaki köşelerde
+            dim.Dimfxlen = o.Uzatma;          // (çizim boyunca uzanan uzun çizgi olmasın); yakındakiler köşeye kadar iner
             dim.Dimscale = 1;     // çizimin ölçü stili ölçekli olsa da yazı boyu korunsun
             dim.Dimlfac = 1;      // ölçülen değer gerçek mm olsun
             dim.Dimtfac = 1;
             dim.Dimlunit = 2;     // ondalık
             dim.Dimrnd = 0;
+            if (o.YaziU.HasValue && o.YaziV.HasValue)
+            {
+                dim.Dimtmove = 2;   // yazı serbest: ok / uzatma çizgileri yerinde kalır
+                dim.TextPosition = new Point3d(o.YaziU.Value, o.YaziV.Value, 0);
+            }
             try
             {
                 dim.TransformBy(m);
@@ -1644,6 +1649,10 @@ namespace OtomatikKesit
         public double U1, V1, U2, V2, UD, VD, Rotation;
         /// <summary>Kesit büyüklüğüne göre ölçü yazı yüksekliği ve uzatma çizgisi boyu (mm).</summary>
         public double Yazi = 200, Uzatma = 400;
+        /// <summary>Uzatma çizgisi sabit boy mu (false: ölçülen noktaya kadar iner).</summary>
+        public bool SabitUzatma = true;
+        /// <summary>Yazı sığmıyorsa elle konum (ölçü düzleminde); null: AutoCAD yerleştirir.</summary>
+        public double? YaziU, YaziV;
         public double Deger { get { return Math.Abs(Rotation) < 1e-9 ? Math.Abs(U2 - U1) : Math.Abs(V2 - V1); } }
     }
 
@@ -1688,12 +1697,17 @@ namespace OtomatikKesit
             if (us.Count >= 2 && maxU - minU >= EnKisa)
             {
                 double vd = maxV + aralik;
+                var zincir = new List<OlcuTanimi>();
                 for (int i = 0; i + 1 < us.Count; i++)
-                    sonuc.Add(new OlcuTanimi
+                    zincir.Add(new OlcuTanimi
                     {
                         U1 = us[i][0], V1 = us[i][1], U2 = us[i + 1][0], V2 = us[i + 1][1],
-                        UD = (us[i][0] + us[i + 1][0]) / 2, VD = vd, Rotation = 0, Yazi = yazi, Uzatma = uzatma
+                        UD = (us[i][0] + us[i + 1][0]) / 2, VD = vd, Rotation = 0, Yazi = yazi, Uzatma = uzatma,
+                        // köşe ölçü çizgisine yakınsa uzatma çizgisi köşeye kadar iner; derindeki köşede sabit boy
+                        SabitUzatma = Math.Max(vd - us[i][1], vd - us[i + 1][1]) > 3 * aralik
                     });
+                YazilariYerlestir(zincir, vd);
+                sonuc.AddRange(zincir);
             }
 
             // Sağ: toplam derinlik (en üst ve en alt köşelerden sağdakiler)
@@ -1704,10 +1718,35 @@ namespace OtomatikKesit
                 sonuc.Add(new OlcuTanimi
                 {
                     U1 = ust[0], V1 = ust[1], U2 = alt[0], V2 = alt[1],
-                    UD = maxU + aralik, VD = (maxV + minV) / 2, Rotation = Math.PI / 2, Yazi = yazi, Uzatma = uzatma
+                    UD = maxU + aralik, VD = (maxV + minV) / 2, Rotation = Math.PI / 2, Yazi = yazi, Uzatma = uzatma,
+                    SabitUzatma = Math.Max(maxU + aralik - ust[0], maxU + aralik - alt[0]) > 3 * aralik
                 });
             }
             return sonuc;
+        }
+
+        /// <summary>Yazı genişliği tahmini (mm): rakam başına ~0,75 yazı yüksekliği.</summary>
+        public static double YaziGenisligi(OlcuTanimi o)
+        {
+            int n = Math.Round(o.Deger).ToString(CultureInfo.InvariantCulture).Length;
+            return n * 0.75 * o.Yazi;
+        }
+
+        /// <summary>Zincirde yazısı iki ok arasına sığmayan kısa parçaların yazısı komşusuyla çakışmasın: ilk parça
+        /// sola, son parça sağa, aradakiler ölçü çizgisinin üstüne (art arda kısalar sırayla bir kat daha yukarı).</summary>
+        public static void YazilariYerlestir(List<OlcuTanimi> zincir, double vd)
+        {
+            int kat = 0;
+            for (int i = 0; i < zincir.Count; i++)
+            {
+                OlcuTanimi o = zincir[i];
+                double w = YaziGenisligi(o), gerek = w + 2 * 0.75 * o.Yazi + 0.5 * o.Yazi;
+                if (o.Deger >= gerek) { kat = 0; continue; }
+                double sol = Math.Min(o.U1, o.U2), sag = Math.Max(o.U1, o.U2);
+                if (i == 0 && zincir.Count > 1) { o.YaziU = sol - 0.75 * o.Yazi - w / 2; o.YaziV = vd + 0.5 * o.Yazi; kat = 0; }
+                else if (i == zincir.Count - 1 && zincir.Count > 1) { o.YaziU = sag + 0.75 * o.Yazi + w / 2; o.YaziV = vd + 0.5 * o.Yazi; }
+                else if (zincir.Count > 1) { kat = kat % 2 + 1; o.YaziU = (sol + sag) / 2; o.YaziV = vd + 0.5 * o.Yazi + kat * 1.5 * o.Yazi; }
+            }
         }
 
         public static double KucukParcaOrani = 0.1;   // toplam boyu en büyük parçanın bundan azı olan kopuk parçalar ölçülmez
