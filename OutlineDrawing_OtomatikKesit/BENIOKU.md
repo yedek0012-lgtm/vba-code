@@ -10,6 +10,17 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC.
 
+**2.1: Yan / ön görünüşte iç eleman çizgilerinin görünmemesi düzeltildi.**
+- *Kök neden:* OTO_IC_ELEMAN / OTO_IC_ELEMAN_UC katmanı kapalı ya da dondurulmuşsa (ÇALIŞTIR nesneleri siler, katman
+  durumunu korur) çizgiler çiziliyor ama görünmüyordu; uyarı oturumda bir kez, UC katmanı için hiç çıkmıyordu.
+  OutlineDrawing kendi katmanlarını her çizimde açıyor; artık eklenti de iç eleman ve ölçü katmanlarını her çizimde açar
+  (açtığını özette yazar). Özet ön / yan çizgi sayısını ayrı gösterir.
+- *İç eleman kutusu* kapalı haliyle hatırlanmaz (her açılışta işaretli); kapalıysa uyarı kutusunda da yazar.
+- *Ölçü yazısı stili:* ölçü stilinin yazı stili sabit yükseklikliyse (şablonda 2,5 gibi) AutoCAD yazı yüksekliğini yok
+  sayıyordu, yazılar görünmeyecek kadar küçük çıkıyordu; o durumda aynı yazı tipinde yüksekliği 0 olan OTO_OLCU stili
+  kullanılır.
+- *Geçerli katman:* eklenti katmanıyken "0"a alma artık belge kilidiyle yapılır (önceden sessizce olmuyordu).
+
 **2.0: Ölçülmüş, daha güvenli ve daha pratik sürüm.** (Önceki sürüm `eklenti/bin/yedek_1.26/OutlineDrawing.dll`'de;
 bir sorun olursa onunla değiştirilebilir.)
 - *UCS güvenliği:* 1.26'dan beri ÇALIŞTIR sonrası UCS kesit düzlemine (XZ) alınıyor. OutlineDrawing'in Nokta / Yükseklik
@@ -112,7 +123,7 @@ taşan, uçtan görülen travers elemanları (bilerek, okunmaz yığın olmasın
 `OTOIC`: ön/yan görünüşe, yüz düzleminde olmayan elemanların izdüşümü eklenir (kalça çaprazları, iç diyaframlar; ör.
 YAA-R1 20BE uzatmasındaki P-E1-5_20). Yalnız görünüşte yeni bir çizgi oluşturanlar eklenir: izdüşümü yüz
 çizgilerinin üstüne binenler (arka yüz, yan yüzler, yatay düzlemler), ayna kopyaları, bakış yönüne yakın olanlar ve
-gövdenin dışında kalanlar (uçtan görülen travers) eklenmez. Katman `OTO_IC_ELEMAN` (kapatılabilir), stil ana/redundant
+gövdenin dışında kalanlar (uçtan görülen travers) eklenmez. Katman `OTO_IC_ELEMAN` (2.1: her ÇALIŞTIR'da açılır), stil ana/redundant
 kuralıyla aynı. YAA-R1: ön 12, yan 80 çizgi; Tangent Tower: ön 4, yan 40.
 
 **1.13: Kesik çizgi her ölçekte görünür.** Redundant çizgilerin çizgi tipi ölçeği LTSCALE'e ek olarak anotasyon

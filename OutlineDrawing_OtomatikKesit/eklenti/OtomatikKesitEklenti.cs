@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "2.0";
+        public const string Surum = "2.1";
         private static Timer _timer;
 
         public void Initialize()
@@ -345,7 +345,11 @@ namespace OtomatikKesit
                         if (r != null) mesaj.Add(r);
                         if (IcElemanlar.SonUyari != null) sorun.Add(IcElemanlar.SonUyari);
                     }
-                    else mesaj.Add("İç eleman: kapalı");
+                    else
+                    {
+                        mesaj.Add("İç eleman: kapalı");
+                        sorun.Add("'İç eleman' kutusu kapalı: görünüşlere iç eleman izdüşümleri (tepe, travers, iç çaprazlar) çizilmedi.");
+                    }
                     if (chkR.Checked)
                     {
                         string r = adim("redundant stil", () =>
@@ -568,9 +572,11 @@ namespace OtomatikKesit
         {
             try
             {
+                Document doc = AcApp.DocumentManager.MdiActiveDocument;
+                if (doc == null) return;
                 string c = Convert.ToString(AcApp.GetSystemVariable("CLAYER"), CultureInfo.InvariantCulture);
                 if (IcElemanlar.BizimKatman(c) || string.Equals(c, KesitOlculeri.Katman, StringComparison.OrdinalIgnoreCase))
-                    AcApp.SetSystemVariable("CLAYER", "0");
+                    using (doc.LockDocument()) { doc.Database.Clayer = doc.Database.LayerZero; }   // modeless formdan: kilit şart
             }
             catch { }
         }
@@ -945,7 +951,8 @@ namespace OtomatikKesit
                     else if (k.StartsWith("eklenti:"))
                     {
                         var c = f.Controls.Find(k.Substring(8), true).FirstOrDefault() as CheckBox;
-                        if (c != null) c.Checked = v == "1";
+                        // İç eleman kapalı hatırlanmaz: unutulursa görünüşler sessizce eksik kalır
+                        if (c != null && !(c.Name == "chkIcEleman" && v == "0")) c.Checked = v == "1";
                     }
                 }
             }
@@ -974,10 +981,8 @@ namespace OtomatikKesit
     /// <summary>Eklentinin katmanları kapalı / dondurulmuşsa çizgiler çizilir ama ekranda görünmez; kullanıcı fark etsin.</summary>
     internal static class KatmanDurumu
     {
-        private static readonly HashSet<string> _uyarildi = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        /// <summary>Açık olan özelliğin (iç eleman / ölçü) katmanı kapalı ya da dondurulmuşsa uyarı; her katman için oturumda bir
-        /// kez. OTO_IC_ELEMAN_UC (uçtan görülenler) kalabalık bulunup bilerek kapatılabildiği için uyarılmaz.</summary>
+        /// <summary>Açık olan özelliğin (iç eleman / ölçü) katmanı çizimden sonra hâlâ kapalı ya da dondurulmuşsa uyarı (adımlar
+        /// katmanı zaten açar; bu bir güvenlik ağı).</summary>
         internal static string Kapalilar(bool icEleman, bool olcu)
         {
             try
@@ -985,7 +990,7 @@ namespace OtomatikKesit
                 Document doc = AcApp.DocumentManager.MdiActiveDocument;
                 if (doc == null) return null;
                 var adlar = new List<string>();
-                if (icEleman) adlar.Add(IcElemanlar.Katman);
+                if (icEleman) { adlar.Add(IcElemanlar.Katman); adlar.Add(IcElemanlar.KatmanUc); }
                 if (olcu) adlar.Add(KesitOlculeri.Katman);
                 var l = new List<string>();
                 using (doc.LockDocument())
@@ -996,7 +1001,7 @@ namespace OtomatikKesit
                     {
                         if (!lt.Has(ad)) continue;
                         var k = (LayerTableRecord)tr.GetObject(lt[ad], OpenMode.ForRead);
-                        if ((k.IsOff || k.IsFrozen) && _uyarildi.Add(doc.Name + "|" + ad))
+                        if (k.IsOff || k.IsFrozen)
                             l.Add(ad + (k.IsFrozen ? " (dondurulmuş)" : " (kapalı)"));
                     }
                     tr.Commit();
@@ -1289,7 +1294,11 @@ namespace OtomatikKesit
                 KatmaniHazirla(db, tr);
                 var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
                 var olcuKatmani = (LayerTableRecord)tr.GetObject(lt[Katman], OpenMode.ForRead);
-                if (olcuKatmani.IsLocked) { olcuKatmani.UpgradeOpen(); olcuKatmani.IsLocked = false; }
+                if (olcuKatmani.IsLocked || olcuKatmani.IsOff || olcuKatmani.IsFrozen)
+                {
+                    olcuKatmani.UpgradeOpen(); olcuKatmani.IsLocked = false; olcuKatmani.IsOff = false; olcuKatmani.IsFrozen = false;
+                }
+                _metinStili = OlcuMetinStili(db, tr);
 
                 KuleVerisi kule = null;
                 try
@@ -1368,6 +1377,7 @@ namespace OtomatikKesit
                 new Point3d(o.U1, o.V1, 0), new Point3d(o.U2, o.V2, 0), new Point3d(o.UD, o.VD, 0),
                 "", db.Dimstyle);
             dim.SetDatabaseDefaults(db);
+            if (!_metinStili.IsNull) dim.TextStyleId = _metinStili;   // sabit yükseklikli stil Dimtxt'yi ezmesin
             dim.Layer = Katman;
             dim.Dimtxt = o.Yazi;
             dim.Dimasz = 0.75 * o.Yazi;
@@ -1403,6 +1413,41 @@ namespace OtomatikKesit
                 throw;
             }
             tr.AddNewlyCreatedDBObject(dim, true);
+        }
+
+        private static ObjectId _metinStili = ObjectId.Null;
+
+        /// <summary>Ölçü stilinin yazı stili sabit yükseklikliyse (ör. şablonda 2,5) AutoCAD Dimtxt'yi yok sayar ve ölçü yazıları
+        /// kulede görünmeyecek kadar küçük / dev çıkar. O durumda aynı yazı tipinde, yüksekliği 0 olan OTO_OLCU stili kullanılır.</summary>
+        private static ObjectId OlcuMetinStili(Database db, Transaction tr)
+        {
+            try
+            {
+                var ds = (DimStyleTableRecord)tr.GetObject(db.Dimstyle, OpenMode.ForRead);
+                ObjectId stilId = ds.Dimtxsty.IsNull ? db.Textstyle : ds.Dimtxsty;
+                var stil = (TextStyleTableRecord)tr.GetObject(stilId, OpenMode.ForRead);
+                if (stil.TextSize <= 1e-9) return ObjectId.Null;
+                var tt = (TextStyleTableRecord)null;
+                var tst = (TextStyleTable)tr.GetObject(db.TextStyleTableId, OpenMode.ForRead);
+                const string ad = "OTO_OLCU";
+                if (tst.Has(ad))
+                {
+                    tt = (TextStyleTableRecord)tr.GetObject(tst[ad], OpenMode.ForRead);
+                    if (tt.TextSize > 1e-9) { tt.UpgradeOpen(); tt.TextSize = 0; }
+                    return tt.ObjectId;
+                }
+                tst.UpgradeOpen();
+                tt = new TextStyleTableRecord
+                {
+                    Name = ad, TextSize = 0, FileName = stil.FileName, BigFontFileName = stil.BigFontFileName,
+                    XScale = stil.XScale, ObliquingAngle = stil.ObliquingAngle
+                };
+                if (string.IsNullOrEmpty(stil.FileName)) tt.Font = stil.Font;
+                ObjectId id = tst.Add(tt);
+                tr.AddNewlyCreatedDBObject(tt, true);
+                return id;
+            }
+            catch (System.Exception ex) { Komutlar.BirKezYaz("\nÖlçü yazı stili ayarlanamadı: " + ex.Message + "\n"); return ObjectId.Null; }
         }
 
         private static void KatmaniHazirla(Database db, Transaction tr)
@@ -2215,7 +2260,7 @@ namespace OtomatikKesit
     {
         internal const string Katman = "OTO_IC_ELEMAN";
         /// <summary>Uçtan görülen (bakış yönüne yakın / gövde dışındaki) elemanların izdüşümü: ör. yan görünüşte travers.
-        /// Görünüşte eksik çizgi olmasın diye çizilir; kalabalık bulunursa bu katman kapatılabilir.</summary>
+        /// Görünüşte eksik çizgi olmasın diye çizilir; her ÇALIŞTIR'da görünür yapılır.</summary>
         internal const string KatmanUc = "OTO_IC_ELEMAN_UC";
 
         internal static bool BizimKatman(string katman)
@@ -2239,8 +2284,9 @@ namespace OtomatikKesit
             if (yol.Length == 0 || !File.Exists(yol)) return "İç eleman: .tow dosyası seçili değil.";
             KuleVerisi kule = KuleOkuyucu.Oku(f.GetType().Assembly, yol);
             if (kule == null) return "İç eleman: .tow okunamadı.";
-            int adet = 0, adetUc = 0, gorunus = 0, plan = 0, hatali = 0;
+            int adet = 0, adetUc = 0, gorunus = 0, plan = 0, hatali = 0, adetOn = 0, adetYan = 0;
             string ilkHata = null;
+            var acilan = new List<string>();
 
             using (doc.LockDocument())
             using (Transaction tr = db.TransactionManager.StartTransaction())
@@ -2257,7 +2303,13 @@ namespace OtomatikKesit
                         tr.AddNewlyCreatedDBObject(ltr, true);
                     }
                     var katman = (LayerTableRecord)tr.GetObject(lt[ad], OpenMode.ForRead);
-                    if (katman.IsLocked) { katman.UpgradeOpen(); katman.IsLocked = false; }
+                    // OutlineDrawing kendi katmanlarını her çizimde açar (EnsureLayer); kapalı / dondurulmuş katmanda çizgiler
+                    // çizilir ama görünmez, görünüş eksik kalırdı. İç eleman kutusu işaretliyse katman görünür yapılır.
+                    if (katman.IsLocked || katman.IsOff || katman.IsFrozen)
+                    {
+                        if (katman.IsOff || katman.IsFrozen) acilan.Add(ad);
+                        katman.UpgradeOpen(); katman.IsLocked = false; katman.IsOff = false; katman.IsFrozen = false;
+                    }
                 }
 
                 // Görünüşler önce bulunur: bulunamazsa eski çizgiler silinmez (yerine yenisi konamaz)
@@ -2306,6 +2358,7 @@ namespace OtomatikKesit
                             tr.AddNewlyCreatedDBObject(line, true);
                             adet++;
                             if (c.Uc) adetUc++;
+                            if (k.Yan) adetYan++; else adetOn++;
                         }
                         catch (System.Exception ex)
                         {
@@ -2323,7 +2376,9 @@ namespace OtomatikKesit
                 SonUyari = string.Format("İç eleman: {0} / {1} çizgi eklenemedi ({2}).", hatali, plan, ilkHata);
             else if (ilkHata != null)
                 Komutlar.Yaz("\nİç eleman çizgi tipi uyarısı: " + ilkHata + "\n");
-            return string.Format("İç eleman: {0} çizgi", adet);
+            if (acilan.Count > 0) Komutlar.Yaz("\nİç eleman: kapalı / dondurulmuş katman açıldı: " + string.Join(", ", acilan) + ".\n");
+            return string.Format("İç eleman: {0} çizgi (ön {1}, yan {2}){3}", adet, adetOn, adetYan,
+                acilan.Count > 0 ? " - kapalı katman açıldı: " + string.Join(", ", acilan) : "");
         }
 
         // OutlineDrawing görünüşü Point3d(x + ofset, y, z) ile çizer; 2D Aktar sonrası (x, z, 0)
