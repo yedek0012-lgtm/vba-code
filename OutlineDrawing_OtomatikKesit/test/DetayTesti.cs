@@ -138,7 +138,7 @@ public static class DetayTesti
         // ---- 2. otomatik kesitler + gerçek SectionDetection
         var gorunen = KuleOkuyucu.Gorunenler(o);
         AutoSectionReport rapor;
-        var secs = AutoSectionDetector.DetectHidden(uyeler, gorunen, new AutoSectionOptions(), out rapor);
+        var secs = OtoKesitBulucu.Bul(uyeler, gorunen, out rapor);
         Type rowT = asm.GetType("OutlineDrawing.SectionRowData"), ptT = asm.GetType("OutlineDrawing.SectionPoint3D");
         var grid = (IDictionary)Activator.CreateInstance(typeof(Dictionary<,>).MakeGenericType(typeof(string), rowT));
         int ri = 0;
@@ -171,7 +171,7 @@ public static class DetayTesti
             ICollection<string> gor = secim == "on+yan" ? (ICollection<string>)gorunen
                 : new HashSet<string>((secim == "on" ? on : yan).Select(c => c.Anahtar));
             AutoSectionReport r2;
-            var s2 = secim == "on+yan" ? secs : AutoSectionDetector.DetectHidden(uyeler, gor, new AutoSectionOptions(), out r2);
+            var s2 = secim == "on+yan" ? secs : OtoKesitBulucu.Bul(uyeler, gor, out r2);
             var kes2 = new HashSet<string>();
             foreach (var c in s2)
             {

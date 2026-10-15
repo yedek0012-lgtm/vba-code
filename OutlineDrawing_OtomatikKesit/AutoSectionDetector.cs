@@ -89,6 +89,8 @@ namespace OutlineDrawing
         /// Örnek: Tangent Tower'da traversin arkasında kalan yan yüz çaprazları (CB-D1-T ...), YAA-R1'de CA-9. Bunlar
         /// dik bir yüz düzleminde olduğu ve o düzlemin çoğu zaten görünüşte olduğu için "dik düzlem" kuralıyla eleniyordu.</summary>
         public bool YerelKesit = true;
+        /// <summary>Başka kesitlerin tamamen kapsadığı (tek başına hiçbir görünmeyen elemanı göstermeyen) kesitler atılır.</summary>
+        public bool GereksizKesitleriAt = true;
         /// <summary>mm. Yerel kesit dörtgeninin elemandan en az uzaklığı (düğümler ve çapraz eşi içeride kalsın).</summary>
         public double YerelKesitPayi = 100.0;
         /// <summary>mm. OutlineDrawing.SectionDetection nokta kesitinde elemanın orta noktası düzleme bu kadar yakın olmalı.</summary>
@@ -191,6 +193,31 @@ namespace OutlineDrawing
             foreach (var b in bars)
                 if (!seen.Contains(b.GeoKey) && !covered.Contains(b.Family)) sonuc.Add(b.Key);
             return sonuc;
+        }
+
+        /// <summary>Gereksiz kesitler: kesitlerin gerçekten seçtiği elemanlar (OutlineDrawing'in SectionDetection'ı / KesitSecici)
+        /// verildiğinde, gösterdiği bütün görünmeyen aileler kalan kesitlerde de bulunan kesitlerin sırası. Az aile gösteren
+        /// kesit önce denenir; böylece hiçbir eleman açıkta kalmaz (Kapsanmayanlar ile aynı görünürlük / aile kuralı).</summary>
+        public static HashSet<int> GereksizKesitler(IDictionary<string, FinalMember> members, ICollection<string> visibleKeys,
+            IList<ICollection<string>> kesitler)
+        {
+            var atilan = new HashSet<int>();
+            if (members == null || kesitler == null || kesitler.Count < 2) return atilan;
+            var bars = members.Where(kv => kv.Value != null).Select(kv => new Bar(kv.Key, kv.Value)).Where(b => b.Length >= 1.0).ToList();
+            var seen = new HashSet<string>();
+            var visible = new HashSet<string>(visibleKeys ?? new string[0]);
+            foreach (var b in bars)
+                if (visible.Contains(b.Key)) foreach (var g in b.MirrorKeys) seen.Add(g);
+            var gizliAile = new Dictionary<string, string>();
+            foreach (var b in bars) if (!seen.Contains(b.GeoKey)) gizliAile[b.Key] = b.Family;
+            var aile = kesitler.Select(k => new HashSet<string>((k ?? new string[0]).Where(gizliAile.ContainsKey).Select(x => gizliAile[x]))).ToList();
+            foreach (int ki in Enumerable.Range(0, aile.Count).OrderBy(x => aile[x].Count).ThenByDescending(x => x).ToList())
+            {
+                var kalan = new HashSet<string>();
+                for (int j = 0; j < aile.Count; j++) if (j != ki && !atilan.Contains(j)) kalan.UnionWith(aile[j]);
+                if (aile[ki].All(kalan.Contains)) atilan.Add(ki);
+            }
+            return atilan;
         }
 
         public static List<AutoSectionCandidate> DetectHidden(IDictionary<string, FinalMember> members,
@@ -374,6 +401,25 @@ namespace OutlineDrawing
                     AutoSectionCandidate yerel = YerelKesit(u, bars, nodeBars, opt, seen, covered);
                     if (yerel != null) result.Add(yerel);
                 }
+
+            // ---- gereksiz kesit ayıklama: gösterdiği bütün görünmeyen aileler kalan kesitlerde de varsa kesit atılır
+            // (açgözlü seçimde önce alınan geniş bir kesit, sonradan eklenenlerce tamamen kapsanabiliyor). Kapsama yalnız
+            // MemberKeys'e (gerçek SectionDetection'ın seçtiğinin alt kümesi) göre: atılan kesitin her elemanı kesin çizilir.
+            if (opt.GereksizKesitleriAt && result.Count > 1)
+            {
+                var anahtarla = new Dictionary<string, Bar>();
+                foreach (var b in bars) anahtarla[b.Key] = b;
+                var aile = result.Select(c => new HashSet<string>(c.MemberKeys.Where(anahtarla.ContainsKey).Select(x => anahtarla[x])
+                                                                      .Where(b => !seen.Contains(b.GeoKey)).Select(b => b.Family))).ToList();
+                var atilan = new HashSet<int>();
+                foreach (int ki in Enumerable.Range(0, result.Count).OrderBy(x => aile[x].Count).ThenByDescending(x => x).ToList())
+                {
+                    var kalan = new HashSet<string>();
+                    for (int j = 0; j < result.Count; j++) if (j != ki && !atilan.Contains(j)) kalan.UnionWith(aile[j]);
+                    if (aile[ki].All(kalan.Contains)) atilan.Add(ki);
+                }
+                result = result.Where((c, x) => !atilan.Contains(x)).ToList();
+            }
 
             foreach (var b in hidden)
             {

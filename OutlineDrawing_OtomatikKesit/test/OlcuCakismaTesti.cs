@@ -53,7 +53,7 @@ public static class OlcuCakismaTesti
         var asm = typeof(KuleOkuyucu).Assembly;
         KuleVerisi k = KuleOkuyucu.OkuDogrudan(asm, a[0]);
         AutoSectionReport r;
-        var secs = AutoSectionDetector.DetectHidden(k.Uyeler, k.GorunenAnahtarlar, new AutoSectionOptions(), out r);
+        var secs = OtoKesitBulucu.Bul(k.Uyeler, k.GorunenAnahtarlar, out r);
         var rapor = new List<string>();
         int toplam = 0, sig = 0, cak = 0, ki = 0;
         foreach (var c in secs)

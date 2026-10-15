@@ -10,6 +10,11 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC.
 
+**2.2: Gereksiz kesit alınmaz.** Otomatik kesitler bulunduktan sonra, OutlineDrawing'in her kesitte gerçekte çizeceği
+elemanlara (KesitSecici: %5 büyütülen poligon, 100 mm düzlem toleransı) bakılır; gösterdiği bütün görünmeyen elemanlar
+başka kesitlerde de bulunan kesit tabloya yazılmaz (Tangent Tower R1: 15 → 14). 7 kule + 84 varyantta her kesit en az
+bir elemanı tek başına gösteriyor; hiçbir eleman açıkta kalmıyor.
+
 **2.1: Yan / ön görünüşte iç eleman çizgilerinin görünmemesi düzeltildi.**
 - *Kök neden:* OTO_IC_ELEMAN / OTO_IC_ELEMAN_UC katmanı kapalı ya da dondurulmuşsa (ÇALIŞTIR nesneleri siler, katman
   durumunu korur) çizgiler çiziliyor ama görünmüyordu; uyarı oturumda bir kez, UC katmanı için hiç çıkmıyordu.

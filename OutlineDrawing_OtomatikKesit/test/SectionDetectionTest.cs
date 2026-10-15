@@ -8,7 +8,7 @@ public static class SD { const BindingFlags H = BindingFlags.Instance|BindingFla
     var o = Activator.CreateInstance(t, true);
     t.GetMethod("datapreprocessing", H).Invoke(o, new object[]{a[0]});
     var uyeler = KuleOkuyucu.Kopyala(o);
-    AutoSectionReport r; var secs = AutoSectionDetector.DetectHidden(uyeler, KuleOkuyucu.Gorunenler(o), new AutoSectionOptions(), out r);
+    AutoSectionReport r; var secs = OtoKesitBulucu.Bul(uyeler, KuleOkuyucu.Gorunenler(o), out r);
     // grid -> Dictionary<string, SectionRowData>
     Type rowT = asm.GetType("OutlineDrawing.SectionRowData"), ptT = asm.GetType("OutlineDrawing.SectionPoint3D");
     var dictT = typeof(Dictionary<,>).MakeGenericType(typeof(string), rowT);

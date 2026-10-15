@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "2.1";
+        public const string Surum = "2.2";
         private static Timer _timer;
 
         public void Initialize()
@@ -714,7 +714,7 @@ namespace OtomatikKesit
                 else
                 {
                     if (gorunen != null && gorunen.Count > 0)
-                        bulunan = AutoSectionDetector.DetectHidden(kule.Uyeler, gorunen, new AutoSectionOptions(), out rapor);
+                        bulunan = OtoKesitBulucu.Bul(kule.Uyeler, gorunen, out rapor);
                     else
                         bulunan = AutoSectionDetector.Detect(kule.Uyeler, new AutoSectionOptions());
                     _otoHesapAnahtar = anahtar; _otoHesapBulunan = bulunan; _otoHesapRapor = rapor;
@@ -1684,6 +1684,37 @@ namespace OtomatikKesit
         {
             return double.TryParse(s, NumberStyles.Float, CultureInfo.CurrentCulture, out d) ||
                    double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out d);
+        }
+    }
+
+    /// <summary>Otomatik kesitler: AutoSectionDetector.DetectHidden + OutlineDrawing'in gerçekte çizeceği elemanlara (KesitSecici)
+    /// göre gereksiz kesit ayıklama. (Kesit poligonu %5 büyütüldüğü ve düzlem toleransı 100 mm olduğu için bir kesit hesaplanandan
+    /// fazlasını çizer; tek başına hiçbir görünmeyen elemanı göstermeyen kesit tabloya yazılmaz.)</summary>
+    public static class OtoKesitBulucu
+    {
+        public static List<AutoSectionCandidate> Bul(IDictionary<string, FinalMember> uyeler, ICollection<string> gorunen, out AutoSectionReport rapor)
+        {
+            List<AutoSectionCandidate> l = AutoSectionDetector.DetectHidden(uyeler, gorunen, new AutoSectionOptions(), out rapor);
+            var secim = new List<ICollection<string>>();
+            foreach (AutoSectionCandidate c in l)
+            {
+                List<string> a;
+                KesitSecici.Sec(uyeler, Tanim(c), out a);
+                secim.Add(a);
+            }
+            HashSet<int> at = AutoSectionDetector.GereksizKesitler(uyeler, gorunen, secim);
+            if (at.Count > 0)
+                Komutlar.Yaz(string.Format("\nOto Kesit: {0} gereksiz kesit atıldı (gösterdiği elemanlar başka kesitlerde de var).\n", at.Count));
+            return l.Where((c, i) => !at.Contains(i)).ToList();
+        }
+
+        /// <summary>Adayın tabloya yazılan hali (yükseklik "0.###", noktalar FormatPoint ile 3 ondalık).</summary>
+        public static KesitTanimi Tanim(AutoSectionCandidate c)
+        {
+            var t = new KesitTanimi();
+            if (c.Kind == AutoSectionKind.Height && c.Height.HasValue) t.Yukseklik = Math.Round(c.Height.Value, 3);
+            else foreach (var p in c.Points) t.Noktalar.Add(new[] { Math.Round(p.X, 3), Math.Round(p.Y, 3), Math.Round(p.Z, 3) });
+            return t;
         }
     }
 
