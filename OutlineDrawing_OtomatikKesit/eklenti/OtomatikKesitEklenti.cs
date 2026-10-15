@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "2.2";
+        public const string Surum = "2.3";
         private static Timer _timer;
 
         public void Initialize()
@@ -101,6 +101,18 @@ namespace OtomatikKesit
                 return;
             }
             FormBaglayici.Guvenli(f, "İç eleman", () => { FormBaglayici.Uyari(f, IcElemanlar.Ciz(f, true)); Goruntu.Yenile(); });
+        }
+
+        [CommandMethod("OTODIZ", CommandFlags.Session)]
+        public void OtoDiz()
+        {
+            try
+            {
+                string r = KesitDizici.Diz();
+                Yaz("\n" + (r ?? "Dizilecek kesit yok (en az iki \"SECTION x\" başlığı gerekir).") + "\n");
+                Goruntu.Yenile();
+            }
+            catch (System.Exception ex) { Yaz("\nKesitler dizilemedi: " + ex.Message + "\n"); }
         }
 
         [CommandMethod("OTOSTIL", CommandFlags.Session)]
@@ -173,6 +185,7 @@ namespace OtomatikKesit
             var chk = new CheckBox { Name = OlcuKutusuAdi, Text = "Ölçü", Checked = true, AutoSize = true };
             var chkR = new CheckBox { Name = "chkRedundant", Text = "Redundant", Checked = true, AutoSize = true };
             var chkI = new CheckBox { Name = "chkIcEleman", Text = "İç eleman", Checked = true, AutoSize = true };
+            var chkD = new CheckBox { Name = "chkKesitDiz", Text = "Kesitleri diz", Checked = true, AutoSize = true };
             if (ornek != null)
             {
                 b.Size = ornek.Size;
@@ -216,6 +229,11 @@ namespace OtomatikKesit
                     Control ust = chkR.Top == chk.Top ? chkR : chk;
                     chkI.Location = new Point(ust.Left + ust.PreferredSize.Width + 8, ust.Top);
                 }
+                chkD.Font = ornek.Font;
+                chkD.ForeColor = kap.ForeColor;
+                chkD.Anchor = ornek.Anchor;
+                chkD.Location = new Point(ornek.Left + 2, chkI.Bottom + 2);
+                if (chkD.Bottom > altSinir) chkD.Location = new Point(chkI.Left + chkI.PreferredSize.Width + 8, chkI.Top);
             }
             else
             {
@@ -226,6 +244,7 @@ namespace OtomatikKesit
                 chk.Location = new Point(8, 36);
                 chkR.Location = new Point(8, 58);
                 chkI.Location = new Point(8, 80);
+                chkD.Location = new Point(8, 102);
             }
 
             kap.Controls.Add(b);
@@ -233,15 +252,18 @@ namespace OtomatikKesit
             kap.Controls.Add(chk);
             kap.Controls.Add(chkR);
             kap.Controls.Add(chkI);
+            kap.Controls.Add(chkD);
             b.BringToFront();
             bh.BringToFront();
             chk.BringToFront();
             chkR.BringToFront();
             chkI.BringToFront();
+            chkD.BringToFront();
             var tip = new ToolTip();
             tip.SetToolTip(b, "Ön/yan görünüşte görünmeyen elemanların hepsini kapsayan kesitleri bulup tabloya yazar");
             tip.SetToolTip(chk, "ÇALIŞTIR'dan sonra kesitlere ölçü koy (komut: OTOOLCU)");
             tip.SetToolTip(chkR, "YÜKLE ve ÇALIŞTIR'dan sonra 3D modelde, görünüşlerde ve kesitlerde ana elemanlar düz, redundant elemanlar kesikli; isimler tek renk (komut: OTOSTIL)");
+            tip.SetToolTip(chkD, "ÇALIŞTIR'dan sonra kesitleri kendi boyutlarına göre satırlar halinde sıkı bir ızgaraya dizer (tek uzun sıra yerine); çizgiler, etiketler, başlık ve ölçüler birlikte taşınır (komut: OTODIZ)");
             tip.SetToolTip(chkI, "ÇALIŞTIR'dan sonra ön/yan görünüşe yüzde olmayan iç elemanların (kalça çaprazları, diyaframlar) izdüşümünü PLS-TOWER'daki gibi ekler; katman " + IcElemanlar.Katman + " (komut: OTOIC)");
             b.Click += (s, e) => Guvenli(f, "Otomatik kesit", () => TabloyuDoldur(f));
             tip.SetToolTip(bh, "Tek tık: otomatik kesitleri bulup tabloya yazar ve ÇALIŞTIR'ı çalıştırır (görünüşler, kesitler, iç eleman, ölçü, redundant)");
@@ -368,7 +390,16 @@ namespace OtomatikKesit
                         });
                         if (r != null) mesaj.Add(r);
                     }
-                    if (chkI.Checked || chkR.Checked || chk.Checked) adim("REGEN", () => { Goruntu.Yenile(); return null; });
+                    if (chkD.Checked)
+                    {
+                        string r = adim("kesit dizme", () =>
+                        {
+                            try { return KesitDizici.Diz(); }
+                            catch (System.Exception ex) { sorun.Add("Kesitler dizilemedi (yerleri değişmedi): " + IcHata(ex).Message); return null; }
+                        });
+                        if (r != null) mesaj.Add(r);
+                    }
+                    if (chkI.Checked || chkR.Checked || chk.Checked || chkD.Checked) adim("REGEN", () => { Goruntu.Yenile(); return null; });
                     string kapali = KatmanDurumu.Kapalilar(chkI.Checked, chk.Checked);
                     if (kapali != null) sorun.Add(kapali);
                     // Görünüş / kesit düzlemi (XZ) UCS olsun: ölçü ve yazılar tutamaçla düzenlenebilsin
@@ -907,7 +938,7 @@ namespace OtomatikKesit
                     var r = fi.GetValue(f) as RadioButton;
                     if (r != null && r.Checked) satir.Add("secim:" + fi.Name + "=1");
                 }
-                foreach (string ad in new[] { "chkAutoDim", "chkRedundant", "chkIcEleman" })
+                foreach (string ad in new[] { "chkAutoDim", "chkRedundant", "chkIcEleman", "chkKesitDiz" })
                 {
                     var c = f.Controls.Find(ad, true).FirstOrDefault() as CheckBox;
                     if (c != null) satir.Add("eklenti:" + ad + "=" + (c.Checked ? "1" : "0"));
@@ -975,6 +1006,141 @@ namespace OtomatikKesit
                 return c == null || string.Equals(c.DxfName, dxf, StringComparison.OrdinalIgnoreCase);
             }
             catch { return true; }
+        }
+    }
+
+    /// <summary>ÇALIŞTIR sonrası kesitleri ızgaraya dizer (KesitDizimi). Her kesitin bütün nesneleri (çizgiler, eleman etiketleri,
+    /// başlık, ölçüler) birlikte taşınır ve kesit adıyla işaretlenir (XData OTO_KESIT); sonraki ölçü / stil adımları kesitleri
+    /// bu işaretle tanır. Tek işlemde: hata olursa hiçbir şey taşınmaz.</summary>
+    internal static class KesitDizici
+    {
+        internal const string Uygulama = "OTO_KESIT";
+        private static readonly Regex KesitYazisi = new Regex(@"^SECTION\s+(\S+)$", RegexOptions.IgnoreCase);
+
+        internal static string Etiket(Entity e)
+        {
+            try
+            {
+                using (ResultBuffer rb = e.GetXDataForApplication(Uygulama))
+                {
+                    if (rb == null) return null;
+                    foreach (TypedValue tv in rb)
+                        if (tv.TypeCode == (int)DxfCode.ExtendedDataAsciiString) return tv.Value as string;
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private class Baslik { public string Ad; public double U, V; public bool XZ; }
+
+        // { u0, v0, u1, v1 } (XZ düzleminde v = Z, XY'de v = Y); okunamazsa null
+        private static double[] Kutu(Entity e, bool xz)
+        {
+            Point3d a, b;
+            try { Extents3d x = e.GeometricExtents; a = x.MinPoint; b = x.MaxPoint; }
+            catch
+            {
+                var t = e as DBText; var l = e as Line;
+                if (t != null) { a = b = t.Position; }
+                else if (l != null) { a = l.StartPoint; b = l.EndPoint; }
+                else return null;
+            }
+            double va = xz ? a.Z : a.Y, vb = xz ? b.Z : b.Y;
+            return new[] { Math.Min(a.X, b.X), Math.Min(va, vb), Math.Max(a.X, b.X), Math.Max(va, vb) };
+        }
+
+        internal static string Diz()
+        {
+            Document doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) return null;
+            Database db = doc.Database;
+            using (doc.LockDocument())
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
+                var basliklar = new List<Baslik>();
+                var gorunusU = new List<double>();
+                foreach (ObjectId id in ms)
+                {
+                    if (!Sinif.Yazi(id)) continue;
+                    var t = tr.GetObject(id, OpenMode.ForRead) as DBText;
+                    if (t == null || t.TextString == null) continue;
+                    string metin = t.TextString.Trim();
+                    Point3d p = t.HorizontalMode == TextHorizontalMode.TextLeft && t.VerticalMode == TextVerticalMode.TextBase ? t.Position : t.AlignmentPoint;
+                    bool xz = Math.Abs(t.Normal.Y) > 0.9, xy = Math.Abs(t.Normal.Z) > 0.9;
+                    if (!xz && !xy) continue;
+                    if (metin.Equals(GorunusYeri.OnBaslik, StringComparison.OrdinalIgnoreCase) || metin.Equals(GorunusYeri.YanBaslik, StringComparison.OrdinalIgnoreCase))
+                    { gorunusU.Add(p.X); continue; }
+                    if (t.Height < 250) continue;
+                    Match m = KesitYazisi.Match(metin);
+                    if (m.Success && !basliklar.Any(o => o.Ad == m.Groups[1].Value))
+                        basliklar.Add(new Baslik { Ad = m.Groups[1].Value, U = p.X, V = xz ? p.Z : p.Y, XZ = xz });
+                }
+                if (basliklar.Count < 2) { tr.Commit(); return null; }
+                bool duzXZ = basliklar.Count(b => b.XZ) >= basliklar.Count(b => !b.XZ);
+                basliklar = basliklar.Where(b => b.XZ == duzXZ).OrderBy(b => b.U).ToList();
+                if (basliklar.Count < 2) { tr.Commit(); return null; }
+
+                // Daha önce dizilmemiş çizimde kesitler sabit aralıkla tek sırada: nesne en yakın başlığa, aralığın yarısı içinde
+                double enKucuk = double.MaxValue;
+                for (int i = 1; i < basliklar.Count; i++)
+                    if (basliklar[i].U - basliklar[i - 1].U > 1000) enKucuk = Math.Min(enKucuk, basliklar[i].U - basliklar[i - 1].U);
+                double yari = enKucuk < double.MaxValue ? enKucuk / 2 : 15000;
+                var gruplar = basliklar.ToDictionary(b => b.Ad, b => new List<ObjectId>());
+                var kutular = basliklar.ToDictionary(b => b.Ad, b => (double[])null);
+                foreach (ObjectId id in ms)
+                {
+                    if (id.IsErased) continue;
+                    var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (e == null) continue;
+                    string ad = Etiket(e);
+                    double[] k = Kutu(e, duzXZ);
+                    if (k == null) continue;
+                    if (ad == null || !gruplar.ContainsKey(ad))
+                    {
+                        double um = (k[0] + k[2]) / 2;
+                        Baslik en = basliklar.OrderBy(b => Math.Abs(b.U - um)).First();
+                        if (Math.Abs(en.U - um) > yari) continue;
+                        if (gorunusU.Any(g => Math.Abs(g - um) < Math.Abs(en.U - um))) continue;   // görünüşe daha yakın
+                        ad = en.Ad;
+                    }
+                    gruplar[ad].Add(id);
+                    double[] kk = kutular[ad];
+                    kutular[ad] = kk == null ? k : new[] { Math.Min(kk[0], k[0]), Math.Min(kk[1], k[1]), Math.Max(kk[2], k[2]), Math.Max(kk[3], k[3]) };
+                }
+                var sirali = basliklar.Where(b => kutular[b.Ad] != null).ToList();
+                if (sirali.Count < 2) { tr.Commit(); return null; }
+                int satir;
+                List<double[]> kayma = KesitDizimi.Yerlestir(sirali.Select(b => kutular[b.Ad]).ToList(), out satir);
+
+                var rat = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
+                if (!rat.Has(Uygulama))
+                {
+                    rat.UpgradeOpen();
+                    var r = new RegAppTableRecord { Name = Uygulama };
+                    rat.Add(r);
+                    tr.AddNewlyCreatedDBObject(r, true);
+                }
+                int tasinan = 0;
+                for (int i = 0; i < sirali.Count; i++)
+                {
+                    Vector3d v = duzXZ ? new Vector3d(kayma[i][0], 0, kayma[i][1]) : new Vector3d(kayma[i][0], kayma[i][1], 0);
+                    Matrix3d m = Matrix3d.Displacement(v);
+                    bool kaymaVar = v.Length > 1e-6;
+                    foreach (ObjectId id in gruplar[sirali[i].Ad])
+                    {
+                        var e = (Entity)tr.GetObject(id, OpenMode.ForWrite);
+                        if (kaymaVar) e.TransformBy(m);
+                        e.XData = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, Uygulama),
+                                                   new TypedValue((int)DxfCode.ExtendedDataAsciiString, sirali[i].Ad));
+                        tasinan++;
+                    }
+                }
+                tr.Commit();
+                Komutlar.Yaz(string.Format("\nKesitler dizildi: {0} kesit, {1} satır ({2} nesne).\n", sirali.Count, satir, tasinan));
+                return string.Format("Kesitler: {0} kesit {1} satırda", sirali.Count, satir);
+            }
         }
     }
 
@@ -1209,6 +1375,7 @@ namespace OtomatikKesit
         {
             var etiketler = new List<KesitCizimi>();
             var cizgiler = new List<KeyValuePair<ObjectId, Point3d[]>>();
+            var etiketli = new List<KeyValuePair<string, KeyValuePair<ObjectId, Point3d[]>>>();
             foreach (ObjectId id in ms)
             {
                 var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
@@ -1234,7 +1401,21 @@ namespace OtomatikKesit
                 var l = ent as Line;
                 if (l != null && !l.Layer.StartsWith("SECTION_MARK", StringComparison.OrdinalIgnoreCase)
                     && !IcElemanlar.BizimKatman(l.Layer))
-                    cizgiler.Add(new KeyValuePair<ObjectId, Point3d[]>(id, new[] { l.StartPoint, l.EndPoint }));
+                {
+                    string etiket = KesitDizici.Etiket(l);
+                    if (etiket != null) etiketli.Add(new KeyValuePair<string, KeyValuePair<ObjectId, Point3d[]>>(etiket,
+                        new KeyValuePair<ObjectId, Point3d[]>(id, new[] { l.StartPoint, l.EndPoint })));
+                    else cizgiler.Add(new KeyValuePair<ObjectId, Point3d[]>(id, new[] { l.StartPoint, l.EndPoint }));
+                }
+            }
+            // Kesitler dizildiyse (KesitDizici) çizgiler kesit adıyla işaretli: pencereye bakmadan o kesite
+            foreach (var et in etiketli)
+            {
+                KesitCizimi e = etiketler.FirstOrDefault(x => x.Ad == et.Key);
+                if (e == null) { cizgiler.Add(et.Value); continue; }
+                Point3d[] c = et.Value.Value;
+                e.Ids.Add(et.Value.Key);
+                e.Segs.Add(new[] { c[0].X, e.XZ ? c[0].Z : c[0].Y, c[1].X, e.XZ ? c[1].Z : c[1].Y });
             }
 
             // u penceresi: OutlineDrawing kesitleri sabit aralıkla (asıl kod 30000, tek DLL kule genişliğine göre) dizer;
@@ -1931,6 +2112,38 @@ namespace OtomatikKesit
 
     /// <summary>AutoCAD'den bağımsız ölçü yerleşimi: kesit çizgilerinin dış konturundan
     /// üstte zincir ölçü (kontur köşelerinin u değerleri), sağda toplam derinlik.</summary>
+    /// <summary>Kesitlerin ızgara yerleşimi (AutoCAD'den bağımsız): sırayla, kendi boyutlarına göre satırlar halinde. OutlineDrawing
+    /// her kesiti en geniş kesit kadar aralıkla tek uzun sıraya diziyordu.</summary>
+    public static class KesitDizimi
+    {
+        public static double EnAzBosluk = 2000;   // kesitler arası en az boşluk (mm)
+
+        /// <param name="kutular">Her kesit (çizgi, etiket, başlık, ölçü dahil) için { u0, v0, u1, v1 }; v yukarı; çizim sırasıyla.</param>
+        /// <returns>Her kesit için { du, dv } kaydırma.</returns>
+        public static List<double[]> Yerlestir(List<double[]> kutular, out int satir)
+        {
+            var sonuc = new List<double[]>();
+            satir = 0;
+            if (kutular == null || kutular.Count == 0) return sonuc;
+            double maxW = kutular.Max(k => k[2] - k[0]), maxH = kutular.Max(k => k[3] - k[1]);
+            double g = Math.Max(EnAzBosluk, 0.05 * Math.Max(maxW, maxH));
+            double alan = kutular.Sum(k => (k[2] - k[0] + g) * (k[3] - k[1] + g));
+            double R = Math.Max(maxW, 1.6 * Math.Sqrt(alan));   // satır genişliği: kabaca kare bir blok
+            double x0 = kutular.Min(k => k[0]), ust = kutular.Max(k => k[3]);
+            double x = x0, satirUst = ust, satirH = 0;
+            satir = 1;
+            foreach (double[] k in kutular)
+            {
+                double w = k[2] - k[0], h = k[3] - k[1];
+                if (x > x0 && x + w > x0 + R) { satirUst -= satirH + g; x = x0; satirH = 0; satir++; }
+                sonuc.Add(new[] { x - k[0], satirUst - k[3] });
+                x += w + g;
+                satirH = Math.Max(satirH, h);
+            }
+            return sonuc;
+        }
+    }
+
     public static class OlcuPlani
     {
         public static double Aralik = 500;      // ölçü çizgisinin kesitten uzaklığı (mm)

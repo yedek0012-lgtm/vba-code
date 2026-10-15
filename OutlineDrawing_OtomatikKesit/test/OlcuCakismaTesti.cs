@@ -56,6 +56,7 @@ public static class OlcuCakismaTesti
         var secs = OtoKesitBulucu.Bul(k.Uyeler, k.GorunenAnahtarlar, out r);
         var rapor = new List<string>();
         int toplam = 0, sig = 0, cak = 0, ki = 0;
+        var kesitKutulari = new List<double[]>();
         foreach (var c in secs)
         {
             var t = new KesitTanimi();
@@ -65,7 +66,32 @@ public static class OlcuCakismaTesti
             var l = OlcuPlani.Hesapla(segs);
             toplam += l.Count;
             var s = Say(l, "kesit " + (++ki), rapor); sig += s[0]; cak += s[1];
+            // dizim testi için kesitin kapladığı alan: çizgiler + ölçü yazıları + altında 400'lük başlık (OutlineDrawing)
+            if (segs.Count == 0) continue;
+            double u0 = segs.Min(q => Math.Min(q[0], q[2])), u1 = segs.Max(q => Math.Max(q[0], q[2]));
+            double v0 = segs.Min(q => Math.Min(q[1], q[3])), v1 = segs.Max(q => Math.Max(q[1], q[3]));
+            foreach (var o in l) { var b = Kutu(o); u0 = Math.Min(u0, b[0]); v0 = Math.Min(v0, b[1]); u1 = Math.Max(u1, b[2]); v1 = Math.Max(v1, b[3]); }
+            double baslikW = ("SECTION " + ki).Length * 0.8 * 400, um = (u0 + u1) / 2;
+            u0 = Math.Min(u0, um - baslikW / 2); u1 = Math.Max(u1, um + baslikW / 2); v0 -= 1400;
+            // OutlineDrawing'in tek sıra düzeni: kesit i, kesit aralığı kadar sağda
+            double kay = (kesitKutulari.Count) * k.KesitAraligi;
+            kesitKutulari.Add(new[] { u0 + kay, v0, u1 + kay, v1 });
         }
+        // ---- kesit dizimi: ızgarada kesitler birbirine binmiyor, sıra korunuyor
+        int satir; var kayma = KesitDizimi.Yerlestir(kesitKutulari, out satir);
+        var yeni = kesitKutulari.Select((b, i) => new[] { b[0] + kayma[i][0], b[1] + kayma[i][1], b[2] + kayma[i][0], b[3] + kayma[i][1] }).ToList();
+        int binen = 0;
+        for (int i = 0; i < yeni.Count; i++)
+            for (int j = i + 1; j < yeni.Count; j++)
+                if (yeni[i][0] < yeni[j][2] && yeni[j][0] < yeni[i][2] && yeni[i][1] < yeni[j][3] && yeni[j][1] < yeni[i][3]) { binen++; rapor.Add("dizim: kesit " + (i + 1) + " / " + (j + 1) + " biniyor"); }
+        if (yeni.Count > 0)
+        {
+            Func<List<double[]>, double> gen = L => L.Max(b => b[2]) - L.Min(b => b[0]);
+            Func<List<double[]>, double> yuk = L => L.Max(b => b[3]) - L.Min(b => b[1]);
+            Console.WriteLine("Dizim: {0} kesit, {1} satir; blok {2:0.0} x {3:0.0} m (tek sira {4:0.0} x {5:0.0} m), binen {6}",
+                yeni.Count, satir, gen(yeni) / 1000, yuk(yeni) / 1000, gen(kesitKutulari) / 1000, yuk(kesitKutulari) / 1000, binen);
+        }
+        cak += binen;
         foreach (var g in new[] { new { ad = "on", y = k.OnYuz, o = 0 }, new { ad = "yan", y = k.YanYuz, o = k.GorunusAraligi } })
         {
             var l = GorunusOlcuPlani.Hesapla(g.y, g.o);

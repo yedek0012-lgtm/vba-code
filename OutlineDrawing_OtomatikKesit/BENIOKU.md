@@ -10,6 +10,14 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC.
 
+**2.3: Kesitler ızgaraya dizilir.** OutlineDrawing kesitleri en geniş kesit kadar aralıkla tek uzun sıraya diziyordu
+(YAA-R1: 24 kesit, 829 m × 20 m). Artık ÇALIŞTIR sonunda ("Kesitleri diz" kutusu, komut OTODIZ) kesitler kendi
+boyutlarına göre, A-B-C sırasıyla satırlar halinde sıkı bir bloğa yerleşir (YAA-R1: 4 satır, 71 m × 52 m; Tangent
+Tower R1: 14 kesit, 403 m → 51 m × 36 m). Her kesitin çizgileri, eleman etiketleri, başlığı ve ölçüleri birlikte
+taşınır ve kesit adıyla işaretlenir (XData OTO_KESIT); OTOOLCU / OTOSTIL dizilmiş kesitleri bu işaretle tanır. Tek
+işlemde yapılır: hata olursa hiçbir şey taşınmaz. Örnek: `kesit_dizilim_YAA.png`. Test: `olcu_testi.sh` dizimde
+hiçbir kesitin (ölçü ve başlığıyla) bir başkasına binmediğini denetler.
+
 **2.2: Gereksiz kesit alınmaz.** Otomatik kesitler bulunduktan sonra, OutlineDrawing'in her kesitte gerçekte çizeceği
 elemanlara (KesitSecici: %5 büyütülen poligon, 100 mm düzlem toleransı) bakılır; gösterdiği bütün görünmeyen elemanlar
 başka kesitlerde de bulunan kesit tabloya yazılmaz (Tangent Tower R1: 15 → 14). 7 kule + 84 varyantta her kesit en az
