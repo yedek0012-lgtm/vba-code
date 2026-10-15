@@ -10,6 +10,19 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC.
 
+**2.4: Pafta ve malzeme listesi.**
+- *Pafta* butonu (komut OTOPAFTA, ÇALIŞTIR'dan sonra): ŞA-RA A1 antetli çerçeve (YAA_OUTLINE_rev0'dan çıkarıldı, DLL'e
+  gömülü: `eklenti/sablon/SARA_A1_pafta.dxf`) ön görünüşün etrafına kurulur; yan görünüş yanına (yalnız yatay kayar),
+  kesitler kalan alana (görünüşlerin sağı ve altı, malzeme listesinin altı) A-B-C sırasıyla yerleşir; ölçek otomatik,
+  5'in katı (YAA-R1: 1:130) ve antetteki SCALE hücresine yazılır. Ctrl+Pafta: başka şablon (DWG/DXF; sol alt köşe 0,0).
+  Yeniden basılırsa önceki pafta silinip yeniden kurulur. Önizleme: `pafta_onizleme_YAA.png`.
+- *Malzeme listesi*: .tow grup tablosundan, şirket paftasındaki Excel tablosu düzeninde (Group Label | Group Desc. |
+  Angle Size | Strength(Mpa), S355 → 355.0), sağ üstte 3 sütun (YAA-R1 222, Tangent 284 grup). Katman OTO_LISTE.
+- *Form*: eklenti butonları ve kutucukları ÇALIŞTIR'ın sağına, kutunun içine dizilir (önceden "İç eleman" ve
+  "Kesitleri diz" kutunun sağ kenarının dışında kalıp görünmüyordu).
+- Test: `olcu_testi.sh` her kulede paftanın sığdığını, hiçbir parçanın birbirine, listeye ya da antete binmediğini
+  ve hepsinin çerçeve içinde kaldığını denetler.
+
 **2.3: Kesitler ızgaraya dizilir.** OutlineDrawing kesitleri en geniş kesit kadar aralıkla tek uzun sıraya diziyordu
 (YAA-R1: 24 kesit, 829 m × 20 m). Artık ÇALIŞTIR sonunda ("Kesitleri diz" kutusu, komut OTODIZ) kesitler kendi
 boyutlarına göre, A-B-C sırasıyla satırlar halinde sıkı bir bloğa yerleşir (YAA-R1: 4 satır, 71 m × 52 m; Tangent

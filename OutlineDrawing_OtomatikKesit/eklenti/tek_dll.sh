@@ -32,6 +32,7 @@ mcs -langversion:7.2 -target:library -optimize+ -nowarn:1591 -nostdlib -noconfig
     -lib:"$FW" -lib:"$FW/Facades" -r:mscorlib.dll -r:System.dll -r:System.Core.dll \
     -lib:"$REF/autocad.net/lib/net47" -lib:"$REF/autocad.net.core/lib/net47" -lib:"$REF/autocad.net.model/lib/net47" \
     -r:AcMgd.dll -r:AcCoreMgd.dll -r:AcDbMgd.dll -r:System.Windows.Forms.dll -r:System.Drawing.dll \
+    -resource:sablon/SARA_A1_pafta.dxf,SARA_A1_pafta.dxf \
     OtomatikKesitEklenti.cs "$OUT/AutoSectionDetector.gen.cs"
 
 mono "$TOOL/pkg/tools/ILRepack.exe" /targetplatform:v4,"$FW" /copyattrs \

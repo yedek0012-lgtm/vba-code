@@ -92,6 +92,35 @@ public static class OlcuCakismaTesti
                 yeni.Count, satir, gen(yeni) / 1000, yuk(yeni) / 1000, gen(kesitKutulari) / 1000, yuk(kesitKutulari) / 1000, binen);
         }
         cak += binen;
+
+        // ---- pafta: görünüşler + kesitler şablonun iç çerçevesine, malzeme listesi ve antetle çakışmadan
+        Func<List<double[]>, double[]> kutuL = L => new[] { L.Min(q => Math.Min(q[0], q[2])) - 300, L.Min(q => Math.Min(q[1], q[3])) - 1600, L.Max(q => Math.Max(q[0], q[2])) + 2500, L.Max(q => Math.Max(q[1], q[3])) + 300 };
+        Func<List<YuzCizgisi>, bool, int, List<double[]>> yuz = (F, yanMi, ofs) => F.Concat(IcElemanPlani.Hesapla(k.Uyeler, F, yanMi)).Select(c => new[] { c.P[0] + ofs, c.P[2], c.P[3] + ofs, c.P[5] }).ToList();
+        double[] onK = kutuL(yuz(k.OnYuz, false, 0)), yanK = kutuL(yuz(k.YanYuz, true, k.GorunusAraligi));
+        var liste = MalzemeListesi.Oku(a[0]);
+        var pf = PaftaPlani.Hesapla(onK, yanK, kesitKutulari, liste.Count > 0);
+        int paftaSorun = 0;
+        if (!pf.Sigdi) { paftaSorun++; rapor.Add("pafta: sigmadi"); }
+        else
+        {
+            Func<double[], double, double, double[]> kagit = (b, du, dv) => new[] { (b[0] + du - pf.OrjinU) / pf.Olcek, (b[1] + dv - pf.OrjinV) / pf.Olcek, (b[2] + du - pf.OrjinU) / pf.Olcek, (b[3] + dv - pf.OrjinV) / pf.Olcek };
+            var parca = new List<double[]> { kagit(onK, 0, 0), kagit(yanK, pf.YanDu, 0) };
+            for (int i = 0; i < kesitKutulari.Count; i++) parca.Add(kagit(kesitKutulari[i], pf.KesitKayma[i][0], pf.KesitKayma[i][1]));
+            double G = 841, Y = 594.65;
+            double[] ic = { PaftaPlani.Ic[0] * G, PaftaPlani.Ic[1] * Y, PaftaPlani.Ic[2] * G, PaftaPlani.Ic[3] * Y };
+            var yasak = new List<double[]> { new[] { PaftaPlani.Antet[0] * G, PaftaPlani.Antet[1] * Y, PaftaPlani.Antet[2] * G, PaftaPlani.Antet[3] * Y } };
+            if (liste.Count > 0) yasak.Add(new[] { PaftaPlani.Liste[0] * G, PaftaPlani.Liste[1] * Y, PaftaPlani.Liste[2] * G, PaftaPlani.Liste[3] * Y });
+            Func<double[], double[], bool> biner = (x, y) => x[0] < y[2] - 0.01 && y[0] < x[2] - 0.01 && x[1] < y[3] - 0.01 && y[1] < x[3] - 0.01;
+            for (int i = 0; i < parca.Count; i++)
+            {
+                var b = parca[i];
+                if (b[0] < ic[0] - 0.01 || b[1] < ic[1] - 0.01 || b[2] > ic[2] + 0.01 || b[3] > ic[3] + 0.01) { paftaSorun++; rapor.Add("pafta: parca " + i + " cerceve disinda"); }
+                foreach (var y in yasak) if (biner(b, y)) { paftaSorun++; rapor.Add("pafta: parca " + i + " liste/antet ustunde"); }
+                for (int j = i + 1; j < parca.Count; j++) if (biner(b, parca[j])) { paftaSorun++; rapor.Add("pafta: parca " + i + " / " + j + " biniyor"); }
+            }
+            Console.WriteLine("Pafta: olcek 1:{0:0}, {1} parca, malzeme listesi {2} satir, sorun {3}", pf.Olcek, parca.Count, liste.Count, paftaSorun);
+        }
+        cak += paftaSorun;
         foreach (var g in new[] { new { ad = "on", y = k.OnYuz, o = 0 }, new { ad = "yan", y = k.YanYuz, o = k.GorunusAraligi } })
         {
             var l = GorunusOlcuPlani.Hesapla(g.y, g.o);
