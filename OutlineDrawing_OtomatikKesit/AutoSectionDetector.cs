@@ -98,6 +98,14 @@ namespace OutlineDrawing
         /// <summary>Aynı düzlemde olup düzlemdeki elemanlarla birbirine bağlanan düzlem kesitleri tek kesitte birleşir
         /// (parça parça yerel kesit yerine tek gövde yüzü / panel şeridi).</summary>
         public bool AyniDuzlemiBirlestir = true;
+        /// <summary>Sade (çizimci gibi) kesit: yatay planlar, travers üst/alt düzlemleri, yüz / çerçeve / bacak düzlemleri
+        /// kesit olur; tek panellik yerel kesitler, neredeyse yatay eğik kesitler ve tek çubuk gösteren parçalar alınmaz.
+        /// Bunların gizli elemanları görünüşte iç eleman çizgisi olarak durur, raporda "kapsanmayan" listelenir.</summary>
+        public bool Sade = true;
+        /// <summary>Derece. Sade modda bundan az eğimli (ama yatay olmayan) düzlemler kesit olmaz.</summary>
+        public double SadeMinEgim = 15.0;
+        /// <summary>Sade modda bundan az elemanlı kesit (tek bir çubuğu gösteren parça) alınmaz.</summary>
+        public int SadeMinEleman = 4;
     }
 
     public class AutoSectionCandidate
@@ -116,6 +124,8 @@ namespace OutlineDrawing
         /// <summary>Sıralama kotu (mm).</summary>
         public double SortZ;
         public string Description = "";
+        /// <summary>Tek bir gizli elemanın paneli için açılan yerel kesit (Sade modda, başka parçayla birleşmezse atılır).</summary>
+        public bool Yerel;
     }
 
     /// <summary>DetectHidden sonucu: ön/yan görünüşte görünmeyen elemanların kesitlerle kapsanma durumu.</summary>
@@ -223,6 +233,12 @@ namespace OutlineDrawing
             return atilan;
         }
 
+        /// <summary>Elemanın ayna ailesi anahtarı (±X / ±Y aynaları aynı anahtarı verir).</summary>
+        public static string AileAnahtari(FinalMember m)
+        {
+            return new Bar("", m).Family;
+        }
+
         public static List<AutoSectionCandidate> DetectHidden(IDictionary<string, FinalMember> members,
             ICollection<string> visibleKeys, AutoSectionOptions opt, out AutoSectionReport report)
         {
@@ -308,6 +324,7 @@ namespace OutlineDrawing
                             if (nrm.Z < 0) nrm = -nrm;
                             double tilt = Math.Acos(Math.Min(1.0, nrm.Z)) * 180.0 / Math.PI;
                             if (tilt < opt.MinPlaneTiltDeg || tilt > opt.MaxHiddenPlaneTiltDeg) continue;
+                            if (opt.Sade && !MantikliDuzlem(tilt, opt)) continue;
                             double d = V3.Dot(nrm, p);
                             string key = Math.Round(nrm.X * 200).ToString(CultureInfo.InvariantCulture) + "|" +
                                          Math.Round(nrm.Y * 200).ToString(CultureInfo.InvariantCulture) + "|" +
@@ -410,6 +427,26 @@ namespace OutlineDrawing
             if (opt.AyniDuzlemiBirlestir && result.Count(c => c.Kind == AutoSectionKind.Plane) > 1)
                 result = AyniDuzlemBirlestir(result, bars, opt);
 
+            // ---- sade: birleşmeyen tek panel yerel kesitleri ve mantıksız yönlü düzlemler atılır; kapsama yeniden hesaplanır
+            if (opt.Sade)
+            {
+                int once = result.Count;
+                result = result.Where(c => !c.Yerel && c.MemberKeys.Count >= opt.SadeMinEleman && (c.Kind != AutoSectionKind.Plane || c.TiltDeg < opt.MinPlaneTiltDeg ||
+                                                        MantikliDuzlem(c.TiltDeg, opt))).ToList();
+                if (result.Count != once)
+                {
+                    var anahtarla = new Dictionary<string, Bar>();
+                    foreach (var b in bars) anahtarla[b.Key] = b;
+                    covered.Clear();
+                    foreach (var c in result)
+                        foreach (string k in c.MemberKeys)
+                        {
+                            Bar b;
+                            if (anahtarla.TryGetValue(k, out b)) covered.Add(b.Family);
+                        }
+                }
+            }
+
             // ---- gereksiz kesit ayıklama: gösterdiği bütün görünmeyen aileler kalan kesitlerde de varsa kesit atılır
             // (açgözlü seçimde önce alınan geniş bir kesit, sonradan eklenenlerce tamamen kapsanabiliyor). Kapsama yalnız
             // MemberKeys'e (gerçek SectionDetection'ın seçtiğinin alt kümesi) göre: atılan kesitin her elemanı kesin çizilir.
@@ -443,6 +480,13 @@ namespace OutlineDrawing
                 ? result.OrderByDescending(c => c.SortZ).ThenBy(c => (int)c.Kind).ToList()
                 : result.OrderBy(c => c.SortZ).ThenBy(c => (int)c.Kind).ToList();
             return result;
+        }
+
+        /// <summary>Sade mod: neredeyse yatay (eğimi SadeMinEgim'den az) eğik düzlem çizimci için kesit yeri değildir; o
+        /// elemanlar yakındaki yatay planda / görünüşte okunur.</summary>
+        private static bool MantikliDuzlem(double tilt, AutoSectionOptions opt)
+        {
+            return tilt >= opt.SadeMinEgim;
         }
 
         /// <summary>Aynı düzlemdeki (normal ±1°, uzaklık PlaneTolerance) ve o düzlemdeki elemanlarla bağlı düzlem kesitlerini
@@ -579,6 +623,7 @@ namespace OutlineDrawing
                 PlanMemberCount = gizli,
                 TiltDeg = Math.Round(tilt, 1),
                 SortZ = u.Mid.Z,
+                Yerel = true,
                 Description = string.Format(CultureInfo.InvariantCulture,
                     "Yerel kesit: {0} elemanı görünüşlerde ve diğer kesitlerde yok; panel düzlemi eğim {1:0.0}°, {2} eleman ({3} görünmeyen), merkez ({4:0}; {5:0}; {6:0})",
                     u.Group, tilt, secilen.Count, gizli, u.Mid.X, u.Mid.Y, u.Mid.Z)

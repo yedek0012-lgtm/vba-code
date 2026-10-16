@@ -10,6 +10,14 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC.
 
+**2.6: Sade (çizimci gibi) kesit, varsayılan.** Çizimcinin YAA_OUTLINE_rev0'da elle bıraktığı kesitlerle
+karşılaştırıldı: 16 kesitin 15'ini Oto Kesit de aynı yerden alıyor; fazladan verdiği parçalar çizimcinin sildiği türden.
+Ön + yan görünüş birlikte çizilirken artık şunlar kesit olmaz: tek panellik yerel kesitler (aynı düzlemde başkalarıyla
+birleşenler şerit kesit olarak kalır), neredeyse yatay (15°'den az) eğik düzlemler, 4'ten az elemanlı parçalar.
+Bu elemanlar görünüşte iç eleman çizgisi olarak durur (test: hiç çizilmeyen eleman 0); çizim sonrası denetim onları eksik
+saymaz. Tek görünüş seçiliyken kapsama tam kalır. YAA-R1: 24 → 21 kesit, Tangent R1: 13 → 12. Kapatmak:
+`AutoSectionOptions.Sade = false`.
+
 **2.5: Aynı düzlemdeki parça kesitler tek kesit.** Çizimci, traversin arkasında kalan gövde yüzünü tek bir şerit
 kesitte gösterir; Oto Kesit ise her gizli panel için ayrı küçük "yerel kesit" veriyordu. Artık aynı düzlemde olup o
 düzlemdeki elemanlarla birbirine bağlanan düzlem kesitleri tek kesitte birleşir (220kV TAO: gövde yüzündeki 4 parça →

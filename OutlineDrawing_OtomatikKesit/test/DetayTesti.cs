@@ -1,4 +1,4 @@
-// Uçtan uca detay testi (AutoCAD'siz): "hiçbir eleman atlanmıyor mu?"
+﻿// Uçtan uca detay testi (AutoCAD'siz): "hiçbir eleman atlanmıyor mu?"
 //  1. .tow bağımsız okunur (bu dosyadaki okuyucu) ve OutlineDrawing'in okuduğu elemanlarla geometri olarak
 //     karşılaştırılır: OutlineDrawing'in düşürdüğü (eksik düğüm, desteklenmeyen simetri) eleman var mı?
 //     Açı elemanı dışındaki eleman türleri (kablo, davit, X-arm, ...) sayılır: OutlineDrawing bunları çizmez.
@@ -171,7 +171,7 @@ public static class DetayTesti
             ICollection<string> gor = secim == "on+yan" ? (ICollection<string>)gorunen
                 : new HashSet<string>((secim == "on" ? on : yan).Select(c => c.Anahtar));
             AutoSectionReport r2;
-            var s2 = secim == "on+yan" ? secs : OtoKesitBulucu.Bul(uyeler, gor, out r2);
+            var s2 = secim == "on+yan" ? secs : OtoKesitBulucu.Bul(uyeler, gor, out r2, false);
             var kes2 = new HashSet<string>();
             foreach (var c in s2)
             {
@@ -180,8 +180,17 @@ public static class DetayTesti
                 else foreach (var p in c.Points) tn.Noktalar.Add(new[] { p.X, p.Y, p.Z });
                 List<string> a2; KesitSecici.Sec(uyeler, tn, out a2); kes2.UnionWith(a2);
             }
-            int kap2 = AutoSectionDetector.Kapsanmayanlar(uyeler, gor, kes2).Count;
-            Console.WriteLine("     Çizim sonrası denetim ({0}): {1} kesit, kapsanmayan {2}", secim, s2.Count, kap2);
+            // Sade mod kesit almadığı parçaları bilerek bırakır: o elemanlar seçili görünüşlerde iç eleman çizgisi olarak
+            // çizilmeli. Ne kesitte ne iç eleman çizgisinde olanlar hatadır.
+            var kapList = AutoSectionDetector.Kapsanmayanlar(uyeler, gor, kes2);
+            var icSecim = new HashSet<string>();
+            if (secim != "yan") icSecim.UnionWith(IcElemanPlani.Hesapla(uyeler, on, false).Select(c => c.Anahtar));
+            if (secim != "on") icSecim.UnionWith(IcElemanPlani.Hesapla(uyeler, yan, true).Select(c => c.Anahtar));
+            var kapAile = new HashSet<string>(kapList.Select(x => Aile(Koord(uyeler[x]))));
+            var icAile = new HashSet<string>(icSecim.Where(uyeler.ContainsKey).Select(x => Aile(Koord(uyeler[x]))));
+            int kap2 = kapAile.Count(x => !icAile.Contains(x));
+            Console.WriteLine("     Çizim sonrası denetim ({0}): {1} kesit, kesitsiz {2} (iç eleman çizgisiyle {3}), hiç çizilmeyen {4}",
+                secim, s2.Count, kapList.Count, kapAile.Count - kap2, kap2);
             hata += kap2;
         }
 

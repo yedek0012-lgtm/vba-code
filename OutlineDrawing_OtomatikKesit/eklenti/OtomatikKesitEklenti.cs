@@ -1,4 +1,4 @@
-// =====================================================================
+﻿// =====================================================================
 //  OtomatikKesit.dll  -  OutlineDrawing için ayrı eklenti
 // ---------------------------------------------------------------------
 //  OutlineDrawing.dll'e dokunmaz. İkisi de NETLOAD ile yüklenir; OutlineDrawing
@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "2.5";
+        public const string Surum = "2.6";
         private static Timer _timer;
 
         public void Initialize()
@@ -377,7 +377,7 @@ namespace OtomatikKesit
                     if (runSarili && _sonOdMesaji != null) mesaj.Add(_sonOdMesaji.StartsWith("UYARI: ") ? _sonOdMesaji.Substring(7) : _sonOdMesaji);
                     string denetim = adim("denetim", () =>
                     {
-                        try { return KesitDenetimi.Yap(f); }
+                        try { return KesitDenetimi.Yap(f, chkI.Checked); }
                         catch (System.Exception ex) { Komutlar.Yaz("\nKesit denetimi yapılamadı: " + IcHata(ex).Message + "\n"); return null; }
                     });
                     if (denetim != null) { mesaj.Add(denetim); sorun.Add(denetim); }
@@ -771,7 +771,7 @@ namespace OtomatikKesit
                 else
                 {
                     if (gorunen != null && gorunen.Count > 0)
-                        bulunan = OtoKesitBulucu.Bul(kule.Uyeler, gorunen, out rapor);
+                        bulunan = OtoKesitBulucu.Bul(kule.Uyeler, gorunen, out rapor, onSecili && yanSecili);
                     else
                         bulunan = AutoSectionDetector.Detect(kule.Uyeler, new AutoSectionOptions());
                     _otoHesapAnahtar = anahtar; _otoHesapBulunan = bulunan; _otoHesapRapor = rapor;
@@ -1700,7 +1700,9 @@ namespace OtomatikKesit
         private static readonly Regex KesitYazisi = new Regex(@"^SECTION\s+(\S+)$", RegexOptions.IgnoreCase);
 
         /// <returns>Sorun yoksa null; varsa kısa açıklama (ayrıntı komut satırına).</returns>
-        internal static string Yap(Form f)
+        /// <param name="icEleman">İç eleman çizgileri çizilecek: sade modun kesit almadığı elemanlar görünüşte o çizgilerle
+        /// durur, eksik sayılmaz.</param>
+        internal static string Yap(Form f, bool icEleman = false)
         {
             var parcalar = new List<string>();
 
@@ -1757,6 +1759,14 @@ namespace OtomatikKesit
                     kesitteki.UnionWith(a);
                 }
                 List<string> kap = AutoSectionDetector.Kapsanmayanlar(kule.Uyeler, gorunen, kesitteki);
+                if (icEleman && kap.Count > 0)
+                {
+                    var ic = new HashSet<string>();
+                    if (on) ic.UnionWith(IcElemanPlani.Hesapla(kule.Uyeler, kule.OnYuz, false).Select(c => c.Anahtar));
+                    if (yan) ic.UnionWith(IcElemanPlani.Hesapla(kule.Uyeler, kule.YanYuz, true).Select(c => c.Anahtar));
+                    var icAile = new HashSet<string>(ic.Where(kule.Uyeler.ContainsKey).Select(k => AutoSectionDetector.AileAnahtari(kule.Uyeler[k])));
+                    kap = kap.Where(k => !icAile.Contains(AutoSectionDetector.AileAnahtari(kule.Uyeler[k]))).ToList();
+                }
                 if (kap.Count > 0)
                 {
                     var gruplar = kap.Select(k => kule.Uyeler[k].group_label ?? "?").Distinct().ToList();
@@ -2298,9 +2308,12 @@ namespace OtomatikKesit
     /// fazlasını çizer; tek başına hiçbir görünmeyen elemanı göstermeyen kesit tabloya yazılmaz.)</summary>
     public static class OtoKesitBulucu
     {
-        public static List<AutoSectionCandidate> Bul(IDictionary<string, FinalMember> uyeler, ICollection<string> gorunen, out AutoSectionReport rapor)
+        /// <param name="sade">Sade (çizimci gibi) kesit. Yalnız ön ve yan görünüş birlikte çizilirken anlamlı: sade modun
+        /// kesit almadığı elemanlar görünüşlerde iç eleman çizgisi olarak durur; tek görünüşte tam kapsama gerekir.</param>
+        public static List<AutoSectionCandidate> Bul(IDictionary<string, FinalMember> uyeler, ICollection<string> gorunen, out AutoSectionReport rapor,
+            bool sade = true)
         {
-            List<AutoSectionCandidate> l = AutoSectionDetector.DetectHidden(uyeler, gorunen, new AutoSectionOptions(), out rapor);
+            List<AutoSectionCandidate> l = AutoSectionDetector.DetectHidden(uyeler, gorunen, new AutoSectionOptions { Sade = sade }, out rapor);
             var secim = new List<ICollection<string>>();
             foreach (AutoSectionCandidate c in l)
             {
