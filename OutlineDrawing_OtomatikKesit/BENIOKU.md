@@ -8,7 +8,14 @@
 
 `eklenti/bin/tek/OutlineDrawing.dll` = OutlineDrawing v1.3 + Otomatik Kesit, tek dosya (ILRepack ile birleştirildi).
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
-Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC.
+Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
+
+**2.7: Düzenli kesit işaretleri.** OutlineDrawing her kesit için ön görünüşe L oklu bloklar koyuyordu; eğik ve parça
+kesitlerde bunlar gövdenin içine, eleman yazılarının ve birbirinin üstüne düşüyordu. ÇALIŞTIR sonunda (komut OTOISARET)
+bu oklar kaldırılıp çizimci gibi işaretler konur (katman SECTION_MARK): yatay kesitte o kotta kulenin iki yanında kesit
+çizgisi + aşağı ok + harf; travers üst düzlemi gibi ön görünüşte çizgi olan düzlemde izin dış ucunda bakış yönünde ok;
+köşegen bacak düzlemlerinde o kotta kulenin dışından gösteren ok. Birbirine binen işaret dışa kaydırılır.
+Önizleme: `kesit_isaretleri_YAA.png`.
 
 **2.6: Sade (çizimci gibi) kesit, varsayılan.** Çizimcinin YAA_OUTLINE_rev0'da elle bıraktığı kesitlerle
 karşılaştırıldı: 16 kesitin 15'ini Oto Kesit de aynı yerden alıyor; fazladan verdiği parçalar çizimcinin sildiği türden.

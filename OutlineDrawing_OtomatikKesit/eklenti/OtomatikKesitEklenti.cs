@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "2.6";
+        public const string Surum = "2.7";
         private static Timer _timer;
 
         public void Initialize()
@@ -101,6 +101,18 @@ namespace OtomatikKesit
                 return;
             }
             FormBaglayici.Guvenli(f, "İç eleman", () => { FormBaglayici.Uyari(f, IcElemanlar.Ciz(f, true)); Goruntu.Yenile(); });
+        }
+
+        [CommandMethod("OTOISARET", CommandFlags.Session)]
+        public void OtoIsaret()
+        {
+            Form f = FormBaglayici.AcikFormuBul();
+            if (f == null)
+            {
+                Yaz("\nOutlineDrawing formu açık değil. Önce OutlineDrawing'i çalıştırıp .tow dosyasını seçin.\n");
+                return;
+            }
+            FormBaglayici.Guvenli(f, "Kesit işaretleri", () => { Yaz("\n" + (KesitIsaretleri.Ciz(f) ?? "Kesit işareti yok (tablo boş ya da ön görünüş bulunamadı).") + "\n"); Goruntu.Yenile(); });
         }
 
         [CommandMethod("OTOPAFTA", CommandFlags.Session)]
@@ -415,6 +427,14 @@ namespace OtomatikKesit
                             catch (System.Exception ex) { sorun.Add("Ölçü eklenemedi: " + IcHata(ex).Message); return null; }
                         });
                         if (r != null) mesaj.Add(r);
+                    }
+                    {
+                        string r = adim("kesit işaretleri", () =>
+                        {
+                            try { return KesitIsaretleri.Ciz(f); }
+                            catch (System.Exception ex) { Komutlar.Yaz("\nKesit işaretleri yenilenemedi (OutlineDrawing okları kaldı): " + IcHata(ex).Message + "\n"); return null; }
+                        });
+                        if (r != null) Komutlar.Yaz("\n" + r + ".\n");
                     }
                     if (chkD.Checked)
                     {
@@ -3068,6 +3088,219 @@ namespace OtomatikKesit
         {
             double u = p[i] + ofs, d = p[i + 1], z = p[i + 2];
             return ikiD ? new Point3d(u, z, 0) : new Point3d(u, d, z);
+        }
+    }
+
+    /// <summary>Ön görünüşte bir kesit işareti: çizgiler ve harf (görünüş koordinatı u = x, v = z; ofset eklenmemiş).</summary>
+    public class KesitIsareti
+    {
+        public string Ad;
+        public List<double[]> Cizgiler = new List<double[]>();   // { u1, v1, u2, v2 }
+        public double YaziU, YaziV, YaziBoyu;
+        public double[] Kutu;                                     // { u0, v0, u1, v1 }
+    }
+
+    /// <summary>
+    /// Çizimci gibi kesit işaretleri. OutlineDrawing her kesit için ön görünüşe L oklu bloklar koyar; eğik / parça
+    /// kesitlerde bunlar gövdenin içine, eleman yazılarının üstüne ve birbirinin üstüne düşüyor. Burada işaretler kulenin
+    /// dışına konur:
+    ///  - yatay kesit: o kotta kule silüetinin iki yanında kısa kesit çizgisi, uçta aşağı bakan ok ve harf;
+    ///  - ön görünüşte çizgi olarak görünen düzlem (travers üst düzlemi, yüz şeridi, yatay parça): düzlem izinin kuleden
+    ///    uzak ucunda, iz doğrultusunda dışa uzanan çizgi, bakış yönünde ok;
+    ///  - ön görünüşte alan olarak görünen düzlem (köşegen bacak düzlemi): ağırlık merkezi kotunda, kesitin bulunduğu
+    ///    yanda silüetin dışından kuleyi gösteren ok.
+    /// Birbirine binen işaret dışa kaydırılır.
+    /// </summary>
+    public static class KesitIsaretPlani
+    {
+        public static List<KesitIsareti> Hesapla(IList<YuzCizgisi> onYuz, IDictionary<string, KesitTanimi> tanimlar)
+        {
+            var sonuc = new List<KesitIsareti>();
+            if (onYuz == null || onYuz.Count == 0 || tanimlar == null || tanimlar.Count == 0) return sonuc;
+            double zMin = onYuz.Min(c => Math.Min(c.P[2], c.P[5])), zMax = onYuz.Max(c => Math.Max(c.P[2], c.P[5]));
+            double xMin = onYuz.Min(c => Math.Min(c.P[0], c.P[3])), xMax = onYuz.Max(c => Math.Max(c.P[0], c.P[3]));
+            double th = Math.Max(150, Math.Min(500, Math.Round((zMax - zMin) / 160 / 50) * 50));
+            double bosluk = th, kol = 3 * th, ok = 1.5 * th;
+            var dolu = new List<double[]>();
+
+            foreach (var kv in tanimlar.OrderByDescending(k => Kot(k.Value)))
+            {
+                string ad = kv.Key; KesitTanimi t = kv.Value;
+                if (t.Yukseklik.HasValue)
+                {
+                    double h = t.Yukseklik.Value, a, b;
+                    Kenar(onYuz, h, xMin, xMax, out a, out b);
+                    Ekle(sonuc, dolu, ad, a - bosluk, h, -1, 0, 0, -1, kol, ok, th);
+                    Ekle(sonuc, dolu, ad, b + bosluk, h, 1, 0, 0, -1, kol, ok, th);
+                    continue;
+                }
+                if (t.Noktalar.Count < 3) continue;
+                double[] p0 = t.Noktalar[0], p1 = t.Noktalar[1], p2 = t.Noktalar[2];
+                double ax = p1[0] - p0[0], ay = p1[1] - p0[1], az = p1[2] - p0[2], bx = p2[0] - p0[0], by = p2[1] - p0[1], bz = p2[2] - p0[2];
+                double nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx, nl = Math.Sqrt(nx * nx + ny * ny + nz * nz);
+                if (nl < 1e-9) continue;
+                nx /= nl; ny /= nl; nz /= nl;
+                if (nz < 0) { nx = -nx; ny = -ny; nz = -nz; }
+                double cx = t.Noktalar.Average(p => p[0]), cz = t.Noktalar.Average(p => p[2]);
+                if (Math.Abs(ny) < 0.2)
+                {
+                    // izi ön görünüşte çizgi: doğrultu t = (nz, -nx) (XZ'de), uçlar dörtgenin bu doğrultudaki uç izdüşümleri
+                    double hl = Math.Sqrt(nx * nx + nz * nz), tu = nz / hl, tv = -nx / hl;
+                    double s0 = t.Noktalar.Min(p => (p[0] - cx) * tu + (p[2] - cz) * tv), s1 = t.Noktalar.Max(p => (p[0] - cx) * tu + (p[2] - cz) * tv);
+                    double u0 = cx + tu * s0, v0 = cz + tv * s0, u1 = cx + tu * s1, v1 = cz + tv * s1;
+                    // kuleden uzak uç (eşitse üstteki)
+                    bool birinci = Math.Abs(Math.Abs(u0) - Math.Abs(u1)) > th ? Math.Abs(u0) > Math.Abs(u1) : v0 > v1;
+                    double eu = birinci ? u0 : u1, ev = birinci ? v0 : v1, du = birinci ? -tu : tu, dv = birinci ? -tv : tv;
+                    // bakış: eğik düzlemde üstten (-n), düşeyde kule eksenine doğru
+                    double bu, bv;
+                    if (nz > 0.1) { bu = -nx / hl; bv = -nz / hl; }
+                    else { bu = eu > 0 ? -1 : 1; bv = 0; }
+                    Ekle(sonuc, dolu, ad, eu + du * bosluk, ev + dv * bosluk, du, dv, bu, bv, kol, ok, th);
+                }
+                else
+                {
+                    double a, b;
+                    Kenar(onYuz, cz, xMin, xMax, out a, out b);
+                    bool sag = cx >= 0;
+                    double eu = sag ? b + bosluk : a - bosluk, du = sag ? 1 : -1;
+                    Ekle(sonuc, dolu, ad, eu, cz, du, 0, -du, 0, kol, ok, th);
+                }
+            }
+            return sonuc;
+        }
+
+        private static double Kot(KesitTanimi t)
+        {
+            return t.Yukseklik ?? (t.Noktalar.Count > 0 ? t.Noktalar.Average(p => p[2]) : 0);
+        }
+
+        /// <summary>Ön yüz silüetinin z kotundaki sol / sağ sınırı (o kotu kesen çizgilerden).</summary>
+        private static void Kenar(IList<YuzCizgisi> onYuz, double z, double xMin, double xMax, out double a, out double b)
+        {
+            a = double.MaxValue; b = double.MinValue;
+            foreach (var c in onYuz)
+            {
+                double z1 = c.P[2], z2 = c.P[5];
+                if (z < Math.Min(z1, z2) - 1 || z > Math.Max(z1, z2) + 1) continue;
+                if (Math.Abs(z2 - z1) < 1) { a = Math.Min(a, Math.Min(c.P[0], c.P[3])); b = Math.Max(b, Math.Max(c.P[0], c.P[3])); continue; }
+                double x = c.P[0] + (c.P[3] - c.P[0]) * (z - z1) / (z2 - z1);
+                a = Math.Min(a, x); b = Math.Max(b, x);
+            }
+            if (a > b) { a = xMin; b = xMax; }
+        }
+
+        /// <summary>(u, v) başlangıcından d yönünde kol boyu kesit çizgisi; ucunda b yönünde ok ve harf. Dolu bir yere
+        /// binerse d yönünde dışa kaydırılır.</summary>
+        private static void Ekle(List<KesitIsareti> sonuc, List<double[]> dolu, string ad, double u, double v,
+            double du, double dv, double bu, double bv, double kol, double ok, double th)
+        {
+            double dl = Math.Sqrt(du * du + dv * dv), bl = Math.Sqrt(bu * bu + bv * bv);
+            if (dl < 1e-9) { du = 1; dv = 0; dl = 1; }
+            if (bl < 1e-9) { bu = 0; bv = -1; bl = 1; }
+            du /= dl; dv /= dl; bu /= bl; bv /= bl;
+            KesitIsareti s = null;
+            for (int deneme = 0; deneme < 12; deneme++)
+            {
+                double su = u + du * deneme * 1.5 * th, sv = v + dv * deneme * 1.5 * th;
+                double eu = su + du * kol, ev = sv + dv * kol;          // kolun dış ucu
+                double ou = eu + bu * ok, ov = ev + bv * ok;            // ok ucu
+                double qu = -bv, qv = bu;                               // ok başının yanları
+                s = new KesitIsareti { Ad = ad, YaziBoyu = th };
+                s.Cizgiler.Add(new[] { su, sv, eu, ev });
+                s.Cizgiler.Add(new[] { eu, ev, ou, ov });
+                s.Cizgiler.Add(new[] { ou, ov, ou - bu * 0.6 * th + qu * 0.3 * th, ov - bv * 0.6 * th + qv * 0.3 * th });
+                s.Cizgiler.Add(new[] { ou, ov, ou - bu * 0.6 * th - qu * 0.3 * th, ov - bv * 0.6 * th - qv * 0.3 * th });
+                // harf: kolun dış ucunun ötesinde, oka ters tarafta
+                s.YaziU = eu + du * 0.8 * th - bu * 0.6 * th;
+                s.YaziV = ev + dv * 0.8 * th - bv * 0.6 * th - 0.5 * th;
+                double yg = Math.Max(1, ad.Length) * 0.8 * th;
+                var k = new[] { s.YaziU - yg / 2, s.YaziV, s.YaziU + yg / 2, s.YaziV + th };
+                foreach (var c in s.Cizgiler) k = new[] { Math.Min(k[0], Math.Min(c[0], c[2])), Math.Min(k[1], Math.Min(c[1], c[3])),
+                                                           Math.Max(k[2], Math.Max(c[0], c[2])), Math.Max(k[3], Math.Max(c[1], c[3])) };
+                s.Kutu = k;
+                double p = 0.3 * th;
+                if (!dolu.Any(o => k[0] < o[2] + p && o[0] < k[2] + p && k[1] < o[3] + p && o[1] < k[3] + p)) break;
+            }
+            dolu.Add(s.Kutu);
+            sonuc.Add(s);
+        }
+    }
+
+    /// <summary>Ön görünüşteki OutlineDrawing kesit işaretlerini (SECTION_ARROW_ blokları) KesitIsaretPlani'na göre yenileriyle
+    /// değiştirir. İşaretler OutlineDrawing'in katmanında (SECTION_MARK): kesit gruplama / pafta onları görünüşe sayar.</summary>
+    internal static class KesitIsaretleri
+    {
+        internal const string Katman = "SECTION_MARK";
+
+        internal static string Ciz(Form f)
+        {
+            Document doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) return null;
+            Database db = doc.Database;
+            string yol = FormBaglayici.YolAl(f);
+            if (yol.Length == 0 || !File.Exists(yol)) return null;
+            KuleVerisi kule = KuleOkuyucu.Oku(f.GetType().Assembly, yol);
+            Dictionary<string, KesitTanimi> tanimlar = KesitStili.GridTanimlari(f);
+            if (kule == null || tanimlar.Count == 0) return null;
+
+            int adet = 0, silinen = 0;
+            using (doc.LockDocument())
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForWrite);
+                GorunusKonumu on = GorunusYeri.Bul(tr, ms, kule).FirstOrDefault(k => !k.Yan);
+                if (on == null) { tr.Commit(); return null; }
+
+                var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                if (!lt.Has(Katman))
+                {
+                    lt.UpgradeOpen();
+                    var ltr = new LayerTableRecord { Name = Katman };
+                    lt.Add(ltr);
+                    tr.AddNewlyCreatedDBObject(ltr, true);
+                }
+                ObjectId katman = lt[Katman];
+
+                // OutlineDrawing'in okları ve önceki çalıştırmanın işaretleri
+                foreach (ObjectId id in ms)
+                {
+                    var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (e == null) continue;
+                    bool sil = false;
+                    var br = e as BlockReference;
+                    if (br != null)
+                    {
+                        var btr = tr.GetObject(br.BlockTableRecord, OpenMode.ForRead) as BlockTableRecord;
+                        sil = btr != null && btr.Name.StartsWith("SECTION_ARROW_", StringComparison.OrdinalIgnoreCase);
+                    }
+                    else if ((e is Line || e is DBText) && string.Equals(e.Layer, Katman, StringComparison.OrdinalIgnoreCase)) sil = true;
+                    if (!sil) continue;
+                    try { e.UpgradeOpen(); e.Erase(); silinen++; } catch { }
+                }
+
+                Func<double, double, Point3d> N = (u, v) => on.IkiD ? new Point3d(u + on.Ofs, v, 0) : new Point3d(u + on.Ofs, 0, v);
+                Matrix3d duzlem = on.IkiD ? Matrix3d.Identity : Matrix3d.Rotation(Math.PI / 2, Vector3d.XAxis, Point3d.Origin);
+                foreach (KesitIsareti s in KesitIsaretPlani.Hesapla(kule.OnYuz, tanimlar))
+                {
+                    foreach (double[] c in s.Cizgiler)
+                    {
+                        var l = new Line(N(c[0], c[1]), N(c[2], c[3]));
+                        l.SetDatabaseDefaults(db); l.LayerId = katman;
+                        ms.AppendEntity(l); tr.AddNewlyCreatedDBObject(l, true);
+                    }
+                    var t = new DBText();
+                    t.SetDatabaseDefaults(db); t.LayerId = katman;
+                    t.TextString = s.Ad; t.Height = s.YaziBoyu;
+                    t.HorizontalMode = TextHorizontalMode.TextCenter; t.VerticalMode = TextVerticalMode.TextBase;
+                    t.AlignmentPoint = new Point3d(s.YaziU + on.Ofs, s.YaziV, 0);
+                    t.TransformBy(duzlem);
+                    ms.AppendEntity(t); tr.AddNewlyCreatedDBObject(t, true);
+                    try { t.AdjustAlignment(db); } catch { }
+                    adet++;
+                }
+                tr.Commit();
+            }
+            return string.Format("Kesit işaretleri: {0} ({1} OutlineDrawing oku kaldırıldı)", adet, silinen);
         }
     }
 
