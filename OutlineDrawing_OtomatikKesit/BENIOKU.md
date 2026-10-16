@@ -10,6 +10,16 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
 
+**2.9: "Tüm elemanlar" kutusu ve kesit yönü.**
+- *Tüm elemanlar* kutusu (varsayılan işaretsiz): işaretsizken görünüş seçiminden bağımsız olarak sade kesit alınır,
+  yani her gizli elemanı bir kesite sokmaya çalışılmaz (YAA-R1'de SECTION K gibi 5.7°'lik parça kesit çıkmaz). Kesit
+  almayan elemanlar görünüşte iç eleman çizgisi olarak durur. İşaretlenirse her gizli eleman bir kesitte gösterilir.
+- *Kesit yönü*: OutlineDrawing eğik düzlem kesitini düzlemin eğim yönü yukarı gelecek şekilde çiziyordu; travers üst
+  düzlemleri traversi dikey (ucu aşağıda) veriyordu. ÇALIŞTIR sonunda plana yakın (45°'den yatık) eğik kesitler, düzlemde
+  kulenin X eksenine en yakın doğrultu yatay ve +X sağda olacak şekilde 90° döndürülür (YAA-R1 G: saat yönü tersi; TAO
+  travers üst düzlemleri PDF'teki gibi yatay). Dik düzlemler (yüz şeridi, çerçeve) ve bacak iç düzlemleri olduğu gibi
+  kalır. Yazılar okunur yöne çevrilir, başlık kesitin altına ortalanır; aynı kesit ikinci kez döndürülmez.
+
 **2.8: Kule yüzü kesit olmaz; bacak kesiti çizimci gibi işaretlenir.** Yalnız TRANSVERSE FACE seçiliyken yan yüz
 (LONGITUDINAL) görünüş yerine yüz büyüklüğünde bir kesit olarak veriliyordu (YAA-R1: SECTION U, 150 eleman). Artık ön ve
 yan yüz elemanları görünüş seçiminden bağımsız olarak görünüş sayılır; yüz düzlemi hiçbir zaman kesit olmaz (YAA-R1, yalnız

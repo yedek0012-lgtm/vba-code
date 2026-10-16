@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "2.8";
+        public const string Surum = "2.9";
         private static Timer _timer;
 
         public void Initialize()
@@ -212,6 +212,7 @@ namespace OtomatikKesit
             var chkR = new CheckBox { Name = "chkRedundant", Text = "Redundant", Checked = true, AutoSize = true };
             var chkI = new CheckBox { Name = "chkIcEleman", Text = "İç eleman", Checked = true, AutoSize = true };
             var chkD = new CheckBox { Name = "chkKesitDiz", Text = "Kesitleri diz", Checked = true, AutoSize = true };
+            var chkT = new CheckBox { Name = TumElemanKutusuAdi, Text = "Tüm elemanlar", Checked = false, AutoSize = true };
             if (ornek != null)
             {
                 b.Size = ornek.Size;
@@ -233,7 +234,7 @@ namespace OtomatikKesit
                 }
                 bh.Font = new System.Drawing.Font(ornek.Font, FontStyle.Bold);
                 b.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-                foreach (CheckBox c in new[] { chk, chkR, chkI, chkD }) { c.Font = ornek.Font; c.ForeColor = kap.ForeColor; c.Anchor = AnchorStyles.Top | AnchorStyles.Left; }
+                foreach (CheckBox c in new[] { chk, chkR, chkI, chkD, chkT }) { c.Font = ornek.Font; c.ForeColor = kap.ForeColor; c.Anchor = AnchorStyles.Top | AnchorStyles.Left; }
                 // Yer: ÇALIŞTIR'ın sağı, tablonun ve sağ buton sütununun (Nokta ... Liste) altı. Soldan sağa dizilir, kutunun
                 // sağ kenarına gelince alt satıra geçer (önceden kutucuklar sağ kenarın dışına düşüp görünmüyordu).
                 Control calistir = kap.Controls.Find("btnRun", false).FirstOrDefault();
@@ -251,7 +252,7 @@ namespace OtomatikKesit
                     px += sz.Width + 6; satirH = Math.Max(satirH, sz.Height);
                 };
                 koy(b, false); koy(bh, false); koy(bp, false);
-                koy(chk, true); koy(chkR, false); koy(chkI, false); koy(chkD, false);
+                koy(chk, true); koy(chkR, false); koy(chkI, false); koy(chkD, false); koy(chkT, false);
             }
             else
             {
@@ -265,6 +266,7 @@ namespace OtomatikKesit
                 chkR.Location = new Point(8, 58);
                 chkI.Location = new Point(8, 80);
                 chkD.Location = new Point(8, 102);
+                chkT.Location = new Point(8, 124);
             }
 
             kap.Controls.Add(b);
@@ -274,6 +276,7 @@ namespace OtomatikKesit
             kap.Controls.Add(chkR);
             kap.Controls.Add(chkI);
             kap.Controls.Add(chkD);
+            kap.Controls.Add(chkT);
             b.BringToFront();
             bh.BringToFront();
             bp.BringToFront();
@@ -281,8 +284,11 @@ namespace OtomatikKesit
             chkR.BringToFront();
             chkI.BringToFront();
             chkD.BringToFront();
+            chkT.BringToFront();
             var tip = new ToolTip();
-            tip.SetToolTip(b, "Ön/yan görünüşte görünmeyen elemanların hepsini kapsayan kesitleri bulup tabloya yazar");
+            tip.SetToolTip(b, "Çizimci gibi sade kesitleri bulup tabloya yazar: yatay planlar, travers düzlemleri, çerçeveler, bacak iç düzlemleri");
+            tip.SetToolTip(chkT, "İşaretliyse her gizli eleman mutlaka bir kesitte gösterilir (küçük, eğik parça kesitler de alınır). " +
+                                 "İşaretsizse sade: yalnız mantıklı yerlerden kesit, kalan elemanlar görünüşte iç eleman çizgisi olarak durur");
             tip.SetToolTip(chk, "ÇALIŞTIR'dan sonra kesitlere ölçü koy (komut: OTOOLCU)");
             tip.SetToolTip(chkR, "YÜKLE ve ÇALIŞTIR'dan sonra 3D modelde, görünüşlerde ve kesitlerde ana elemanlar düz, redundant elemanlar kesikli; isimler tek renk (komut: OTOSTIL)");
             tip.SetToolTip(chkD, "ÇALIŞTIR'dan sonra kesitleri kendi boyutlarına göre satırlar halinde sıkı bir ızgaraya dizer (tek uzun sıra yerine); çizgiler, etiketler, başlık ve ölçüler birlikte taşınır (komut: OTODIZ)");
@@ -416,6 +422,14 @@ namespace OtomatikKesit
                         {
                             try { return KesitStili.Uygula(f); }
                             catch (System.Exception ex) { sorun.Add("Redundant çizgi tipi uygulanamadı: " + IcHata(ex).Message); return null; }
+                        });
+                        if (r != null) mesaj.Add(r);
+                    }
+                    {
+                        string r = adim("kesit yönü", () =>
+                        {
+                            try { return KesitYonu.Dondur(f); }
+                            catch (System.Exception ex) { sorun.Add("Kesitler döndürülemedi: " + IcHata(ex).Message); return null; }
                         });
                         if (r != null) mesaj.Add(r);
                     }
@@ -735,12 +749,21 @@ namespace OtomatikKesit
         private static bool _tabloYaziliyor;     // tabloyu eklenti yazıyor (kullanıcı değişikliği sayılmaz)
 
         /// <summary>.tow (yol + zaman + boyut) ve görünüş seçimi; okunamazsa null.</summary>
-        internal static string OtoAnahtar(string path, bool on, bool yan)
+        internal const string TumElemanKutusuAdi = "chkTumEleman";
+
+        /// <summary>"Tüm elemanlar" işaretli mi (her gizli eleman bir kesitte); işaretsizse sade kesit.</summary>
+        internal static bool TumElemanlar(Form f)
+        {
+            var c = f.Controls.Find(TumElemanKutusuAdi, true).FirstOrDefault() as CheckBox;
+            return c != null && c.Checked;
+        }
+
+        internal static string OtoAnahtar(string path, bool on, bool yan, bool tum)
         {
             try
             {
                 var fi = new FileInfo(path);
-                return fi.Exists ? fi.FullName + "|" + fi.LastWriteTimeUtc.Ticks + "|" + fi.Length + "|" + on + "|" + yan : null;
+                return fi.Exists ? fi.FullName + "|" + fi.LastWriteTimeUtc.Ticks + "|" + fi.Length + "|" + on + "|" + yan + "|" + tum : null;
             }
             catch { return null; }
         }
@@ -751,7 +774,7 @@ namespace OtomatikKesit
             if (_otoTabloAnahtari == null) return false;
             bool on, yan;
             GorunusSecimi(f, out on, out yan);
-            return _otoTabloAnahtari == OtoAnahtar(YolAl(f), on, yan);
+            return _otoTabloAnahtari == OtoAnahtar(YolAl(f), on, yan, TumElemanlar(f));
         }
 
         internal static void TabloyuDoldur(Form f)
@@ -786,7 +809,8 @@ namespace OtomatikKesit
                 // görünüştür, kesitle (yüz büyüklüğünde "SECTION") verilmez. Görünür sayılan elemanlar her zaman iki yüzün
                 // elemanlarıdır; görünüş seçimi yalnız sade modu belirler.
                 ICollection<string> gorunen = GorunenAnahtarlar(kule, true, true);
-                string anahtar = OtoAnahtar(path, onSecili, yanSecili);
+                bool tum = TumElemanlar(f);
+                string anahtar = OtoAnahtar(path, onSecili, yanSecili, tum);
                 if (anahtar != null && anahtar == _otoHesapAnahtar)
                 {
                     bulunan = _otoHesapBulunan; rapor = _otoHesapRapor;   // aynı .tow ve görünüş seçimi: yeniden hesaplanmaz
@@ -794,7 +818,7 @@ namespace OtomatikKesit
                 else
                 {
                     if (gorunen != null && gorunen.Count > 0)
-                        bulunan = OtoKesitBulucu.Bul(kule.Uyeler, gorunen, out rapor, onSecili && yanSecili);
+                        bulunan = OtoKesitBulucu.Bul(kule.Uyeler, gorunen, out rapor, !tum);
                     else
                         bulunan = AutoSectionDetector.Detect(kule.Uyeler, new AutoSectionOptions());
                     _otoHesapAnahtar = anahtar; _otoHesapBulunan = bulunan; _otoHesapRapor = rapor;
@@ -851,7 +875,7 @@ namespace OtomatikKesit
 
                 HarfleriYenile(f);
                 } finally { _tabloYaziliyor = false; }
-                _otoTabloAnahtari = OtoAnahtar(path, onSecili, yanSecili);   // tablo bu .tow + seçim için Oto Kesit'in ürettiği hal
+                _otoTabloAnahtari = OtoAnahtar(path, onSecili, yanSecili, tum);   // tablo bu .tow + seçim için Oto Kesit'in ürettiği hal
 
                 string ozet = string.Format("{0} kesit eklendi", bulunan.Count);
                 string onAd = KutuYazisi(f, "chkFrontFace", "Ön Yüz"), yanAd = KutuYazisi(f, "chkSideFace", "Yan Yüz");
@@ -990,7 +1014,7 @@ namespace OtomatikKesit
                     var r = fi.GetValue(f) as RadioButton;
                     if (r != null && r.Checked) satir.Add("secim:" + fi.Name + "=1");
                 }
-                foreach (string ad in new[] { "chkAutoDim", "chkRedundant", "chkIcEleman", "chkKesitDiz" })
+                foreach (string ad in new[] { "chkAutoDim", "chkRedundant", "chkIcEleman", "chkKesitDiz", FormBaglayici.TumElemanKutusuAdi })
                 {
                     var c = f.Controls.Find(ad, true).FirstOrDefault() as CheckBox;
                     if (c != null) satir.Add("eklenti:" + ad + "=" + (c.Checked ? "1" : "0"));
@@ -2441,6 +2465,30 @@ namespace OtomatikKesit
             return ic;
         }
 
+        /// <summary>OutlineDrawing BuildPlaneAxes'in kopyası: u çizimde sağa (düzlemin yatay doğrultusu, +X'e), v yukarı
+        /// (eğim yukarı). Yükseklik kesitinde ya da bozuk düzlemde false.</summary>
+        internal static bool Eksenler(KesitTanimi t, out double[] u, out double[] v)
+        {
+            u = v = null;
+            if (t == null || t.Yukseklik.HasValue || t.Noktalar.Count < 3) return false;
+            double[] p0 = t.Noktalar[0], p1 = t.Noktalar[1], pn = t.Noktalar[t.Noktalar.Count - 1];
+            double[] n = Norm(Cross(Sub(p1, p0), Sub(pn, p0)));
+            if (n == null) return false;
+            double[] X = { 1, 0, 0 }, Y = { 0, 1, 0 }, Z = { 0, 0, 1 };
+            v = Sub(Z, Kat(n, Dot(Z, n)));
+            if (Boy(v) < 1e-9) v = Sub(Y, Kat(n, Dot(Y, n)));
+            v = Norm(v);
+            if (v == null) return false;
+            if (Dot(v, Z) < 0) v = Kat(v, -1);
+            u = Norm(Cross(v, n));
+            if (u == null) return false;
+            if (Dot(u, X) < 0) u = Kat(u, -1);
+            v = Norm(Cross(n, u));
+            if (v == null) return false;
+            if (Dot(v, Z) < 0) v = Kat(v, -1);
+            return true;
+        }
+
         private static double[] Sub(double[] a, double[] b) { return new[] { a[0] - b[0], a[1] - b[1], a[2] - b[2] }; }
         private static double Dot(double[] a, double[] b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
         private static double[] Cross(double[] a, double[] b) { return new[] { a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0] }; }
@@ -3251,6 +3299,117 @@ namespace OtomatikKesit
             }
             dolu.Add(s.Kutu);
             sonuc.Add(s);
+        }
+    }
+
+    /// <summary>
+    /// Eğik düzlem kesitlerini çizimci gibi döndürür. OutlineDrawing düzlem kesitini, düzlemin yatay doğrultusu sağa ve
+    /// eğim (yukarı) doğrultusu yukarı gelecek şekilde çizer; travers üst düzlemi gibi eğimi kulenin X ekseni boyunca
+    /// olan düzlemlerde travers dikey çıkar (ucu aşağıda). Burada düzlemdeki X'e en yakın doğrultu yatay ve +X sağda
+    /// olacak şekilde kesit 90° döndürülür (görünüşteki ve TAO paftasındaki gibi travers yatay). Yazılar okunur kalır,
+    /// başlık yine altta ortalanır; döndürülen kesitin nesneleri kesit adıyla işaretlenir (ölçü / dizme onları tanır).
+    /// </summary>
+    internal static class KesitYonu
+    {
+        internal const string Uygulama = "OTO_KESIT_YON";
+
+        /// <summary>Derece, + saat yönü tersi; 0: döndürme gerekmez (yatay kesit, 45°'den dik düzlem, köşegen bacak düzlemi).</summary>
+        internal static int Aci(KesitTanimi t)
+        {
+            double[] u, v;
+            if (t == null || t.Yukseklik.HasValue || !KesitSecici.Eksenler(t, out u, out v)) return 0;
+            // dik düzlem (45°'den dik: yüz, çerçeve) görünüş gibi dik kalır; plana yakın düzlem plan gibi okunur
+            if (v[2] > Math.Sqrt(0.5)) return 0;
+            if (Math.Abs(v[0]) <= Math.Abs(u[0]) + 0.05) return 0;
+            return v[0] < 0 ? 90 : -90;   // yukarısı -X'e bakıyorsa saat yönü tersi: yukarı sola, +X sağa gelir
+        }
+
+        internal static string Dondur(Form f)
+        {
+            Document doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) return null;
+            Database db = doc.Database;
+            var acilar = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in KesitStili.GridTanimlari(f)) { int a = Aci(kv.Value); if (a != 0) acilar[kv.Key] = a; }
+            if (acilar.Count == 0) return null;
+
+            var donen = new List<string>();
+            using (doc.LockDocument())
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
+                KesitDizici.Gruplar g = KesitDizici.Grupla(tr, ms);
+                if (g.Kesitler.Count == 0) { tr.Commit(); return null; }
+                KesitDizici.UygulamaKaydi(db, tr);
+                var rat = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
+                if (!rat.Has(Uygulama))
+                {
+                    rat.UpgradeOpen();
+                    var r = new RegAppTableRecord { Name = Uygulama };
+                    rat.Add(r);
+                    tr.AddNewlyCreatedDBObject(r, true);
+                }
+                Vector3d eksen = g.XZ ? -Vector3d.YAxis : Vector3d.ZAxis;   // ekrana dik, bakana doğru: + açı saat yönü tersi
+                Func<double, double, double, Point3d> P = (u, v, w) => g.XZ ? new Point3d(u, w, v) : new Point3d(u, v, w);
+                Func<double, double, Vector3d> V = (du, dv) => g.XZ ? new Vector3d(du, 0, dv) : new Vector3d(du, dv, 0);
+
+                foreach (KesitDizici.Baslik b in g.Kesitler)
+                {
+                    int aci;
+                    if (!acilar.TryGetValue(b.Ad, out aci)) continue;
+                    var baslik = tr.GetObject(b.Id, OpenMode.ForRead) as Entity;
+                    if (baslik == null || Donduruldu(baslik)) continue;
+                    List<ObjectId> ids = g.Nesneler[b.Ad].Where(id => id != b.Id).ToList();
+                    double[] k = null;
+                    foreach (ObjectId id in ids) k = KesitDizici.Birlestir(k, KesitDizici.Kutu((Entity)tr.GetObject(id, OpenMode.ForRead), g.XZ));
+                    double[] bk = KesitDizici.Kutu(baslik, g.XZ);
+                    if (k == null || bk == null) continue;
+
+                    Matrix3d M = Matrix3d.Rotation(aci * Math.PI / 180.0, eksen, P((k[0] + k[2]) / 2, (k[1] + k[3]) / 2, b.W));
+                    foreach (ObjectId id in ids)
+                    {
+                        var e = (Entity)tr.GetObject(id, OpenMode.ForWrite);
+                        e.TransformBy(M);
+                        var t = e as DBText;
+                        if (t != null) Okunur(t, g.XZ, eksen);
+                    }
+                    // başlık: yeni kutunun altında, eski boşlukla, ortalı
+                    double[] k2 = null;
+                    foreach (ObjectId id in ids) k2 = KesitDizici.Birlestir(k2, KesitDizici.Kutu((Entity)tr.GetObject(id, OpenMode.ForRead), g.XZ));
+                    if (k2 == null) k2 = k;
+                    double bosluk = Math.Max(0, k[1] - bk[3]);
+                    baslik.UpgradeOpen();
+                    baslik.TransformBy(Matrix3d.Displacement(V((k2[0] + k2[2]) / 2 - (bk[0] + bk[2]) / 2, k2[1] - bosluk - bk[3])));
+                    ids.Add(b.Id);
+                    KesitDizici.Tasi(tr, ids, b.Ad, new Vector3d(0, 0, 0));
+                    baslik.XData = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, Uygulama),
+                                                    new TypedValue((int)DxfCode.ExtendedDataInteger16, (short)aci));
+                    donen.Add(b.Ad + (aci > 0 ? " ↺" : " ↻"));
+                }
+                tr.Commit();
+            }
+            return donen.Count == 0 ? null : "Kesit yönü: " + string.Join(", ", donen) + " 90° döndürüldü (travers yatay)";
+        }
+
+        private static bool Donduruldu(Entity e)
+        {
+            try { using (ResultBuffer rb = e.GetXDataForApplication(Uygulama)) return rb != null; }
+            catch { return false; }
+        }
+
+        /// <summary>Döndürmeden sonra baş aşağı / sağdan sola okunan yazıyı kendi merkezinde 180° çevirir.</summary>
+        private static void Okunur(DBText t, bool xz, Vector3d eksen)
+        {
+            try
+            {
+                Vector3d d = Vector3d.XAxis.RotateBy(t.Rotation, Vector3d.ZAxis).TransformBy(Matrix3d.PlaneToWorld(t.Normal));
+                double du = d.X, dv = xz ? d.Z : d.Y;
+                if (du > 1e-6 || (Math.Abs(du) <= 1e-6 && dv > 0)) return;
+                Extents3d x = t.GeometricExtents;
+                Point3d m = new Point3d((x.MinPoint.X + x.MaxPoint.X) / 2, (x.MinPoint.Y + x.MaxPoint.Y) / 2, (x.MinPoint.Z + x.MaxPoint.Z) / 2);
+                t.TransformBy(Matrix3d.Rotation(Math.PI, eksen, m));
+            }
+            catch { }
         }
     }
 
