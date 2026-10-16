@@ -10,6 +10,12 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
 
+**2.8: Kule yüzü kesit olmaz; bacak kesiti çizimci gibi işaretlenir.** Yalnız TRANSVERSE FACE seçiliyken yan yüz
+(LONGITUDINAL) görünüş yerine yüz büyüklüğünde bir kesit olarak veriliyordu (YAA-R1: SECTION U, 150 eleman). Artık ön ve
+yan yüz elemanları görünüş seçiminden bağımsız olarak görünüş sayılır; yüz düzlemi hiçbir zaman kesit olmaz (YAA-R1, yalnız
+ön görünüş: 26 → 24 kesit). Bacağın iç düzlemi (TAO'daki SECTION L gibi; YAA-R1'de SH-C / K-C_35 / K-C-R_35 kesiti)
+ön görünüşte kasıktaki iç düğümden ayağa uzanan kesit hattıyla, iki ucunda içeriden dışa bakan okla işaretlenir.
+
 **2.7: Düzenli kesit işaretleri.** OutlineDrawing her kesit için ön görünüşe L oklu bloklar koyuyordu; eğik ve parça
 kesitlerde bunlar gövdenin içine, eleman yazılarının ve birbirinin üstüne düşüyordu. ÇALIŞTIR sonunda (komut OTOISARET)
 bu oklar kaldırılıp çizimci gibi işaretler konur (katman SECTION_MARK): yatay kesitte o kotta kulenin iki yanında kesit

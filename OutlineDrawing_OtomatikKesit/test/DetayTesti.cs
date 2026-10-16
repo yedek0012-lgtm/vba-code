@@ -168,8 +168,9 @@ public static class DetayTesti
         var on = KuleOkuyucu.Yuz(o, "frontFace"); var yan = KuleOkuyucu.Yuz(o, "sideFace");
         foreach (var secim in new[] { "on+yan", "on", "yan" })
         {
-            ICollection<string> gor = secim == "on+yan" ? (ICollection<string>)gorunen
-                : new HashSet<string>((secim == "on" ? on : yan).Select(c => c.Anahtar));
+            // Kule yüzleri her zaman görünüş sayılır (yan yüz kesitle verilmez); seçim yalnız sade modu ve iç eleman
+            // çizgilerinin hangi görünüşe çizileceğini belirler.
+            ICollection<string> gor = gorunen;
             AutoSectionReport r2;
             var s2 = secim == "on+yan" ? secs : OtoKesitBulucu.Bul(uyeler, gor, out r2, false);
             var kes2 = new HashSet<string>();

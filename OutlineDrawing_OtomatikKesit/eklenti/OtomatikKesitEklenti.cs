@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "2.7";
+        public const string Surum = "2.8";
         private static Timer _timer;
 
         public void Initialize()
@@ -782,7 +782,10 @@ namespace OtomatikKesit
                 GorunusSecimi(f, out onSecili, out yanSecili);
                 bool otoIsaret = !onSecili && !yanSecili;
                 if (otoIsaret) { GorunusIsaretle(f); onSecili = yanSecili = true; }
-                ICollection<string> gorunen = GorunenAnahtarlar(kule, onSecili, yanSecili);
+                // Kule dış yüzleri (ön ve yan yüz düzlemi) kesit konusu değildir: yan görünüş çizilmese bile yan yüz bir
+                // görünüştür, kesitle (yüz büyüklüğünde "SECTION") verilmez. Görünür sayılan elemanlar her zaman iki yüzün
+                // elemanlarıdır; görünüş seçimi yalnız sade modu belirler.
+                ICollection<string> gorunen = GorunenAnahtarlar(kule, true, true);
                 string anahtar = OtoAnahtar(path, onSecili, yanSecili);
                 if (anahtar != null && anahtar == _otoHesapAnahtar)
                 {
@@ -1770,7 +1773,7 @@ namespace OtomatikKesit
             {
                 bool on, yan;
                 FormBaglayici.GorunusSecimi(f, out on, out yan);
-                ICollection<string> gorunen = FormBaglayici.GorunenAnahtarlar(kule, on, yan) ?? new List<string>();
+                ICollection<string> gorunen = FormBaglayici.GorunenAnahtarlar(kule, true, true) ?? new List<string>();
                 var kesitteki = new HashSet<string>();
                 foreach (KesitTanimi t in KesitStili.GridTanimlari(f).Values)
                 {
@@ -3107,8 +3110,9 @@ namespace OtomatikKesit
     ///  - yatay kesit: o kotta kule silüetinin iki yanında kısa kesit çizgisi, uçta aşağı bakan ok ve harf;
     ///  - ön görünüşte çizgi olarak görünen düzlem (travers üst düzlemi, yüz şeridi, yatay parça): düzlem izinin kuleden
     ///    uzak ucunda, iz doğrultusunda dışa uzanan çizgi, bakış yönünde ok;
-    ///  - ön görünüşte alan olarak görünen düzlem (köşegen bacak düzlemi): ağırlık merkezi kotunda, kesitin bulunduğu
-    ///    yanda silüetin dışından kuleyi gösteren ok.
+    ///  - ön görünüşte alan olarak görünen düzlem: zemine inen bacak iç düzleminde kesit hattı üst-iç köşeden ayağa (bacak
+    ///    iç çizgisi boyunca), iki uçta işaret, ok içeriden dışa; gövdedeki köşegen düzlemde ağırlık merkezi kotunda,
+    ///    kesitin bulunduğu yanda silüetin dışından kuleyi gösteren ok.
     /// Birbirine binen işaret dışa kaydırılır.
     /// </summary>
     public static class KesitIsaretPlani
@@ -3159,11 +3163,35 @@ namespace OtomatikKesit
                 }
                 else
                 {
-                    double a, b;
-                    Kenar(onYuz, cz, xMin, xMax, out a, out b);
-                    bool sag = cx >= 0;
-                    double eu = sag ? b + bosluk : a - bosluk, du = sag ? 1 : -1;
-                    Ekle(sonuc, dolu, ad, eu, cz, du, 0, -du, 0, kol, ok, th);
+                    // ön görünüşte alan olarak görünen düzlem (ör. bacağın iç / kalça düzlemi): çizimci kesit hattını düzlemin
+                    // üst-iç köşesinden alt-dış köşesine (bacak iç çizgisi boyunca) çizer; işaret iki uçta, ok içeriden
+                    // dışa (kesite içeriden bakılır)
+                    var kose = t.Noktalar.OrderByDescending(p => p[2]).ToList();
+                    double[] ust = kose.Take(2).OrderBy(p => Math.Abs(p[0])).First(), alt = kose.Skip(2).OrderByDescending(p => Math.Abs(p[0])).First();
+                    double lu = alt[0] - ust[0], lv = alt[2] - ust[2], ll = Math.Sqrt(lu * lu + lv * lv);
+                    // yalnız zemine inen (bacak) düzlemde; gövdedeki köşegen düzlemlerin üst-iç köşesi gövdenin ortasına düşer
+                    bool bacak = alt[2] <= zMin + 2 * th;
+                    if (bacak)
+                    {
+                        // dörtgen köşesi elemanların dışında kalabilir: alt uç bacağın ayağı (silüetin en alttaki ucu)
+                        double fa, fb;
+                        Kenar(onYuz, zMin, xMin, xMax, out fa, out fb);
+                        alt = new[] { cx >= 0 ? fb : fa, 0, zMin };
+                        lu = alt[0] - ust[0]; lv = alt[2] - ust[2]; ll = Math.Sqrt(lu * lu + lv * lv);
+                    }
+                    if (ll < 1e-6 || !bacak)
+                    {
+                        double a, b;
+                        Kenar(onYuz, cz, xMin, xMax, out a, out b);
+                        bool sag = cx >= 0;
+                        Ekle(sonuc, dolu, ad, sag ? b + bosluk : a - bosluk, cz, sag ? 1 : -1, 0, sag ? -1 : 1, 0, kol, ok, th);
+                        continue;
+                    }
+                    lu /= ll; lv /= ll;
+                    double pu = lv, pv = -lu;
+                    if (pu * (cx >= 0 ? 1 : -1) < 0) { pu = -pu; pv = -pv; }
+                    Ekle(sonuc, dolu, ad, ust[0] - lu * bosluk, ust[2] - lv * bosluk, -lu, -lv, pu, pv, 1.5 * th, ok, th);
+                    Ekle(sonuc, dolu, ad, alt[0] + lu * bosluk, alt[2] + lv * bosluk, lu, lv, pu, pv, 1.5 * th, ok, th);
                 }
             }
             return sonuc;
