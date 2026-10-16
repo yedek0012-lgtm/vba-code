@@ -10,6 +10,13 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC.
 
+**2.5: Aynı düzlemdeki parça kesitler tek kesit.** Çizimci, traversin arkasında kalan gövde yüzünü tek bir şerit
+kesitte gösterir; Oto Kesit ise her gizli panel için ayrı küçük "yerel kesit" veriyordu. Artık aynı düzlemde olup o
+düzlemdeki elemanlarla birbirine bağlanan düzlem kesitleri tek kesitte birleşir (220kV TAO: gövde yüzündeki 4 parça →
+1 şerit, toplam 18 → 15 kesit; kapsama değişmedi, 91 test dosyası TAMAM). Kapatmak: `AyniDuzlemiBirlestir = false`.
+Not: TAO gibi PLS *family* dosyalarında OutlineDrawing bütün gövde/bacak uzatmalarını üst üste okur; uzatmaya özel
+kesitler (+3/+6 gövde uzatması yüzleri, K1-K5 gibi) bu yüzden ayrı ayrı çıkarılamaz, her uzatma için ayrı .tow gerekir.
+
 **2.4: Pafta ve malzeme listesi.**
 - *Pafta* butonu (komut OTOPAFTA, ÇALIŞTIR'dan sonra): ŞA-RA A1 antetli çerçeve (YAA_OUTLINE_rev0'dan çıkarıldı, DLL'e
   gömülü: `eklenti/sablon/SARA_A1_pafta.dxf`) ön görünüşün etrafına kurulur; yan görünüş yanına (yalnız yatay kayar),

@@ -95,6 +95,9 @@ namespace OutlineDrawing
         public double YerelKesitPayi = 100.0;
         /// <summary>mm. OutlineDrawing.SectionDetection nokta kesitinde elemanın orta noktası düzleme bu kadar yakın olmalı.</summary>
         public double KesitDuzlemMesafesi = 100.0;
+        /// <summary>Aynı düzlemde olup düzlemdeki elemanlarla birbirine bağlanan düzlem kesitleri tek kesitte birleşir
+        /// (parça parça yerel kesit yerine tek gövde yüzü / panel şeridi).</summary>
+        public bool AyniDuzlemiBirlestir = true;
     }
 
     public class AutoSectionCandidate
@@ -402,6 +405,11 @@ namespace OutlineDrawing
                     if (yerel != null) result.Add(yerel);
                 }
 
+            // ---- aynı düzlem birleştirme: aynı düzlemde, düzlemdeki elemanlarla birbirine bağlı parça kesitleri (ör. traversin
+            // arkasında kalan gövde yüzü panelleri) çizimcinin yaptığı gibi tek bir bütün kesit olur.
+            if (opt.AyniDuzlemiBirlestir && result.Count(c => c.Kind == AutoSectionKind.Plane) > 1)
+                result = AyniDuzlemBirlestir(result, bars, opt);
+
             // ---- gereksiz kesit ayıklama: gösterdiği bütün görünmeyen aileler kalan kesitlerde de varsa kesit atılır
             // (açgözlü seçimde önce alınan geniş bir kesit, sonradan eklenenlerce tamamen kapsanabiliyor). Kapsama yalnız
             // MemberKeys'e (gerçek SectionDetection'ın seçtiğinin alt kümesi) göre: atılan kesitin her elemanı kesin çizilir.
@@ -435,6 +443,72 @@ namespace OutlineDrawing
                 ? result.OrderByDescending(c => c.SortZ).ThenBy(c => (int)c.Kind).ToList()
                 : result.OrderBy(c => c.SortZ).ThenBy(c => (int)c.Kind).ToList();
             return result;
+        }
+
+        /// <summary>Aynı düzlemdeki (normal ±1°, uzaklık PlaneTolerance) ve o düzlemdeki elemanlarla bağlı düzlem kesitlerini
+        /// birleştirir. Yeni dörtgen tüm parçaların elemanlarını çevreler; MemberKeys birleşimdir (her biri yeni dörtgende de
+        /// düzlemde ve içeride kaldığı için SectionDetection onları yine seçer).</summary>
+        private static List<AutoSectionCandidate> AyniDuzlemBirlestir(List<AutoSectionCandidate> result, List<Bar> bars, AutoSectionOptions opt)
+        {
+            var anahtarla = new Dictionary<string, Bar>();
+            foreach (var b in bars) anahtarla[b.Key] = b;
+            var duz = result.Select(c =>
+            {
+                if (c.Kind != AutoSectionKind.Plane || c.Points.Count < 3) return null;
+                V3 a = new V3(c.Points[0].X, c.Points[0].Y, c.Points[0].Z), b = new V3(c.Points[1].X, c.Points[1].Y, c.Points[1].Z),
+                   d = new V3(c.Points[2].X, c.Points[2].Y, c.Points[2].Z);
+                V3 n = V3.Cross(b - a, d - a);
+                if (n.Length < 1e-9) return null;
+                n = n / n.Length;
+                if (n.Z < -1e-9 || (Math.Abs(n.Z) <= 1e-9 && (n.X < -1e-9 || (Math.Abs(n.X) <= 1e-9 && n.Y < 0)))) n = -n;
+                return new PlaneCand { N = n, D = V3.Dot(n, a), Tilt = c.TiltDeg };
+            }).ToList();
+
+            double cos1 = Math.Cos(1.0 * Math.PI / 180.0);
+            var birlesik = new HashSet<int>();
+            var yeni = new List<AutoSectionCandidate>();
+            for (int i = 0; i < result.Count; i++)
+            {
+                if (birlesik.Contains(i)) continue;
+                if (duz[i] == null) { yeni.Add(result[i]); continue; }
+                var p = duz[i];
+                var es = Enumerable.Range(i + 1, result.Count - i - 1)
+                    .Where(j => !birlesik.Contains(j) && duz[j] != null && V3.Dot(duz[j].N, p.N) >= cos1 &&
+                                Math.Abs(duz[j].D - p.D) <= opt.PlaneTolerance).ToList();
+                if (es.Count == 0) { yeni.Add(result[i]); continue; }
+
+                // düzlemdeki bağlı gruplar: yalnız aynı gruba düşen parçalar birleşir
+                var duzlemde = bars.Where(b => Math.Abs(V3.Dot(p.N, b.A) - p.D) <= opt.PlaneTolerance &&
+                                               Math.Abs(V3.Dot(p.N, b.B) - p.D) <= opt.PlaneTolerance).ToList();
+                var grup = new Dictionary<string, int>();
+                int gi = 0;
+                foreach (var comp in ConnectedGroups(duzlemde)) { foreach (var b in comp) grup[b.Key] = gi; gi++; }
+                Func<int, HashSet<int>> gruplari = k => new HashSet<int>(result[k].MemberKeys.Where(grup.ContainsKey).Select(x => grup[x]));
+                var gi0 = gruplari(i);
+                var parcalar = new List<int> { i };
+                foreach (int j in es) if (gruplari(j).Overlaps(gi0)) parcalar.Add(j);
+                if (parcalar.Count == 1) { yeni.Add(result[i]); continue; }
+
+                var uyeler = parcalar.SelectMany(k => result[k].MemberKeys).Distinct().Where(anahtarla.ContainsKey).Select(x => anahtarla[x]).ToList();
+                var comp2 = new PlaneComp { Plane = p, Bars = uyeler, Centroid = Centroid(uyeler) };
+                var kose = BoundingQuad(comp2, opt.PolygonMargin);
+                if (kose == null) { yeni.Add(result[i]); continue; }
+                foreach (int k in parcalar) birlesik.Add(k);
+                int gizli = parcalar.Sum(k => result[k].PlanMemberCount);
+                yeni.Add(new AutoSectionCandidate
+                {
+                    Kind = AutoSectionKind.Plane,
+                    Points = kose,
+                    MemberKeys = uyeler.Select(b => b.Key).ToList(),
+                    PlanMemberCount = gizli,
+                    TiltDeg = result[i].TiltDeg,
+                    SortZ = comp2.Centroid.Z,
+                    Description = string.Format(CultureInfo.InvariantCulture,
+                        "Düzlem kesiti (aynı düzlemdeki {0} parça tek kesitte): eğim {1:0.0}°, {2} eleman, merkez ({3:0}; {4:0}; {5:0})",
+                        parcalar.Count, result[i].TiltDeg, uyeler.Count, comp2.Centroid.X, comp2.Centroid.Y, comp2.Centroid.Z)
+                });
+            }
+            return yeni;
         }
 
         /// <summary>
