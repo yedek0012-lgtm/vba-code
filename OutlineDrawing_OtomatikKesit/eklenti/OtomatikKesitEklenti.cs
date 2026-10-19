@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "3.5";
+        public const string Surum = "3.6";
         private static Timer _timer;
 
         public void Initialize()
@@ -3609,9 +3609,28 @@ namespace OtomatikKesit
                     // dışa (kesite içeriden bakılır)
                     var kose = t.Noktalar.OrderByDescending(p => p[2]).ToList();
                     double[] ust = kose.Take(2).OrderBy(p => Math.Abs(p[0])).First(), alt = kose.Skip(2).OrderByDescending(p => Math.Abs(p[0])).First();
+                    double altKot = kose[kose.Count - 1][2];
+                    // OutlineDrawing'in dörtgeni düzlemde dönük olabilir (Tangent J: alt-dış köşe yerden 1.2 m yukarıda):
+                    // düzlemde yatan ön yüz çizgileri (bacak iç çizgisi) varsa üst ucu kasık, alt ucu ayak
+                    var uclar = new List<double[]>();
+                    foreach (var c in onYuz)
+                    {
+                        if (Math.Abs(c.P[5] - c.P[2]) < 1) continue;
+                        double d1 = (c.P[0] - p0[0]) * nx + (c.P[1] - p0[1]) * ny + (c.P[2] - p0[2]) * nz;
+                        double d2 = (c.P[3] - p0[0]) * nx + (c.P[4] - p0[1]) * ny + (c.P[5] - p0[2]) * nz;
+                        if (Math.Abs(d1) > KesitSecici.DuzlemTol || Math.Abs(d2) > KesitSecici.DuzlemTol) continue;
+                        uclar.Add(new[] { c.P[0], c.P[1], c.P[2] });
+                        uclar.Add(new[] { c.P[3], c.P[4], c.P[5] });
+                    }
+                    if (uclar.Count > 0)
+                    {
+                        ust = uclar.OrderByDescending(p => Math.Round(p[2])).ThenBy(p => Math.Abs(p[0])).First();
+                        alt = uclar.OrderBy(p => Math.Round(p[2])).ThenByDescending(p => Math.Abs(p[0])).First();
+                        altKot = alt[2];
+                    }
                     double lu = alt[0] - ust[0], lv = alt[2] - ust[2], ll = Math.Sqrt(lu * lu + lv * lv);
                     // yalnız zemine inen (bacak) düzlemde; gövdedeki köşegen düzlemlerin üst-iç köşesi gövdenin ortasına düşer
-                    bool bacak = alt[2] <= zMin + 2 * th;
+                    bool bacak = altKot <= zMin + 2 * th;
                     if (bacak)
                     {
                         // dörtgen köşesi elemanların dışında kalabilir: alt uç bacağın ayağı (silüetin en alttaki ucu)

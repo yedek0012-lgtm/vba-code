@@ -10,6 +10,12 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
 
+**3.6: Bacak iç düzlemi işareti kasıktan ayağa.** Tangent kulesinde bacağın iç düzlem kesiti (SECTION J, kasıktaki iki iç
+düğüm ile ayak) alınıyordu, ama ön görünüşte işareti bacağın yanına yatay ok olarak konuyordu: OutlineDrawing'in kesit
+dörtgeni düzlemde dönük geldiği için alt köşesi yerden 1.2 m yukarıda kalıyor, düzlem "bacak" sayılmıyordu. Kesit hattı
+artık düzlemde yatan ön yüz çizgilerinden (bacak iç çizgisi) bulunur: üst ucu kasık düğümü, alt ucu ayak. TAO'da da
+bacak iç düzlemi işareti 1.8 m yukarıdan değil kasık düğümünden başlıyor.
+
 **3.5: Genel kontrol düzeltmeleri.** Kod incelemesi (AutoCAD tarafı, çalıştırılamayan kısımlar) ve üç kulenin pafta
 önizlemesiyle (`test/onizleme_ciz.py`, `OTO_ONIZLEME=dosya bash test/olcu_testi.sh ...`):
 - Aynı işlemde iki katman / uygulama kaydı eklenince tablo ikinci kez yazmaya açılıyordu (AutoCAD eWasOpenForWrite):
