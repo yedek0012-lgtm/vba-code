@@ -10,6 +10,21 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
 
+**3.1: Aile paftasının eksikleri tamamlandı, kararlılık.**
+- *Tam travers kesiti*: OutlineDrawing eğik travers düzleminde yalnız bir kolu çiziyordu. Gövdeye bağlı simetrik kolun
+  eğik düzleminde (Y doğrultusunu içeren, 5°-45°, aynası elemanlı, kesit tek tarafta) kesit, çizimcinin B, D, F, H
+  kesitleri gibi iki kol gerçek boyunda + kök kotundaki gövde planı olarak yeniden çizilir (`TraversKesiti`,
+  `TraversCizimi`); ön görünüşte işareti iki kolun ucuna konur. Kapsama hesapları bunu bilir: kökteki gövde planını
+  ayrıca gösteren kesit (TAO: Z=59310) gereksiz sayılıp atılır. Önizleme: `tam_travers_TAO.png`.
+- *Sade*: dik olmayan eğik düzlemde 8'den az elemanlı parça kesit alınmaz (TAO: bacak bölgesindeki 6 elemanlık köşegen).
+- *Uzatma görünüşleri*: ölçülendirilir (kesitler gibi), yüzde olmayan elemanların izdüşümü kesikli çizilir.
+- *Bacak boyları*: ana görünüşte sol bacakta diğer bacak uzatmalarının dış / iç bacak çizgileri kesikli, ayak kotlarında
+  soldan "+4 LEG ... +0 LEG" yazıları.
+- Bacak uzatması hangi köşede tanımlıysa oradan okunur (döndürülmüş kulelerde de); ayrı eklenti DLL'inde aile dosyası
+  açılırsa uyarı; çizgi tipi yüklenemezse çizim sürer.
+- Test: detay testi aile dosyasında uzatma çizimlerini (görünüş, K, L sayısı ve boyutları) denetler; ölçü / pafta testi
+  tam travers ve uzatma çizimleriyle yapılır (TAO: 31 parça 1:155, binen yok). 91 + 13 (TAO) dosya TAMAM.
+
 **3.0: PLS-TOWER aile (family) dosyaları.** 220kV TAO gibi aile dosyalarında gövdeden sonra her gövde uzatması ×
 bacak uzatması birleşimi ayrı konfigürasyondur (TAO: 5 × 5 = 25). OutlineDrawing hepsini birden okuyordu: blok
 düğümleri açılmış adlarla ('100P') yazıldığından ve OutlineDrawing her düğüm adına "P" eklediğinden düğümler yanlış

@@ -106,6 +106,10 @@ namespace OutlineDrawing
         public double SadeMinEgim = 15.0;
         /// <summary>Sade modda bundan az elemanlı kesit (tek bir çubuğu gösteren parça) alınmaz.</summary>
         public int SadeMinEleman = 4;
+        /// <summary>Sade modda dik olmayan (SadeDikEgim'den yatık) eğik düzlem kesitinin en az eleman sayısı.</summary>
+        public int SadeEgikMinEleman = 8;
+        /// <summary>Derece. Bundan dik düzlemler (çerçeve, yüz şeridi) SadeEgikMinEleman'a tabi değil.</summary>
+        public double SadeDikEgim = 80.0;
     }
 
     public class AutoSectionCandidate
@@ -435,7 +439,11 @@ namespace OutlineDrawing
             {
                 int once = result.Count;
                 result = result.Where(c => !c.Yerel && c.MemberKeys.Count >= opt.SadeMinEleman && (c.Kind != AutoSectionKind.Plane || c.TiltDeg < opt.MinPlaneTiltDeg ||
-                                                        MantikliDuzlem(c.TiltDeg, opt))).ToList();
+                                                        (MantikliDuzlem(c.TiltDeg, opt) &&
+                                                         // dik olmayan eğik düzlemde küçük parça (bacak bölgesinde 6 elemanlık köşegen
+                                                         // parça gibi) çizimci için kesit yeri değil; dik çerçeveler (travers
+                                                         // çerçeveleri) küçük de olsa kalır
+                                                         !(c.TiltDeg < opt.SadeDikEgim && c.MemberKeys.Count < opt.SadeEgikMinEleman)))).ToList();
                 if (result.Count != once)
                 {
                     var anahtarla = new Dictionary<string, Bar>();

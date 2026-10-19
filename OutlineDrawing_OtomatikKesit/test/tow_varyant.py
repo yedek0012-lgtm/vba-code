@@ -173,11 +173,21 @@ def main(giris, cikis, varyantlar):
     open(cikis, "w", encoding="latin-1", newline="").write("\n".join(satirlar))
 
 
+def aile_basi(satirlar):
+    """PLS aile dosyasında ilk konfigürasyon satırı (tırnakla başlayan, ardından "; support label"); değilse satır sayısı.
+    Konfigürasyon bloklarında düğümler açılmış adlarla ('100P') yazılır; ad uzatma yalnız baş kısma uygulanır."""
+    for k in range(len(satirlar) - 1):
+        if satirlar[k].startswith("'") and "; support label" in satirlar[k + 1]:
+            return k
+    return len(satirlar)
+
+
 def uzat(satirlar, etiketler, ek="_UZUN_AD_TESTI"):
     """Her 7. düğümün ve 11. elemanın adına ek (15+ karakter); düğüm başvuruları da güncellenir."""
     uzun = set()
+    son = aile_basi(satirlar)
     i = 0
-    while i < len(satirlar):
+    while i < son:
         s = satirlar[i]
         if "; Joints Geometry" in s or "; Secondary Joints" in s:
             n = int(s.split()[0])
@@ -200,7 +210,7 @@ def uzat(satirlar, etiketler, ek="_UZUN_AD_TESTI"):
                 return (cr.replace(q, q[: -len(e)] + ek + e) if q[: -len(e)] in uzun else cr) + son
         return r
     i = 0
-    while i < len(satirlar):
+    while i < son:
         s = satirlar[i]
         if "; Joints Geometry" in s or "; Secondary Joints" in s:
             n = int(s.split()[0])

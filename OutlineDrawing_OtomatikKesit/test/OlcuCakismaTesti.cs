@@ -1,4 +1,4 @@
-// Ölçü yazısı çakışma testi (AutoCAD'siz): otomatik kesitlerin ve ön / yan görünüşün ölçüleri için yazı kutuları
+﻿// Ölçü yazısı çakışma testi (AutoCAD'siz): otomatik kesitlerin ve ön / yan görünüşün ölçüleri için yazı kutuları
 // tahmin edilir (AutoCAD "best fit": yazı iki uzatma çizgisi arasına sığıyorsa ortada, ölçü çizgisinin üstünde; elle
 // konum verilmişse orada). Sığmayıp elle konumu olmayan yazı (AutoCAD dışarı atar, komşusuna biner) ve birbirine
 // binen yazı sayılır.
@@ -57,12 +57,14 @@ public static class OlcuCakismaTesti
         var rapor = new List<string>();
         int toplam = 0, sig = 0, cak = 0, ki = 0;
         var kesitKutulari = new List<double[]>();
-        foreach (var c in secs)
+        // çizimdeki kesitler: OutlineDrawing'in (tam travers kesitleri eklentinin açılmış çizimiyle) + aile dosyasında
+        // eklentinin çizdiği uzatma görünüşleri ve K / L kesitleri
+        var cizimler = secs.Select(c => KesitSecici.CizimSegmentleri(k.Uyeler, OtoKesitBulucu.Tanim(c))).ToList();
+        var uzatma = UzatmaPlani.Hesapla(AileParcalari.Oku(TowYama.SatirlarHam(a[0])));
+        cizimler.AddRange(uzatma.Select(c => c.Cizgiler));
+        if (uzatma.Count > 0) Console.WriteLine("Aile: {0} uzatma cizimi ({1})", uzatma.Count, string.Join(", ", uzatma.Select(c => c.Baslik)));
+        foreach (var segs in cizimler)
         {
-            var t = new KesitTanimi();
-            if (c.Kind == AutoSectionKind.Height) t.Yukseklik = c.Height.Value; else foreach (var p in c.Points) t.Noktalar.Add(new[] { p.X, p.Y, p.Z });
-            List<string> anah;
-            var segs = KesitSecici.Sec(k.Uyeler, t, out anah);
             var l = OlcuPlani.Hesapla(segs);
             toplam += l.Count;
             var s = Say(l, "kesit " + (++ki), rapor); sig += s[0]; cak += s[1];

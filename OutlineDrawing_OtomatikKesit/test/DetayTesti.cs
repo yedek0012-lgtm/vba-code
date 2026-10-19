@@ -164,6 +164,12 @@ public static class DetayTesti
             int i = k.IndexOf(KesitAnahtari.Ayrac);
             kesitte.Add(i >= 0 ? k.Substring(i + 1) : k);
         }
+        // eğik travers kesitleri eklentide tam travers olarak (iki kol + kök gövde planı) yeniden çizilir
+        foreach (var c in secs)
+        {
+            TraversPlani tp = TraversKesiti.Hesapla(uyeler, OtoKesitBulucu.Tanim(c));
+            if (tp != null) kesitte.UnionWith(tp.Anahtarlar);
+        }
 
         // ---- 2b. ÇALIŞTIR sonrası denetimin (KesitDenetimi: KesitSecici + Kapsanmayanlar) Oto Kesit tablosunu temiz
         //          bulması; yalnız ön / yalnız yan görünüş seçiliyken Oto Kesit'in o seçime göre tam tablo üretmesi
@@ -181,7 +187,7 @@ public static class DetayTesti
                 var tn = new KesitTanimi();
                 if (c.Kind == AutoSectionKind.Height) tn.Yukseklik = c.Height.Value;
                 else foreach (var p in c.Points) tn.Noktalar.Add(new[] { p.X, p.Y, p.Z });
-                List<string> a2; KesitSecici.Sec(uyeler, tn, out a2); kes2.UnionWith(a2);
+                kes2.UnionWith(KesitSecici.SecGenis(uyeler, tn));
             }
             // Sade mod kesit almadığı parçaları bilerek bırakır: o elemanlar seçili görünüşlerde iç eleman çizgisi olarak
             // çizilmeli. Ne kesitte ne iç eleman çizgisinde olanlar hatadır.
@@ -222,6 +228,30 @@ public static class DetayTesti
         foreach (var s in icListe.Take(ayrinti ? 1000 : 8)) Console.WriteLine("       yalnız iç eleman çizgisi: " + s);
         foreach (var s in yokListe.Take(ayrinti ? 1000 : 8)) Console.WriteLine("       HİÇ ÇİZİLMİYOR: " + s);
         hata += yok;
+
+        // ---- 4. aile dosyası: diğer uzatmaların çizimleri (eklenti çizer)
+        var parcalar = AileParcalari.Oku(TowYama.SatirlarHam(yol));
+        if (parcalar.Count > 0)
+        {
+            var uz = UzatmaPlani.Hesapla(parcalar);
+            string ilk = parcalar[0].Konfig;
+            int bekGovde = parcalar.Count(p => !p.Bacak && p.Konfig != ilk), bekBacak = parcalar.Count(p => p.Bacak && p.Konfig != ilk);
+            int gorunus = uz.Count(c => !c.Kesit), kesitK = uz.Count(c => c.Baslik.StartsWith("SECTION K")), kesitL = uz.Count(c => c.Baslik.StartsWith("SECTION L"));
+            int sorun = 0;
+            if (gorunus != bekGovde + bekBacak) { sorun++; Console.WriteLine("       uzatma görünüşü {0}, beklenen {1}", gorunus, bekGovde + bekBacak); }
+            if (kesitK != bekGovde) { sorun++; Console.WriteLine("       K kesiti {0}, beklenen {1}", kesitK, bekGovde); }
+            if (kesitL != bekBacak) { sorun++; Console.WriteLine("       L kesiti {0}, beklenen {1}", kesitL, bekBacak); }
+            foreach (var c in uz)
+            {
+                double w = c.Cizgiler.Max(q => Math.Max(q[0], q[2])) - c.Cizgiler.Min(q => Math.Min(q[0], q[2]));
+                double h = c.Cizgiler.Max(q => Math.Max(q[1], q[3])) - c.Cizgiler.Min(q => Math.Min(q[1], q[3]));
+                bool iyi = c.Cizgiler.Count >= 3 && w > 100 && h > 100;
+                if (!iyi) { sorun++; Console.WriteLine("       {0}: {1} çizgi, {2:0} x {3:0}", c.Baslik, c.Cizgiler.Count, w, h); }
+            }
+            Console.WriteLine("  4. Aile dosyası: {0} parça; {1} uzatma görünüşü, {2} K, {3} L kesiti{4}", parcalar.Count, gorunus, kesitK, kesitL,
+                sorun == 0 ? "" : " -> " + sorun + " sorun");
+            hata += sorun;
+        }
         Console.WriteLine(hata == 0 ? "  SONUC: atlanan eleman yok" : "  SONUC: " + hata + " sorun");
         return hata == 0 ? 0 : 1;
     }
