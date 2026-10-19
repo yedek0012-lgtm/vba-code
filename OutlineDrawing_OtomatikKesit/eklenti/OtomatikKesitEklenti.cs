@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "2.9";
+        public const string Surum = "3.0";
         private static Timer _timer;
 
         public void Initialize()
@@ -415,6 +415,14 @@ namespace OtomatikKesit
                     {
                         mesaj.Add("İç eleman: kapalı");
                         sorun.Add("'İç eleman' kutusu kapalı: görünüşlere iç eleman izdüşümleri (tepe, travers, iç çaprazlar) çizilmedi.");
+                    }
+                    {
+                        string r = adim("aile uzatmaları", () =>
+                        {
+                            try { return UzatmaCizimleri.Ciz(f, chkR.Checked); }
+                            catch (System.Exception ex) { sorun.Add("Uzatma çizimleri çizilemedi: " + IcHata(ex).Message); return null; }
+                        });
+                        if (r != null) mesaj.Add(r);
                     }
                     if (chkR.Checked)
                     {
@@ -1094,6 +1102,8 @@ namespace OtomatikKesit
     {
         internal const string Uygulama = "OTO_KESIT";
         private static readonly Regex KesitYazisi = new Regex(@"^SECTION\s+(\S+)$", RegexOptions.IgnoreCase);
+        /// <summary>Aile dosyasındaki uzatma görünüşlerinin başlığı ("+9 BODY EXTENSION"): kesit gibi gruplanır ve dizilir.</summary>
+        internal static readonly Regex UzatmaYazisi = new Regex(@"^\+?\d+(\.\d+)?\s+(BODY|LEG)\s+EXTENSION$", RegexOptions.IgnoreCase);
 
         internal static string Etiket(Entity e)
         {
@@ -1165,6 +1175,7 @@ namespace OtomatikKesit
                 if (t.Height < 250) continue;
                 Match m = KesitYazisi.Match(metin);
                 if (m.Success && !basliklar.Any(o => o.Ad == m.Groups[1].Value)) { b.Ad = m.Groups[1].Value; basliklar.Add(b); }
+                else if (!m.Success && UzatmaYazisi.IsMatch(metin) && !basliklar.Any(o => o.Ad == metin)) { b.Ad = metin; basliklar.Add(b); }
             }
             int nXZ = basliklar.Count(b => b.XZ) + gorunus.Count(b => b.XZ), nXY = basliklar.Count(b => !b.XZ) + gorunus.Count(b => !b.XZ);
             g.XZ = nXZ >= nXY;
@@ -1894,7 +1905,12 @@ namespace OtomatikKesit
             foreach (var et in etiketli)
             {
                 KesitCizimi e = etiketler.FirstOrDefault(x => x.Ad == et.Key);
-                if (e == null) { cizgiler.Add(et.Value); continue; }
+                if (e == null)
+                {
+                    // uzatma görünüşünün (aile dosyası) çizgisi hiçbir kesite ait değildir
+                    if (!KesitDizici.UzatmaYazisi.IsMatch(et.Key)) cizgiler.Add(et.Value);
+                    continue;
+                }
                 Point3d[] c = et.Value.Value;
                 e.Ids.Add(et.Value.Key);
                 e.Segs.Add(new[] { c[0].X, e.XZ ? c[0].Z : c[0].Y, c[1].X, e.XZ ? c[1].Z : c[1].Y });
@@ -2199,7 +2215,11 @@ namespace OtomatikKesit
                 {
                     if (e.Segs.Count == 0) continue;
                     KesitTanimi tanim;
-                    if (!tanimlar.TryGetValue(e.Ad, out tanim)) { tanimsiz.Add(e.Ad); continue; }
+                    if (!tanimlar.TryGetValue(e.Ad, out tanim))
+                    {
+                        if (!UzatmaCizimleri.SonAdlar.Contains(e.Ad)) tanimsiz.Add(e.Ad);   // aile uzatma kesitleri kendi stiliyle çizildi
+                        continue;
+                    }
                     List<string> anahtarlar;
                     List<double[]> kaynak = KesitSecici.Sec(kule.Uyeler, tanim, out anahtarlar);
                     int[] eslesme = Eslestirici.Eslestir(kaynak, e.Segs, 2.0);
@@ -3302,6 +3322,175 @@ namespace OtomatikKesit
         }
     }
 
+    /// <summary>Aile dosyasında UzatmaPlani'ndaki çizimleri (uzatma görünüşleri, K / L kesitleri) model alanına, mevcut
+    /// çizimin sağına çizer. Çizgiler OutlineDrawing gibi "SECTION &lt;kesim&gt;" katmanında, grup başına bir etiket, başlık
+    /// 400 boyunda altta. Hepsi OTO_AILE ile işaretlenir; sonraki çalıştırmada silinip yeniden çizilir.</summary>
+    internal static class UzatmaCizimleri
+    {
+        internal const string Uygulama = "OTO_AILE";
+        /// <summary>Son çizilen uzatma kesitlerinin adları (K2, L3 ...): tabloda olmamaları beklenir.</summary>
+        internal static readonly HashSet<string> SonAdlar = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        internal static string Ciz(Form f, bool stil)
+        {
+            Document doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) return null;
+            Database db = doc.Database;
+            string yol = FormBaglayici.YolAl(f);
+            if (yol.Length == 0 || !File.Exists(yol)) return null;
+            List<AileParcasi> parcalar = AileParcalari.Oku(TowYama.SatirlarHam(yol));
+            if (parcalar.Count == 0)
+            {
+                // aile dosyası değil: önceki bir aile dosyasından kalan uzatma çizimleri silinir
+                using (doc.LockDocument())
+                using (Transaction tr = db.TransactionManager.StartTransaction())
+                {
+                    var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
+                    foreach (ObjectId id in ms)
+                    {
+                        var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                        if (e != null && Bizim(e)) { try { e.UpgradeOpen(); e.Erase(); } catch { } }
+                    }
+                    tr.Commit();
+                }
+                SonAdlar.Clear();
+                return null;
+            }
+            List<UzatmaCizimi> cizimler = UzatmaPlani.Hesapla(parcalar);
+            SonAdlar.Clear();
+            foreach (UzatmaCizimi c in cizimler) if (c.Kesit) SonAdlar.Add(c.Baslik.Substring("SECTION ".Length));
+            KuleVerisi kule = KuleOkuyucu.Oku(f.GetType().Assembly, yol);
+            var redundant = kule != null ? kule.RedundantGruplar : new HashSet<string>();
+
+            int adet = 0;
+            using (doc.LockDocument())
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForWrite);
+                var rat = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
+                if (!rat.Has(Uygulama))
+                {
+                    rat.UpgradeOpen();
+                    var r = new RegAppTableRecord { Name = Uygulama };
+                    rat.Add(r);
+                    tr.AddNewlyCreatedDBObject(r, true);
+                }
+                KesitDizici.UygulamaKaydi(db, tr);
+                string grupAdi = null;   // çizilen nesneler bu adla da işaretlenir (ölçü / dizme kendi çizimine bağlar)
+                // önceki çizimler silinir; mevcut çizimin sınırı ve OutlineDrawing etiket boyu bulunur
+                double xMax = double.MinValue, zMin = double.MaxValue, w = 0;
+                var boylar = new List<double>();
+                bool xz = true;
+                foreach (ObjectId id in ms)
+                {
+                    var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (e == null) continue;
+                    if (Bizim(e)) { try { e.UpgradeOpen(); e.Erase(); } catch { } continue; }
+                    var t = e as DBText;
+                    if (t != null)
+                    {
+                        if (t.TextString != null && t.TextString.Trim().StartsWith("SECTION ", StringComparison.OrdinalIgnoreCase) && t.Height >= 250)
+                        { xz = Math.Abs(t.Normal.Y) > 0.9; w = xz ? t.Position.Y : t.Position.Z; }
+                        else if (t.Height > 20 && t.Height < 350) boylar.Add(t.Height);
+                    }
+                    try
+                    {
+                        Extents3d x = e.GeometricExtents;
+                        xMax = Math.Max(xMax, x.MaxPoint.X);
+                        zMin = Math.Min(zMin, xz ? x.MinPoint.Z : x.MinPoint.Y);
+                    }
+                    catch { }
+                }
+                if (xMax == double.MinValue) { xMax = 0; zMin = 0; }
+                boylar.Sort();
+                double h = boylar.Count > 0 ? boylar[boylar.Count / 2] : 150;
+                Func<double, double, Point3d> P = (u, v) => xz ? new Point3d(u, w, v) : new Point3d(u, v, w);
+                Matrix3d duzlem = xz ? Matrix3d.Displacement(new Vector3d(0, w, 0)) * Matrix3d.Rotation(Math.PI / 2, Vector3d.XAxis, Point3d.Origin)
+                                     : Matrix3d.Displacement(new Vector3d(0, 0, w));
+                ObjectId kesik = stil ? KesitStili.KesikCizgiTipi(db, tr) : ObjectId.Null;
+                ObjectId duz = SymbolUtilityServices.GetLinetypeContinuousId(db);
+                double olcek = stil ? KesitStili.DesenOlcegi(db) : 1;
+                var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                Func<string, ObjectId> katman = ad =>
+                {
+                    if (!lt.Has(ad))
+                    {
+                        if (!lt.IsWriteEnabled) lt.UpgradeOpen();
+                        var ltr = new LayerTableRecord { Name = ad };
+                        lt.Add(ltr);
+                        tr.AddNewlyCreatedDBObject(ltr, true);
+                    }
+                    return lt[ad];
+                };
+                Action<Entity> ekle = e =>
+                {
+                    ms.AppendEntity(e); tr.AddNewlyCreatedDBObject(e, true);
+                    e.XData = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, Uygulama),
+                                               new TypedValue((int)DxfCode.ExtendedDataAsciiString, "1"));
+                    if (grupAdi != null)
+                        e.XData = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, KesitDizici.Uygulama),
+                                                   new TypedValue((int)DxfCode.ExtendedDataAsciiString, grupAdi));
+                };
+                Action<string, double, double, double, double> yazi = (metin, u, v, aci, boy) =>
+                {
+                    var t = new DBText();
+                    t.SetDatabaseDefaults(db);
+                    t.Layer = "0";
+                    t.TextString = metin; t.Height = boy; t.Rotation = aci;
+                    t.HorizontalMode = TextHorizontalMode.TextCenter; t.VerticalMode = TextVerticalMode.TextBase;
+                    t.AlignmentPoint = new Point3d(u, v, 0);
+                    t.TransformBy(duzlem);
+                    ekle(t);
+                    try { t.AdjustAlignment(db); } catch { }
+                };
+
+                double ox = xMax + 10000, aralik = 3000;
+                foreach (UzatmaCizimi c in cizimler)
+                {
+                    double u0 = c.Cizgiler.Min(q => Math.Min(q[0], q[2])), u1 = c.Cizgiler.Max(q => Math.Max(q[0], q[2]));
+                    double v0 = c.Cizgiler.Min(q => Math.Min(q[1], q[3]));
+                    double du = ox - u0, dv = zMin - v0;
+                    grupAdi = c.Kesit ? c.Baslik.Substring("SECTION ".Length) : c.Baslik;
+                    var enUzun = new Dictionary<string, int>();
+                    for (int i = 0; i < c.Cizgiler.Count; i++)
+                    {
+                        double[] q = c.Cizgiler[i];
+                        var l = new Line(P(q[0] + du, q[1] + dv), P(q[2] + du, q[3] + dv));
+                        l.SetDatabaseDefaults(db);
+                        l.LayerId = katman("SECTION " + (string.IsNullOrEmpty(c.Kesimler[i]) ? "0" : c.Kesimler[i]));
+                        if (stil) { try { KesitStili.Boya(l, redundant.Contains((c.Gruplar[i] ?? "").Trim()), kesik, duz, olcek); } catch { } }
+                        ekle(l);
+                        adet++;
+                        string g = c.Gruplar[i] ?? "";
+                        int j;
+                        if (g.Length > 0 && (!enUzun.TryGetValue(g, out j) || Boy(c.Cizgiler[j]) < Boy(q))) enUzun[g] = i;
+                    }
+                    foreach (var kv in enUzun)
+                    {
+                        double[] q = c.Cizgiler[kv.Value];
+                        double a = Math.Atan2(q[3] - q[1], q[2] - q[0]);
+                        if (a > Math.PI / 2 + 1e-6) a -= Math.PI; else if (a <= -Math.PI / 2 + 1e-6) a += Math.PI;
+                        double mu = (q[0] + q[2]) / 2 + du - Math.Sin(a) * 0.3 * h, mv = (q[1] + q[3]) / 2 + dv + Math.Cos(a) * 0.3 * h;
+                        yazi(kv.Key, mu, mv, a, h);
+                    }
+                    yazi(c.Baslik, (u0 + u1) / 2 + du, zMin - 1200, 0, 400);
+                    ox += (u1 - u0) + aralik;
+                }
+                tr.Commit();
+            }
+            return cizimler.Count == 0 ? null : string.Format("Aile dosyası: {0} uzatma çizimi ({1})", cizimler.Count,
+                string.Join(", ", cizimler.Select(c => c.Baslik.Replace("SECTION ", ""))));
+        }
+
+        private static double Boy(double[] q) { return Math.Sqrt((q[2] - q[0]) * (q[2] - q[0]) + (q[3] - q[1]) * (q[3] - q[1])); }
+
+        private static bool Bizim(Entity e)
+        {
+            try { using (ResultBuffer rb = e.GetXDataForApplication(Uygulama)) return rb != null; }
+            catch { return false; }
+        }
+    }
+
     /// <summary>
     /// Eğik düzlem kesitlerini çizimci gibi döndürür. OutlineDrawing düzlem kesitini, düzlemin yatay doğrultusu sağa ve
     /// eğim (yukarı) doğrultusu yukarı gelecek şekilde çizer; travers üst düzlemi gibi eğimi kulenin X ekseni boyunca
@@ -3947,6 +4136,12 @@ namespace OtomatikKesit
         /// 1254 (yoksa bayt = karakter, 28591); satırlara bölme File.ReadAllLines ile aynı.</summary>
         public static string[] Satirlar(string yol)
         {
+            return TowAilesi.TekKonfig(SatirlarHam(yol), TowAilesi.Secili);
+        }
+
+        /// <summary>Satirlar'ın aile süzmesi yapılmamış hali (bütün konfigürasyonlar).</summary>
+        public static string[] SatirlarHam(string yol)
+        {
             byte[] b = File.ReadAllBytes(yol);
             string metin;
             int bom = b.Length >= 3 && b[0] == 0xEF && b[1] == 0xBB && b[2] == 0xBF ? 3 : 0;
@@ -4040,6 +4235,288 @@ namespace OtomatikKesit
         {
             return (kesitAdi ?? "") + Ayrac + uyeAnahtari;
         }
+    }
+
+    /// <summary>
+    /// PLS-TOWER "family" dosyası: gövdenin ardından her gövde uzatması × bacak uzatması birleşimi ayrı bir konfigürasyon
+    /// olarak gelir ('TAO_12BE_4.0L,...' adı, destekler, gövde uzatması bloğu, dört bacak bloğu). Hepsi aynı koordinat
+    /// sistemindedir; OutlineDrawing hepsini birden okuyunca uzatmalar üst üste biner, aynı etiketli elemanlar birbirinin
+    /// üstüne yazılır ve görünüşün alt kısmı karmakarışık olur. Burada OutlineDrawing'e yalnız bir konfigürasyon verilir
+    /// (varsayılan ilki: dosyadaki en uzun, çizimcinin ana görünüşü).
+    /// </summary>
+    public static class TowAilesi
+    {
+        /// <summary>OutlineDrawing'e verilecek konfigürasyonun sırası (0: dosyadaki ilk).</summary>
+        public static int Secili;
+
+        /// <summary>Konfigürasyon adı satırlarının indeksleri: tırnakla başlayan ve ardından "; support label" satırı gelen satır.</summary>
+        public static List<int> Baslar(string[] s)
+        {
+            var l = new List<int>();
+            for (int i = 0; i + 1 < s.Length; i++)
+                if (s[i].StartsWith("'", StringComparison.Ordinal) && s[i + 1].IndexOf("; support label", StringComparison.Ordinal) >= 0)
+                    l.Add(i);
+            return l;
+        }
+
+        public static string Ad(string satir)
+        {
+            int j = satir.IndexOf('\'', 1);
+            return j > 1 ? satir.Substring(1, j - 1) : satir;
+        }
+
+        public static List<string> Adlar(string[] s)
+        {
+            return Baslar(s).Select(i => Ad(s[i])).ToList();
+        }
+
+        /// <summary>Aile dosyası değilse (en fazla bir konfigürasyon) satırlar olduğu gibi döner. Aileyse yalnız baş kısım:
+        /// PLS onu varsayılan tam model olarak yazar (gövde + bir gövde uzatması + dört bacak, bacak elemanları LX_/LY_
+        /// önekleriyle açılmış). Konfigürasyon bloklarındaki düğümler ekli adlarla ('100P', '115X') yazıldığı ve
+        /// OutlineDrawing her düğüm adına "P" eklediği için bloklar OutlineDrawing'e verilmez; diğer uzatmalar
+        /// AileParcalari ile eklenti tarafında okunur.</summary>
+        public static string[] TekKonfig(string[] s, int k)
+        {
+            List<int> b = Baslar(s);
+            if (b.Count < 2) return s;
+            var l = new List<string>(b[0]);
+            for (int i = 0; i < b[0]; i++) l.Add(s[i]);
+            if (l.Count > 0)
+            {
+                // "25 0 22.259 ..." (konfigürasyon sayısı) -> "0 ..."
+                string say = l[l.Count - 1].TrimStart();
+                int bosluk = say.IndexOf(' ');
+                int n;
+                if (bosluk > 0 && int.TryParse(say.Substring(0, bosluk), out n) && n == b.Count) l[l.Count - 1] = "0" + say.Substring(bosluk);
+            }
+            return l.ToArray();
+        }
+    }
+
+    /// <summary>Aile dosyasındaki bir parçanın (gövde ya da bacak uzatması) elemanı: uçlar mm, grup ve kesim etiketi.</summary>
+    public class ParcaElemani
+    {
+        public double[] A, B;
+        public string Grup, Kesim;
+    }
+
+    /// <summary>Aile dosyasında bir gövde ya da bacak uzatması bloğu.</summary>
+    public class AileParcasi
+    {
+        public string Ad;            // "+9.0 Bodt Ext." (dosyadaki gibi)
+        public bool Bacak;
+        public double Uzatma;        // +9, +3 ...
+        public string Konfig;        // ilk geçtiği konfigürasyon
+        public List<ParcaElemani> Elemanlar = new List<ParcaElemani>();
+    }
+
+    /// <summary>
+    /// Aile dosyasındaki uzatma bloklarını OutlineDrawing'e gerek kalmadan okur. Bloklarda düğümler açılmış adlarla
+    /// ('100P', '115S', '115X', '100XY') ve koordinatlarıyla, elemanlar da açılmış olarak (g52P, g52X ...) yazılır: simetri
+    /// uygulanmaz. Bacak bloklarında PLS düğümleri yerel tanımlar (en uzun gövde uzatmasına göre); başlıktaki kaydırma
+    /// (dz, dx, dy) eklenir. Her uzatma adı için ilk geçtiği blok alınır; bacak bloklarından yalnız ilki (dördü aynı,
+    /// +X+Y köşesinde tanımlı).
+    /// </summary>
+    public static class AileParcalari
+    {
+        private static readonly Regex Baslik = new Regex(@"^'([^']*(Bod[a-z]*|Leg) Ext\.?)'\s+(.*)$", RegexOptions.IgnoreCase);
+        private static readonly Regex Dugum = new Regex(@"^\s*(\d+)\s*;\s*(Joints Geometry|Secondary Joints)");
+        private static readonly Regex Eleman = new Regex(@"^\s*(\d+)\s*;\s*Angle Member Connectivity");
+        private static readonly Regex GrupKesim = new Regex(@"^'([^']*)'\s+'([^']*)'\s*;\s*group, section");
+        private static readonly Regex Sayi = new Regex(@"[-+]?\d+(\.\d+)?");
+
+        /// <summary>Aile dosyası değilse boş liste. Sıra: dosyadaki ilk geçiş sırası.</summary>
+        public static List<AileParcasi> Oku(string[] s)
+        {
+            var sonuc = new List<AileParcasi>();
+            List<int> b = TowAilesi.Baslar(s);
+            if (b.Count < 2) return sonuc;
+            var ci = CultureInfo.InvariantCulture;
+            var gorulen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int k = 0; k < b.Count; k++)
+            {
+                int son = k + 1 < b.Count ? b[k + 1] : s.Length;
+                string konfig = TowAilesi.Ad(s[b[k]]);
+                // bloklar: başlık satırından bir sonraki başlığa kadar
+                var basliklar = new List<int>();
+                for (int i = b[k]; i < son; i++) if (Baslik.IsMatch(s[i])) basliklar.Add(i);
+                for (int q = 0; q < basliklar.Count; q++)
+                {
+                    Match mb = Baslik.Match(s[basliklar[q]]);
+                    string ad = mb.Groups[1].Value.Trim();
+                    if (!gorulen.Add(ad)) continue;
+                    int bs = basliklar[q], bson = q + 1 < basliklar.Count ? basliklar[q + 1] : son;
+                    bool bacak = mb.Groups[2].Value.Equals("Leg", StringComparison.OrdinalIgnoreCase);
+                    string[] t = mb.Groups[3].Value.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                    double dx = 0, dy = 0, dz = 0;
+                    if (bacak && t.Length >= 8)
+                    {
+                        double.TryParse(t[3], NumberStyles.Float, ci, out dz);
+                        double.TryParse(t[6], NumberStyles.Float, ci, out dx);
+                        double.TryParse(t[7], NumberStyles.Float, ci, out dy);
+                    }
+                    Match mu = Sayi.Match(ad);
+                    double uz = 0;
+                    if (mu.Success) double.TryParse(mu.Value, NumberStyles.Float, ci, out uz);
+                    var p = new AileParcasi { Ad = ad, Bacak = bacak, Uzatma = uz, Konfig = konfig };
+                    BlokOku(s, bs, bson, dx, dy, dz, p.Elemanlar);
+                    if (p.Elemanlar.Count > 0) sonuc.Add(p);
+                }
+            }
+            return sonuc;
+        }
+
+        private static void BlokOku(string[] s, int bas, int son, double dx, double dy, double dz, List<ParcaElemani> l)
+        {
+            var ci = CultureInfo.InvariantCulture;
+            var dugum = new Dictionary<string, double[]>();
+            for (int i = bas; i < son; i++)
+            {
+                Match md = Dugum.Match(s[i]);
+                if (md.Success)
+                {
+                    int n = int.Parse(md.Groups[1].Value, ci);
+                    for (int r = 0; r < n && i + 1 + 5 * r + 2 < son; r++)
+                    {
+                        int j = i + 1 + 5 * r;
+                        string[] t = s[j + 2].Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                        double x, y, z;
+                        if (t.Length < 3 || !double.TryParse(t[0], NumberStyles.Float, ci, out x) || !double.TryParse(t[1], NumberStyles.Float, ci, out y) ||
+                            !double.TryParse(t[2], NumberStyles.Float, ci, out z)) continue;
+                        dugum[s[j].Trim().Trim('\'')] = new[] { (x + dx) * 1000, (y + dy) * 1000, (z + dz) * 1000 };
+                    }
+                    i += 5 * n;
+                    continue;
+                }
+                Match me = Eleman.Match(s[i]);
+                if (!me.Success) continue;
+                int m = int.Parse(me.Groups[1].Value, ci);
+                for (int r = 0; r < m && i + 1 + 8 * r + 4 < son; r++)
+                {
+                    int j = i + 1 + 8 * r;
+                    double[] a, b;
+                    if (!dugum.TryGetValue(s[j + 1].Trim().Trim('\''), out a) || !dugum.TryGetValue(s[j + 2].Trim().Trim('\''), out b)) continue;
+                    Match mg = GrupKesim.Match(s[j + 4]);
+                    l.Add(new ParcaElemani { A = a, B = b, Grup = mg.Success ? mg.Groups[1].Value : "", Kesim = mg.Success ? mg.Groups[2].Value : "" });
+                }
+                i += 8 * m;
+            }
+        }
+    }
+
+    /// <summary>Uzatma çizimi: görünüş ("+9 BODY EXTENSION") ya da kesit ("SECTION K2"); düzlem koordinatlarında.</summary>
+    public class UzatmaCizimi
+    {
+        public string Baslik;
+        public bool Kesit;
+        public List<double[]> Cizgiler = new List<double[]>();   // { u1, v1, u2, v2 }
+        public List<string> Gruplar = new List<string>();         // çizgiyle aynı sırada
+        public List<string> Kesimler = new List<string>();
+    }
+
+    /// <summary>
+    /// Çizimcinin aile paftasındaki uzatma çizimleri (220kV TAO örneği): ana görünüşte olmayan her gövde uzatması için
+    /// ön yüz görünüşü ve alt planı (K kesitleri), her bacak uzatması için ön yüz görünüşü ve iç düzlemi (L kesitleri:
+    /// ayak ile iki kasık düğümünden geçen düzlem, ters üçgen). Ana görünüşteki uzatmaların (baş kısımdaki varsayılan
+    /// model) kesitleri otomatik kesitlerden gelir; K / L numaraları onlardan sonra başlar.
+    /// </summary>
+    public static class UzatmaPlani
+    {
+        public static List<UzatmaCizimi> Hesapla(List<AileParcasi> parcalar)
+        {
+            var sonuc = new List<UzatmaCizimi>();
+            if (parcalar == null || parcalar.Count == 0) return sonuc;
+            // varsayılan (ilk konfigürasyonun) parçaları ana görünüşte
+            string ilk = parcalar[0].Konfig;
+            var govdeler = parcalar.Where(p => !p.Bacak && p.Konfig != ilk).ToList();
+            var bacaklar = parcalar.Where(p => p.Bacak && p.Konfig != ilk).ToList();
+            var ci = CultureInfo.InvariantCulture;
+            int k = 2;
+            foreach (var p in govdeler)
+            {
+                string u = p.Uzatma.ToString("0.#", ci);
+                sonuc.Add(Yuz(p, "+" + u + " BODY EXTENSION"));
+                UzatmaCizimi plan = AltPlan(p, "SECTION K" + k++);
+                if (plan != null) sonuc.Add(plan);
+            }
+            int l = 2;
+            foreach (var p in bacaklar)
+            {
+                string u = p.Uzatma.ToString("0.#", ci);
+                sonuc.Add(Yuz(p, "+" + u + " LEG EXTENSION"));
+                UzatmaCizimi ic = IcDuzlem(p, "SECTION L" + l++);
+                if (ic != null) sonuc.Add(ic);
+            }
+            return sonuc.Where(c => c.Cizgiler.Count > 0).ToList();
+        }
+
+        private static void Ekle(UzatmaCizimi c, ParcaElemani e, double u1, double v1, double u2, double v2)
+        {
+            if (Math.Abs(u1 - u2) < 1 && Math.Abs(v1 - v2) < 1) return;
+            c.Cizgiler.Add(new[] { u1, v1, u2, v2 });
+            c.Gruplar.Add(e.Grup);
+            c.Kesimler.Add(e.Kesim);
+        }
+
+        /// <summary>Ön yüz (+Y yüzü): köşe hattına göre y(z) doğrusu; iki ucu da bu düzlemde olan elemanlar (x, z).</summary>
+        private static UzatmaCizimi Yuz(AileParcasi p, string baslik)
+        {
+            var c = new UzatmaCizimi { Baslik = baslik };
+            var uclar = p.Elemanlar.SelectMany(e => new[] { e.A, e.B }).ToList();
+            double z0 = uclar.Min(q => q[2]), z1 = uclar.Max(q => q[2]);
+            double yAlt = uclar.Where(q => q[2] < z0 + 1).Max(q => q[1]), yUst = uclar.Where(q => q[2] > z1 - 1).Max(q => q[1]);
+            Func<double[], bool> yuzde = q =>
+            {
+                double yc = z1 - z0 < 1 ? yUst : yAlt + (yUst - yAlt) * (q[2] - z0) / (z1 - z0);
+                return Math.Abs(q[1] - yc) < 30;
+            };
+            foreach (var e in p.Elemanlar)
+                if (yuzde(e.A) && yuzde(e.B)) Ekle(c, e, e.A[0], e.A[2], e.B[0], e.B[2]);
+            return c;
+        }
+
+        /// <summary>Gövde uzatmasının alt kotundaki yatay elemanlar, plan (x, y).</summary>
+        private static UzatmaCizimi AltPlan(AileParcasi p, string baslik)
+        {
+            double z0 = p.Elemanlar.Min(e => Math.Min(e.A[2], e.B[2]));
+            var c = new UzatmaCizimi { Baslik = baslik, Kesit = true };
+            foreach (var e in p.Elemanlar)
+                if (Math.Abs(e.A[2] - z0) < 15 && Math.Abs(e.B[2] - z0) < 15) Ekle(c, e, e.A[0], e.A[1], e.B[0], e.B[1]);
+            return c.Cizgiler.Count >= 3 ? c : null;
+        }
+
+        /// <summary>Bacağın iç düzlemi: ayak (en düşük, x+y en büyük) ile üst kottaki iki kasık düğümünden (biri en küçük x,
+        /// biri en küçük y) geçen düzlem; iki ucu düzleme 50 mm'den yakın elemanlar. Eksenler OutlineDrawing gibi: u
+        /// düzlemin yatay doğrultusu (+X'e), v yukarı.</summary>
+        private static UzatmaCizimi IcDuzlem(AileParcasi p, string baslik)
+        {
+            var uclar = p.Elemanlar.SelectMany(e => new[] { e.A, e.B }).ToList();
+            double z0 = uclar.Min(q => q[2]), z1 = uclar.Max(q => q[2]);
+            double[] ayak = uclar.Where(q => q[2] < z0 + 1).OrderByDescending(q => q[0] + q[1]).First();
+            var ust = uclar.Where(q => q[2] > z1 - 1).ToList();
+            double[] k1 = ust.OrderBy(q => q[0]).First(), k2 = ust.OrderBy(q => q[1]).First();
+            double[] a = Fark(k1, ayak), b = Fark(k2, ayak);
+            double[] n = Birim(Capraz(a, b));
+            if (n == null) return null;
+            double d = Nokta(n, ayak);
+            double[] u = Birim(Fark(k2, k1));
+            if (u == null) return null;
+            if (u[0] < 0) u = new[] { -u[0], -u[1], -u[2] };
+            double[] v = Birim(Capraz(n, u));
+            if (v[2] < 0) v = new[] { -v[0], -v[1], -v[2] };
+            var c = new UzatmaCizimi { Baslik = baslik, Kesit = true };
+            foreach (var e in p.Elemanlar)
+            {
+                if (Math.Abs(Nokta(n, e.A) - d) > 50 || Math.Abs(Nokta(n, e.B) - d) > 50) continue;
+                Ekle(c, e, Nokta(u, e.A), Nokta(v, e.A), Nokta(u, e.B), Nokta(v, e.B));
+            }
+            return c.Cizgiler.Count >= 3 ? c : null;
+        }
+
+        private static double[] Fark(double[] a, double[] b) { return new[] { a[0] - b[0], a[1] - b[1], a[2] - b[2] }; }
+        private static double Nokta(double[] a, double[] b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+        private static double[] Capraz(double[] a, double[] b) { return new[] { a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0] }; }
+        private static double[] Birim(double[] a) { double l = Math.Sqrt(Nokta(a, a)); return l < 1e-9 ? null : new[] { a[0] / l, a[1] / l, a[2] / l }; }
     }
 
     /// <summary>.tow dosyasında OutlineDrawing'in desteklemediği durumları bulur.</summary>

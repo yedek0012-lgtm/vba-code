@@ -358,6 +358,9 @@ namespace OutlineDrawing
                     int hid = bestLevel.Bars.Count(b => !seen.Contains(b.GeoKey));
                     mark(bestLevel.Bars);
                     List<Bar> tek = opt.AynaParcalardaTekParca ? TekAynaParca(bestLevel.Bars, st) : null;
+                    // dört köşe parçası (bacak başları): çizimci planı tam kare çizer (TAO K1); tek parça yalnız iki aynalı
+                    // parçada (iki toprak teli tepesi)
+                    if (tek != null && bestLevel.Bars.Count / Math.Max(1, tek.Count) > 2) tek = null;
                     if (tek != null)
                     {
                         double h = bestLevel.Z, m = opt.PolygonMargin;

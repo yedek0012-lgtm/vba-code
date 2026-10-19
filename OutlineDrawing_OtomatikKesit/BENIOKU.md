@@ -10,6 +10,21 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
 
+**3.0: PLS-TOWER aile (family) dosyaları.** 220kV TAO gibi aile dosyalarında gövdeden sonra her gövde uzatması ×
+bacak uzatması birleşimi ayrı konfigürasyondur (TAO: 5 × 5 = 25). OutlineDrawing hepsini birden okuyordu: blok
+düğümleri açılmış adlarla ('100P') yazıldığından ve OutlineDrawing her düğüm adına "P" eklediğinden düğümler yanlış
+eşleşip uzatmalar üst üste biniyor, görünüşün alt kısmı karmakarışık çıkıyordu.
+- OutlineDrawing'e yalnız dosyanın baş kısmı verilir: PLS onu varsayılan tam model olarak yazar (TAO: gövde + 12 m gövde
+  uzatması + 4 m bacak, çizimcinin ana görünüşü). Ana görünüş ve otomatik kesitler buradan (`TowAilesi`).
+- Diğer uzatmalar eklenti tarafında okunur (`AileParcalari`; bacak bloklarındaki PLS kaydırması dx, dy, dz uygulanır) ve
+  ÇALIŞTIR sonunda çizimin sağına çizilir (`UzatmaCizimleri`, katman "SECTION n", grup başına etiket, OTO_AILE işaretli):
+  her gövde uzatması için ön yüz görünüşü ("+9 BODY EXTENSION") ve alt planı (SECTION K2..), her bacak uzatması için ön
+  yüz görünüşü ("+3 LEG EXTENSION") ve iç düzlemi (SECTION L2.., ayak ile iki kasık düğümünden geçen ters üçgen).
+  Ölçüler TAO paftasıyla aynı (K2-K5: 11384, 10540, 9694, 8850; L2-L5: 7396, 6482, 5604, 4784 yükseklik).
+  K / L kesitlerine ölçü konur; hepsi kesitlerle birlikte dizilir ve paftaya yerleşir.
+- Bacak başlarındaki dört köşe parçası artık tek köşe yerine tam plan (TAO K1 gibi).
+Önizleme: `aile_ana_gorunus_TAO.png`, `aile_uzatmalari_TAO.png`.
+
 **2.9: "Tüm elemanlar" kutusu ve kesit yönü.**
 - *Tüm elemanlar* kutusu (varsayılan işaretsiz): işaretsizken görünüş seçiminden bağımsız olarak sade kesit alınır,
   yani her gizli elemanı bir kesite sokmaya çalışılmaz (YAA-R1'de SECTION K gibi 5.7°'lik parça kesit çıkmaz). Kesit

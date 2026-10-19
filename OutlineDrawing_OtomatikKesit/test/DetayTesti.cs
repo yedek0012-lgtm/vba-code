@@ -20,6 +20,8 @@ public static class DetayTesti
     static List<Uye> TowOku(string yol, out Dictionary<string, int> digerTurler, out int eksikDugum)
     {
         string[] L = File.ReadAllText(yol, System.Text.Encoding.GetEncoding(28591)).Split('\n').Select(s => s.TrimEnd('\r')).ToArray();
+        // PLS aile dosyası: OutlineDrawing'e yalnız baş kısım (varsayılan tam model) verilir; karşılaştırma da onunla
+        L = TowAilesi.TekKonfig(L, 0);
         var dugum = new Dictionary<string, double[]>();
         var uyeler = new List<Uye>();
         digerTurler = new Dictionary<string, int>();
