@@ -62,6 +62,21 @@ public static class OlcuCakismaTesti
         KuleVerisi k = KuleOkuyucu.OkuDogrudan(asm, a[0]);
         AutoSectionReport r;
         var secs = OtoKesitBulucu.Bul(k.Uyeler, k.GorunenAnahtarlar, out r);
+        // yan görünüş çizilmiyorsa (OTO_YAN=0) pafta yalnız ön görünüşle
+        bool yanVar = Environment.GetEnvironmentVariable("OTO_YAN") != "0";
+        var uzatma = UzatmaPlani.Hesapla(AileParcalari.Oku(TowYama.SatirlarHam(a[0])));
+        var liste = MalzemeListesi.Oku(a[0]);
+        if (Environment.GetEnvironmentVariable("OTO_LISTE") == "0") liste.Clear();   // listesiz pafta benzetimi
+        // pafta boşluğuna ek kesitler (Oto Kesit, "Paftayı doldur"; OTO_EK=0 ise yok)
+        if (Environment.GetEnvironmentVariable("OTO_EK") != "0")
+        {
+            var adaylar = OtoKesitBulucu.EkAdaylar(k.Uyeler, k.GorunenAnahtarlar, secs);
+            double s0;
+            var ek = PaftaTahmini.Doldur(k, secs, adaylar, uzatma.Select(c => c.Cizgiler).ToList(), uzatma.Select(c => c.Baslik).ToList(), yanVar, liste.Count > 0, out s0);
+            Console.WriteLine("Ek kesit: {0} aday, {1} eklendi (tahmini olcek 1:{2:0})", adaylar.Count, ek.Count, s0);
+            foreach (var c in adaylar) Console.WriteLine("  {0} {1}", ek.Contains(c) ? "+" : "-", c.Description);
+            secs = OtoKesitBulucu.Sirala(secs.Concat(ek));
+        }
         var rapor = new List<string>();
         int toplam = 0, sig = 0, cak = 0, ki = 0;
         var kesitKutulari = new List<double[]>();
@@ -87,7 +102,6 @@ public static class OlcuCakismaTesti
             cizimler.Add(segs);
         }
         var basliklar0 = Enumerable.Range(0, tanimlar.Count).Select(i => "SECTION " + HarfAdi(i)).ToList();
-        var uzatma = UzatmaPlani.Hesapla(AileParcalari.Oku(TowYama.SatirlarHam(a[0])));
         cizimler.AddRange(uzatma.Select(c => c.Cizgiler));
         basliklar0.AddRange(uzatma.Select(c => c.Baslik));
         var kutuCizim = new List<int>(); var kaylar = new List<double>();
@@ -176,21 +190,21 @@ public static class OlcuCakismaTesti
         // ---- pafta: görünüşler + kesitler şablonun iç çerçevesine, malzeme listesi ve antetle çakışmadan
         Func<List<double[]>, double[]> kutuL = L => new[] { L.Min(q => Math.Min(q[0], q[2])) - 300, L.Min(q => Math.Min(q[1], q[3])) - 1600, L.Max(q => Math.Max(q[0], q[2])) + 2500, L.Max(q => Math.Max(q[1], q[3])) + 300 };
         Func<List<YuzCizgisi>, bool, int, List<double[]>> yuz = (F, yanMi, ofs) => F.Concat(IcElemanPlani.Hesapla(k.Uyeler, F, yanMi)).Select(c => new[] { c.P[0] + ofs, c.P[2], c.P[3] + ofs, c.P[5] }).ToList();
-        double[] onK = kutuL(yuz(k.OnYuz, false, 0)), yanK = kutuL(yuz(k.YanYuz, true, k.GorunusAraligi));
+        double[] onK = kutuL(yuz(k.OnYuz, false, 0)), yanK = yanVar ? kutuL(yuz(k.YanYuz, true, k.GorunusAraligi)) : null;
         // gerçek pafta ön görünüş kutusuna kesit işaretlerini de katar (KesitIsaretleri, SECTION_MARK)
         var tan = new Dictionary<string, KesitTanimi>();
         for (int i = 0; i < tanimlar.Count; i++) tan[HarfAdi(i)] = tanimlar[i];
         var iki = new HashSet<string>(tan.Where(kv => TraversKesiti.Hesapla(k.Uyeler, kv.Value) != null).Select(kv => kv.Key));
         var isaretler = KesitIsaretPlani.Hesapla(k.OnYuz, tan, iki);
         foreach (var m in isaretler) onK = new[] { Math.Min(onK[0], m.Kutu[0]), Math.Min(onK[1], m.Kutu[1]), Math.Max(onK[2], m.Kutu[2]), Math.Max(onK[3], m.Kutu[3]) };
-        var liste = MalzemeListesi.Oku(a[0]);
         var pf = PaftaPlani.Hesapla(onK, yanK, kesitKutulari, liste.Count > 0);
         int paftaSorun = 0;
         if (!pf.Sigdi) { paftaSorun++; rapor.Add("pafta: sigmadi"); }
         else
         {
             Func<double[], double, double, double[]> kagit = (b, du, dv) => new[] { (b[0] + du - pf.OrjinU) / pf.Olcek, (b[1] + dv - pf.OrjinV) / pf.Olcek, (b[2] + du - pf.OrjinU) / pf.Olcek, (b[3] + dv - pf.OrjinV) / pf.Olcek };
-            var parca = new List<double[]> { kagit(onK, 0, 0), kagit(yanK, pf.YanDu, 0) };
+            var parca = new List<double[]> { kagit(onK, 0, 0) };
+            if (yanK != null) parca.Add(kagit(yanK, pf.YanDu, 0));
             for (int i = 0; i < kesitKutulari.Count; i++) parca.Add(kagit(kesitKutulari[i], pf.KesitKayma[i][0], pf.KesitKayma[i][1]));
             double G = 841, Y = 594.65;
             double[] ic = { PaftaPlani.Ic[0] * G, PaftaPlani.Ic[1] * Y, PaftaPlani.Ic[2] * G, PaftaPlani.Ic[3] * Y };
@@ -218,16 +232,23 @@ public static class OlcuCakismaTesti
                     yaz("R", ic); foreach (var y in yasak) yaz("R", y);
                     foreach (var c in k.OnYuz) cizgi("L", new[] { c.P[0], c.P[2], c.P[3], c.P[5] }, 0, 0);
                     foreach (var c in IcElemanPlani.Hesapla(k.Uyeler, k.OnYuz, false)) cizgi("H", new[] { c.P[0], c.P[2], c.P[3], c.P[5] }, 0, 0);
-                    foreach (var c in k.YanYuz) cizgi("L", new[] { c.P[0], c.P[2], c.P[3], c.P[5] }, k.GorunusAraligi + pf.YanDu, 0);
-                    foreach (var c in IcElemanPlani.Hesapla(k.Uyeler, k.YanYuz, true)) cizgi("H", new[] { c.P[0], c.P[2], c.P[3], c.P[5] }, k.GorunusAraligi + pf.YanDu, 0);
+                    if (yanK != null)
+                    {
+                        foreach (var c in k.YanYuz) cizgi("L", new[] { c.P[0], c.P[2], c.P[3], c.P[5] }, k.GorunusAraligi + pf.YanDu, 0);
+                        foreach (var c in IcElemanPlani.Hesapla(k.Uyeler, k.YanYuz, true)) cizgi("H", new[] { c.P[0], c.P[2], c.P[3], c.P[5] }, k.GorunusAraligi + pf.YanDu, 0);
+                    }
                     foreach (var m in isaretler)
                     {
                         foreach (var c in m.Cizgiler) cizgi("M", c, 0, 0);
                         var t = P(m.YaziU, m.YaziV); w.WriteLine("T {0} {1} {2} {3}", t[0].ToString("0.###", ci2), t[1].ToString("0.###", ci2), (m.YaziBoyu / pf.Olcek).ToString("0.###", ci2), m.Ad);
                     }
-                    double onOrta = (onK[0] + onK[2]) / 2, yanOrta = (yanK[0] + yanK[2]) / 2 + pf.YanDu;
+                    double onOrta = (onK[0] + onK[2]) / 2;
                     var to = P(onOrta, onK[1] + 600); w.WriteLine("T {0} {1} {2} TRANSVERSE FACE", to[0].ToString("0.###", ci2), to[1].ToString("0.###", ci2), (400 / pf.Olcek).ToString("0.###", ci2));
-                    var ty = P(yanOrta, yanK[1] + 600); w.WriteLine("T {0} {1} {2} LONGITUDINAL FACE", ty[0].ToString("0.###", ci2), ty[1].ToString("0.###", ci2), (400 / pf.Olcek).ToString("0.###", ci2));
+                    if (yanK != null)
+                    {
+                        double yanOrta = (yanK[0] + yanK[2]) / 2 + pf.YanDu;
+                        var ty = P(yanOrta, yanK[1] + 600); w.WriteLine("T {0} {1} {2} LONGITUDINAL FACE", ty[0].ToString("0.###", ci2), ty[1].ToString("0.###", ci2), (400 / pf.Olcek).ToString("0.###", ci2));
+                    }
                     for (int i = 0; i < kesitKutulari.Count; i++)
                     {
                         var segs = cizimler[kutuCizim[i]];

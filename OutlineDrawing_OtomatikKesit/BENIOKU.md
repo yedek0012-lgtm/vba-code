@@ -10,6 +10,17 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
 
+**3.7: Paftayı doldur (ek kesitler).** Yeni kutu *Paftayı doldur* (varsayılan işaretli): Oto Kesit, paftada boş kalacak
+yer varsa kapsama için gerekmeyen ama çizimcinin koyduğu türden ek kesitleri de tabloya yazar — bacak başı köşe planı (TAO
+K1 gibi), kafes / gövde plan çaprazları. Paftanın yerleşimi ÇALIŞTIR'dan önce tahmin edilir (`PaftaTahmini`: görünüşler,
+kesit işaretleri, kesitler, ölçüler, aile uzatma çizimleri, malzeme listesi); ek kesit yalnız pafta ölçeği büyümeden
+sığıyorsa eklenir (kutular %4 büyük de denenir, denenen kesit ayrıca %10 büyük). Ek kesit olmayan yerler: mevcut yatay
+kesite 300 mm'den yakın kot, yalnız görünüşteki kuşaklardan ya da yalnız dış kuşaklardan oluşan plan, iki kol ucu gibi
+uzak parçalı uzun plan, büyük çerçevede küçük köşe parçaları, mevcut ya da önceki bir planla aynı desen (bacak içindeki
+ardışık kotlar, aynı kafes planı). Ek kesitler tabloda "Ek kesit (pafta boşluğu)" ipucuyla görünür; istenmeyen satır
+silinebilir. Tangent (yalnız ön görünüş, listesiz): C (kafes planı) ve K (bacak başı) eklenir, ölçek 1:90 aynı kalır
+(`pafta_doldur_Tangent.png`). YAA ve TAO paftası zaten dolu: ek kesit sığmıyor, eklenmez.
+
 **3.6: Bacak iç düzlemi işareti kasıktan ayağa.** Tangent kulesinde bacağın iç düzlem kesiti (SECTION J, kasıktaki iki iç
 düğüm ile ayak) alınıyordu, ama ön görünüşte işareti bacağın yanına yatay ok olarak konuyordu: OutlineDrawing'in kesit
 dörtgeni düzlemde dönük geldiği için alt köşesi yerden 1.2 m yukarıda kalıyor, düzlem "bacak" sayılmıyordu. Kesit hattı

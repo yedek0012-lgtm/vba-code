@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "3.6";
+        public const string Surum = "3.7";
         private static Timer _timer;
 
         public void Initialize()
@@ -213,6 +213,7 @@ namespace OtomatikKesit
             var chkI = new CheckBox { Name = "chkIcEleman", Text = "İç eleman", Checked = true, AutoSize = true };
             var chkD = new CheckBox { Name = "chkKesitDiz", Text = "Kesitleri diz", Checked = true, AutoSize = true };
             var chkT = new CheckBox { Name = TumElemanKutusuAdi, Text = "Tüm elemanlar", Checked = false, AutoSize = true };
+            var chkP = new CheckBox { Name = PaftaDoldurKutusuAdi, Text = "Paftayı doldur", Checked = true, AutoSize = true };
             if (ornek != null)
             {
                 b.Size = ornek.Size;
@@ -234,7 +235,7 @@ namespace OtomatikKesit
                 }
                 bh.Font = new System.Drawing.Font(ornek.Font, FontStyle.Bold);
                 b.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-                foreach (CheckBox c in new[] { chk, chkR, chkI, chkD, chkT }) { c.Font = ornek.Font; c.ForeColor = kap.ForeColor; c.Anchor = AnchorStyles.Top | AnchorStyles.Left; }
+                foreach (CheckBox c in new[] { chk, chkR, chkI, chkD, chkT, chkP }) { c.Font = ornek.Font; c.ForeColor = kap.ForeColor; c.Anchor = AnchorStyles.Top | AnchorStyles.Left; }
                 // Yer: ÇALIŞTIR'ın sağı, tablonun ve sağ buton sütununun (Nokta ... Liste) altı. Soldan sağa dizilir, kutunun
                 // sağ kenarına gelince alt satıra geçer (önceden kutucuklar sağ kenarın dışına düşüp görünmüyordu).
                 Control calistir = kap.Controls.Find("btnRun", false).FirstOrDefault();
@@ -252,7 +253,7 @@ namespace OtomatikKesit
                     px += sz.Width + 6; satirH = Math.Max(satirH, sz.Height);
                 };
                 koy(b, false); koy(bh, false); koy(bp, false);
-                koy(chk, true); koy(chkR, false); koy(chkI, false); koy(chkD, false); koy(chkT, false);
+                koy(chk, true); koy(chkR, false); koy(chkI, false); koy(chkD, false); koy(chkT, false); koy(chkP, false);
             }
             else
             {
@@ -267,6 +268,7 @@ namespace OtomatikKesit
                 chkI.Location = new Point(8, 80);
                 chkD.Location = new Point(8, 102);
                 chkT.Location = new Point(8, 124);
+                chkP.Location = new Point(8, 146);
             }
 
             kap.Controls.Add(b);
@@ -277,6 +279,7 @@ namespace OtomatikKesit
             kap.Controls.Add(chkI);
             kap.Controls.Add(chkD);
             kap.Controls.Add(chkT);
+            kap.Controls.Add(chkP);
             b.BringToFront();
             bh.BringToFront();
             bp.BringToFront();
@@ -285,10 +288,13 @@ namespace OtomatikKesit
             chkI.BringToFront();
             chkD.BringToFront();
             chkT.BringToFront();
+            chkP.BringToFront();
             var tip = new ToolTip();
             tip.SetToolTip(b, "Çizimci gibi sade kesitleri bulup tabloya yazar: yatay planlar, travers düzlemleri, çerçeveler, bacak iç düzlemleri");
             tip.SetToolTip(chkT, "İşaretliyse her gizli eleman mutlaka bir kesitte gösterilir (küçük, eğik parça kesitler de alınır). " +
                                  "İşaretsizse sade: yalnız mantıklı yerlerden kesit, kalan elemanlar görünüşte iç eleman çizgisi olarak durur");
+            tip.SetToolTip(chkP, "Oto Kesit, paftada boş kalacak yer varsa ek kesitler de yazar (bacak başı köşe planı, kafes / gövde plan " +
+                                 "çaprazları gibi); pafta ölçeği büyümez. Ek kesitler tabloda \"Ek kesit\" ipucuyla görünür, istenmeyen satır silinebilir");
             tip.SetToolTip(chk, "ÇALIŞTIR'dan sonra kesitlere ölçü koy (komut: OTOOLCU)");
             tip.SetToolTip(chkR, "YÜKLE ve ÇALIŞTIR'dan sonra 3D modelde, görünüşlerde ve kesitlerde ana elemanlar düz, redundant elemanlar kesikli; isimler tek renk (komut: OTOSTIL)");
             tip.SetToolTip(chkD, "ÇALIŞTIR'dan sonra kesitleri kendi boyutlarına göre satırlar halinde sıkı bir ızgaraya dizer (tek uzun sıra yerine); çizgiler, etiketler, başlık ve ölçüler birlikte taşınır (komut: OTODIZ)");
@@ -787,12 +793,21 @@ namespace OtomatikKesit
             return c != null && c.Checked;
         }
 
-        internal static string OtoAnahtar(string path, bool on, bool yan, bool tum)
+        internal const string PaftaDoldurKutusuAdi = "chkPaftaDoldur";
+
+        /// <summary>"Paftayı doldur" işaretli mi (kutu yoksa evet).</summary>
+        internal static bool PaftaDoldur(Form f)
+        {
+            var c = f.Controls.Find(PaftaDoldurKutusuAdi, true).FirstOrDefault() as CheckBox;
+            return c == null || c.Checked;
+        }
+
+        internal static string OtoAnahtar(string path, bool on, bool yan, bool tum, bool doldur)
         {
             try
             {
                 var fi = new FileInfo(path);
-                return fi.Exists ? fi.FullName + "|" + fi.LastWriteTimeUtc.Ticks + "|" + fi.Length + "|" + on + "|" + yan + "|" + tum : null;
+                return fi.Exists ? fi.FullName + "|" + fi.LastWriteTimeUtc.Ticks + "|" + fi.Length + "|" + on + "|" + yan + "|" + tum + "|" + doldur : null;
             }
             catch { return null; }
         }
@@ -803,7 +818,34 @@ namespace OtomatikKesit
             if (_otoTabloAnahtari == null) return false;
             bool on, yan;
             GorunusSecimi(f, out on, out yan);
-            return _otoTabloAnahtari == OtoAnahtar(YolAl(f), on, yan, TumElemanlar(f));
+            return _otoTabloAnahtari == OtoAnahtar(YolAl(f), on, yan, TumElemanlar(f), PaftaDoldur(f));
+        }
+
+        /// <summary>Paftada boş kalacak yere sığan ek kesitler (PaftaTahmini; aile dosyasında eklentinin uzatma çizimleri de
+        /// paftada yer tutar). Hata olursa ek kesit yok.</summary>
+        private static List<AutoSectionCandidate> PaftaEkleri(KuleVerisi kule, string path, ICollection<string> gorunen,
+            List<AutoSectionCandidate> bulunan, bool yan)
+        {
+            try
+            {
+                List<AutoSectionCandidate> adaylar = OtoKesitBulucu.EkAdaylar(kule.Uyeler, gorunen, bulunan);
+                if (adaylar.Count == 0) return adaylar;
+                List<UzatmaCizimi> uzatma = new List<UzatmaCizimi>();
+                try { uzatma = UzatmaPlani.Hesapla(AileParcalari.Oku(TowYama.SatirlarHam(path))); } catch { }
+                bool liste = MalzemeListesi.Oku(path).Count > 0;
+                double olcek;
+                List<AutoSectionCandidate> ek = PaftaTahmini.Doldur(kule, bulunan, adaylar, uzatma.Select(c => c.Cizgiler).ToList(),
+                    uzatma.Select(c => c.Baslik).ToList(), yan, liste, out olcek);
+                if (ek.Count > 0)
+                    Komutlar.Yaz(string.Format(CultureInfo.InvariantCulture, "\nOto Kesit: paftada boş kalacak yere {0} ek kesit (tahmini ölçek 1:{1:0}): {2}\n",
+                        ek.Count, olcek, string.Join(", ", ek.Select(c => c.Height.HasValue ? "Z=" + c.Height.Value.ToString("0", CultureInfo.InvariantCulture) : c.Description))));
+                return ek;
+            }
+            catch (System.Exception ex)
+            {
+                Komutlar.Yaz("\nOto Kesit: ek kesit hesaplanamadı: " + ex.Message + "\n");
+                return new List<AutoSectionCandidate>();
+            }
         }
 
         internal static void TabloyuDoldur(Form f)
@@ -838,8 +880,8 @@ namespace OtomatikKesit
                 // görünüştür, kesitle (yüz büyüklüğünde "SECTION") verilmez. Görünür sayılan elemanlar her zaman iki yüzün
                 // elemanlarıdır; görünüş seçimi yalnız sade modu belirler.
                 ICollection<string> gorunen = GorunenAnahtarlar(kule, true, true);
-                bool tum = TumElemanlar(f);
-                string anahtar = OtoAnahtar(path, onSecili, yanSecili, tum);
+                bool tum = TumElemanlar(f), doldur = PaftaDoldur(f);
+                string anahtar = OtoAnahtar(path, onSecili, yanSecili, tum, doldur);
                 if (anahtar != null && anahtar == _otoHesapAnahtar)
                 {
                     bulunan = _otoHesapBulunan; rapor = _otoHesapRapor;   // aynı .tow ve görünüş seçimi: yeniden hesaplanmaz
@@ -847,7 +889,15 @@ namespace OtomatikKesit
                 else
                 {
                     if (gorunen != null && gorunen.Count > 0)
+                    {
                         bulunan = OtoKesitBulucu.Bul(kule.Uyeler, gorunen, out rapor, !tum);
+                        // paftada boş kalacak yere ek kesitler (yalnız ön görünüş çizilirken pafta kurulur)
+                        if (doldur && onSecili && bulunan.Count > 0)
+                        {
+                            List<AutoSectionCandidate> ek = PaftaEkleri(kule, path, gorunen, bulunan, yanSecili);
+                            if (ek.Count > 0) bulunan = OtoKesitBulucu.Sirala(bulunan.Concat(ek));
+                        }
+                    }
                     else
                         bulunan = AutoSectionDetector.Detect(kule.Uyeler, new AutoSectionOptions());
                     _otoHesapAnahtar = anahtar; _otoHesapBulunan = bulunan; _otoHesapRapor = rapor;
@@ -904,9 +954,11 @@ namespace OtomatikKesit
 
                 HarfleriYenile(f);
                 } finally { _tabloYaziliyor = false; }
-                _otoTabloAnahtari = OtoAnahtar(path, onSecili, yanSecili, tum);   // tablo bu .tow + seçim için Oto Kesit'in ürettiği hal
+                _otoTabloAnahtari = OtoAnahtar(path, onSecili, yanSecili, tum, doldur);   // tablo bu .tow + seçim için Oto Kesit'in ürettiği hal
 
                 string ozet = string.Format("{0} kesit eklendi", bulunan.Count);
+                int ekSayisi = bulunan.Count(c => c.Description != null && c.Description.StartsWith(OtoKesitBulucu.EkKesitOnEki, StringComparison.Ordinal));
+                if (ekSayisi > 0) ozet += string.Format(" ({0} tanesi pafta boşluğu için ek kesit)", ekSayisi);
                 string onAd = KutuYazisi(f, "chkFrontFace", "Ön Yüz"), yanAd = KutuYazisi(f, "chkSideFace", "Yan Yüz");
                 if (otoIsaret) ozet = string.Format("'{0}' ve '{1}' işaretlendi; {2}", onAd, yanAd, ozet);
                 else if (!onSecili || !yanSecili) ozet = string.Format("Yalnız '{0}' çizilecek: {1}", onSecili ? onAd : yanAd, ozet);
@@ -1043,7 +1095,7 @@ namespace OtomatikKesit
                     var r = fi.GetValue(f) as RadioButton;
                     if (r != null && r.Checked) satir.Add("secim:" + fi.Name + "=1");
                 }
-                foreach (string ad in new[] { "chkAutoDim", "chkRedundant", "chkIcEleman", "chkKesitDiz", FormBaglayici.TumElemanKutusuAdi })
+                foreach (string ad in new[] { "chkAutoDim", "chkRedundant", "chkIcEleman", "chkKesitDiz", FormBaglayici.TumElemanKutusuAdi, FormBaglayici.PaftaDoldurKutusuAdi })
                 {
                     var c = f.Controls.Find(ad, true).FirstOrDefault() as CheckBox;
                     if (c != null) satir.Add("eklenti:" + ad + "=" + (c.Checked ? "1" : "0"));
@@ -1503,6 +1555,152 @@ namespace OtomatikKesit
         /// yazı yüksekliği; çizim için.</summary>
         public static int TabloSutunu = 3;
         public static double[] SutunOranlari = { 0.17, 0.45, 0.22, 0.16 };
+    }
+
+    /// <summary>ÇALIŞTIR'dan önce (Oto Kesit tabloyu doldururken) paftanın tahmini: görünüşlerin ve kesitlerin paftada
+    /// kaplayacağı kutular OutlineDrawing'in çizeceğinden hesaplanır (test/OlcuCakismaTesti'ndeki benzetimle aynı), yerleşim
+    /// PaftaPlani ile. Ek kesitlerin paftanın ölçeğini büyütmeden sığıp sığmadığı buna göre denenir.</summary>
+    public static class PaftaTahmini
+    {
+        /// <summary>Kesit çizgileri (düzlem koordinatı): OutlineDrawing'in / tam traversin çizdiği, uzak kopuk parçaları atılmış,
+        /// plana yakın eğik kesitte 90° döndürülmüş (KopukParcaTemizle, KesitYonu).</summary>
+        public static List<double[]> Cizgiler(IDictionary<string, FinalMember> uyeler, KesitTanimi t, IEnumerable<KesitTanimi> digerleri)
+        {
+            List<double[]> segs = KesitSecici.CizimSegmentleri(uyeler, t);
+            HashSet<int> at = KopukParca.Atilacaklar(uyeler, t, digerleri);
+            if (at.Count > 0) segs = segs.Where((q, j) => !at.Contains(j)).ToList();
+            int aci = TraversKesiti.Hesapla(uyeler, t) == null ? KesitYonu.Aci(t) : 0;
+            if (aci != 0 && segs.Count > 0)
+            {
+                double cu = (segs.Min(q => Math.Min(q[0], q[2])) + segs.Max(q => Math.Max(q[0], q[2]))) / 2;
+                double cv = (segs.Min(q => Math.Min(q[1], q[3])) + segs.Max(q => Math.Max(q[1], q[3]))) / 2;
+                double sg = aci > 0 ? 1 : -1;
+                segs = segs.Select(q => new[] { cu - sg * (q[1] - cv), cv + sg * (q[0] - cu), cu - sg * (q[3] - cv), cv + sg * (q[2] - cu) }).ToList();
+            }
+            return segs;
+        }
+
+        /// <summary>Ölçü yazısının kutusu { u0, v0, u1, v1 } (AutoCAD "best fit": sığarsa iki uzatma çizgisi arasında, ölçü
+        /// çizgisinin üstünde; elle konum verilmişse orada).</summary>
+        public static double[] YaziKutusu(OlcuTanimi o)
+        {
+            double w = OlcuPlani.YaziGenisligi(o), h = o.Yazi, gap = 0.25 * o.Yazi;
+            bool yatay = Math.Abs(o.Rotation) < 1e-9;
+            if (o.YaziU.HasValue && o.YaziV.HasValue)
+                return yatay ? new[] { o.YaziU.Value - w / 2, o.YaziV.Value - h / 2, o.YaziU.Value + w / 2, o.YaziV.Value + h / 2 }
+                             : new[] { o.YaziU.Value - h / 2, o.YaziV.Value - w / 2, o.YaziU.Value + h / 2, o.YaziV.Value + w / 2 };
+            if (yatay)
+            {
+                double um = (o.U1 + o.U2) / 2, vb = o.VD + gap;
+                return new[] { um - w / 2, vb, um + w / 2, vb + h };
+            }
+            double vm = (o.V1 + o.V2) / 2, ur = o.UD - gap;
+            return new[] { ur - h, vm - w / 2, ur, vm + w / 2 };
+        }
+
+        /// <summary>Kesit çiziminin paftadaki kutusu: çizgiler, ölçüler ve altındaki başlık (OutlineDrawing: 400'lük yazı);
+        /// çizgisi yoksa null.</summary>
+        public static double[] KesitKutusu(List<double[]> segs, string baslik)
+        {
+            if (segs == null || segs.Count == 0) return null;
+            double u0 = segs.Min(q => Math.Min(q[0], q[2])), u1 = segs.Max(q => Math.Max(q[0], q[2]));
+            double v0 = segs.Min(q => Math.Min(q[1], q[3])), v1 = segs.Max(q => Math.Max(q[1], q[3]));
+            foreach (OlcuTanimi o in OlcuPlani.Hesapla(segs))
+            {
+                double[] b = YaziKutusu(o);
+                u0 = Math.Min(u0, b[0]); v0 = Math.Min(v0, b[1]); u1 = Math.Max(u1, b[2]); v1 = Math.Max(v1, b[3]);
+                // ölçü çizgisi ve uzatmalar da kutuya
+                u0 = Math.Min(u0, Math.Min(o.U1, o.UD)); u1 = Math.Max(u1, Math.Max(o.U2, o.UD));
+                v0 = Math.Min(v0, o.VD); v1 = Math.Max(v1, o.VD);
+            }
+            double bw = (baslik ?? "").Length * 0.8 * 400, um = (u0 + u1) / 2;
+            return new[] { Math.Min(u0, um - bw / 2), v0 - 1400, Math.Max(u1, um + bw / 2), v1 };
+        }
+
+        /// <summary>Görünüşün paftadaki kutusu: yüz çizgileri, iç eleman izdüşümleri, ölçüler (solda başlık, sağda kot ölçüleri
+        /// payı) ve verilirse kesit işaretleri.</summary>
+        public static double[] GorunusKutusu(IDictionary<string, FinalMember> uyeler, List<YuzCizgisi> yuz, bool yanMi, IEnumerable<KesitIsareti> isaretler)
+        {
+            if (yuz == null || yuz.Count == 0) return null;
+            var c = yuz.Concat(IcElemanPlani.Hesapla(uyeler, yuz, yanMi)).ToList();
+            var k = new[] { c.Min(q => Math.Min(q.P[0], q.P[3])) - 300, c.Min(q => Math.Min(q.P[2], q.P[5])) - 1600,
+                            c.Max(q => Math.Max(q.P[0], q.P[3])) + 2500, c.Max(q => Math.Max(q.P[2], q.P[5])) + 300 };
+            if (isaretler != null)
+                foreach (KesitIsareti m in isaretler)
+                    k = new[] { Math.Min(k[0], m.Kutu[0]), Math.Min(k[1], m.Kutu[1]), Math.Max(k[2], m.Kutu[2]), Math.Max(k[3], m.Kutu[3]) };
+            return k;
+        }
+
+        /// <summary>A, B, ... Z, AA, AB ... (OutlineDrawing'in kesit harfleri).</summary>
+        public static string Harf(int i)
+        {
+            string s = "";
+            i++;
+            while (i > 0) { int r = (i - 1) % 26; s = (char)('A' + r) + s; i = (i - 1) / 26; }
+            return s;
+        }
+
+        /// <summary>Paftanın tahmini yerleşimi. kesitKutulari: tablo sırasında kesitler, ardından eklentinin uzatma çizimleri.</summary>
+        public static PaftaPlani.Sonuc Hesapla(KuleVerisi k, IList<KesitTanimi> tanimlar, IList<double[]> kesitKutulari, bool yan, bool liste)
+        {
+            var tan = new Dictionary<string, KesitTanimi>();
+            for (int i = 0; i < tanimlar.Count; i++) tan[Harf(i)] = tanimlar[i];
+            var iki = new HashSet<string>(tan.Where(kv => TraversKesiti.Hesapla(k.Uyeler, kv.Value) != null).Select(kv => kv.Key));
+            double[] onK = GorunusKutusu(k.Uyeler, k.OnYuz, false, KesitIsaretPlani.Hesapla(k.OnYuz, tan, iki));
+            double[] yanK = yan ? GorunusKutusu(k.Uyeler, k.YanYuz, true, null) : null;
+            if (onK == null) return new PaftaPlani.Sonuc { Sigdi = false };
+            if (yanK != null)
+            {
+                // yan görünüş, ön görünüşün GorunusAraligi kadar sağında (yalnız yatay kayma; yerleşimde yeniden konur)
+                yanK[0] += k.GorunusAraligi; yanK[2] += k.GorunusAraligi;
+            }
+            return PaftaPlani.Hesapla(onK, yanK, kesitKutulari.Where(b => b != null).ToList(), liste);
+        }
+
+        /// <summary>Ek kesit adaylarından, paftanın ölçeğini büyütmeden sığanlar (sırayla denenir; her deneme bütün kesitlerle
+        /// yeniden yerleştirilir). Tahmin gerçek çizimden biraz sapabilir (etiket yazıları, ölçü yerleri) ve sıralı yerleşim
+        /// küçük farklara duyarlıdır: bütün kutular olduğu gibi ve %4 büyük iki kez denenir, denenen kesitin kutusu ayrıca %10
+        /// büyük alınır; ikisinde de ölçek ek kesitsiz tahminden büyümüyorsa kesit eklenir (sıkışık paftaya ek kesit girmez).</summary>
+        public static List<AutoSectionCandidate> Doldur(KuleVerisi k, IList<AutoSectionCandidate> mevcut, IList<AutoSectionCandidate> adaylar,
+            IList<List<double[]>> uzatmaCizimleri, IList<string> uzatmaBasliklari, bool yan, bool liste, out double olcek)
+        {
+            olcek = 0;
+            var kabul = new List<AutoSectionCandidate>();
+            if (k == null || k.OnYuz == null || k.OnYuz.Count == 0 || adaylar == null || adaylar.Count == 0) return kabul;
+            var hepsi = mevcut.Concat(adaylar).ToList();
+            var tanim = hepsi.ToDictionary(c => c, OtoKesitBulucu.Tanim);
+            var kutu = new Dictionary<AutoSectionCandidate, double[]>();
+            foreach (AutoSectionCandidate c in hepsi)
+                kutu[c] = KesitKutusu(Cizgiler(k.Uyeler, tanim[c], mevcut.Where(x => x != c).Select(x => tanim[x])), "SECTION AA");
+            var ek = new List<double[]>();
+            if (uzatmaCizimleri != null)
+                for (int i = 0; i < uzatmaCizimleri.Count; i++)
+                    ek.Add(KesitKutusu(uzatmaCizimleri[i], uzatmaBasliklari != null && i < uzatmaBasliklari.Count ? uzatmaBasliklari[i] : ""));
+            double[] paylar = { 1.0, 1.04 };
+            Func<List<AutoSectionCandidate>, AutoSectionCandidate, double, PaftaPlani.Sonuc> dene = (l, yeni, f) =>
+            {
+                var sirali = OtoKesitBulucu.Sirala(l);
+                return Hesapla(k, sirali.Select(c => tanim[c]).ToList(),
+                    sirali.Select(c => Buyut(kutu[c], c == yeni ? 1.1 * f : f)).Concat(ek.Select(b => Buyut(b, f))).ToList(), yan, liste);
+            };
+            PaftaPlani.Sonuc ilk = dene(mevcut.ToList(), null, 1.0);
+            if (!ilk.Sigdi) return kabul;
+            olcek = ilk.Olcek;
+            foreach (AutoSectionCandidate c in adaylar)
+            {
+                if (kutu[c] == null) continue;
+                var l = mevcut.Concat(kabul).Concat(new[] { c }).ToList();
+                if (paylar.All(f => { PaftaPlani.Sonuc r = dene(l, c, f); return r.Sigdi && r.Olcek <= ilk.Olcek + 1e-6; })) kabul.Add(c);
+            }
+            return kabul;
+        }
+
+        private static double[] Buyut(double[] b, double f)
+        {
+            if (b == null) return null;
+            double cu = (b[0] + b[2]) / 2, cv = (b[1] + b[3]) / 2, hu = (b[2] - b[0]) / 2 * f, hv = (b[3] - b[1]) / 2 * f;
+            return new[] { cu - hu, cv - hv, cu + hu, cv + hv };
+        }
     }
 
     /// <summary>Pafta: şablon (gömülü ŞA-RA A1 ya da seçilen DWG/DXF) çerçevesine ön / yan görünüş, kesitler ve malzeme listesi.</summary>
@@ -2504,6 +2702,141 @@ namespace OtomatikKesit
             if (at.Count > 0)
                 Komutlar.Yaz(string.Format("\nOto Kesit: {0} gereksiz kesit atıldı (gösterdiği elemanlar başka kesitlerde de var).\n", at.Count));
             return l.Where((c, i) => !at.Contains(i)).ToList();
+        }
+
+        /// <summary>Ek kesitlerin açıklama (tablo ipucu) başı.</summary>
+        public const string EkKesitOnEki = "Ek kesit (pafta boşluğu): ";
+
+        /// <summary>Tablo sırası (DetectHidden ile aynı): yukarıdan aşağı, aynı kotta yatay kesit önce.</summary>
+        public static List<AutoSectionCandidate> Sirala(IEnumerable<AutoSectionCandidate> l)
+        {
+            return l.OrderByDescending(c => c.SortZ).ThenBy(c => (int)c.Kind).ToList();
+        }
+
+        /// <summary>Paftadaki boşluk için ek kesit adayları (çizimci paftasındaki gibi): kapsama için gerekmeyen yatay planlar —
+        /// bacak başı köşe üçgenleri (TAO K1 gibi), kafes / gövde plan çaprazları; elemanı çok olan önce. Aday değil: mevcut yatay
+        /// kesite 300 mm'den yakın kot, görünmeyen elemanı olmayan plan (yalnız görünüşteki kuşaklar), anlamsız plan (PlanImzasi)
+        /// ve mevcut ya da önceki bir planla aynı desenli plan (bacak içindeki ardışık kotlar gibi).</summary>
+        public static List<AutoSectionCandidate> EkAdaylar(IDictionary<string, FinalMember> uyeler, ICollection<string> gorunen,
+            IList<AutoSectionCandidate> mevcut)
+        {
+            var sonuc = new List<AutoSectionCandidate>();
+            if (uyeler == null || uyeler.Count == 0 || gorunen == null) return sonuc;
+            // görünüşte görünen elemanın aynaları da görünmüş sayılır (DetectHidden ile aynı aile kuralı)
+            var gorulenAile = new HashSet<string>();
+            foreach (string k in gorunen)
+            {
+                FinalMember m;
+                if (k != null && uyeler.TryGetValue(k, out m) && m != null) gorulenAile.Add(AutoSectionDetector.AileAnahtari(m));
+            }
+            Func<string, bool> gizli = k => { FinalMember m; return uyeler.TryGetValue(k, out m) && m != null && !gorulenAile.Contains(AutoSectionDetector.AileAnahtari(m)); };
+            var tanimlar = mevcut.Select(Tanim).ToList();
+            // mevcut yatay kesitlerin kotları (yatay düzlem olarak verilen tek parça kesitler dahil)
+            var kotlarMevcut = new List<double>();
+            foreach (KesitTanimi t in tanimlar)
+                if (t.Yukseklik.HasValue) kotlarMevcut.Add(t.Yukseklik.Value);
+                else if (t.Noktalar.Count > 0 && t.Noktalar.Max(q => q[2]) - t.Noktalar.Min(q => q[2]) < 50) kotlarMevcut.Add(t.Noktalar.Average(q => q[2]));
+            var desenler = new HashSet<string>();
+            foreach (KesitTanimi t in tanimlar.Where(x => x.Yukseklik.HasValue))
+            {
+                string d;
+                if (PlanImzasi(uyeler, t, out d)) desenler.Add(d);
+            }
+
+            // kotlar: yatay elemanların kotları (SectionDetection toleransıyla kümelenir); bacak başı gibi yalnız köşe üçgenlerinden
+            // oluşan plan da aday
+            var kumeler = new List<List<double>>();
+            double tol = KesitSecici.YukseklikTol;
+            foreach (double z in uyeler.Values.Where(m => m != null && Math.Abs(m.start_z - m.end_z) <= tol).Select(m => (m.start_z + m.end_z) / 2).OrderBy(z => z))
+                if (kumeler.Count > 0 && z - kumeler[kumeler.Count - 1][0] <= tol) kumeler[kumeler.Count - 1].Add(z);
+                else kumeler.Add(new List<double> { z });
+            var adaylar = new List<Tuple<AutoSectionCandidate, string>>();
+            foreach (double z in kumeler.Select(l => Math.Round(l.Average(), 3)))
+            {
+                if (kotlarMevcut.Any(h => Math.Abs(h - z) < 300)) continue;
+                var c = new AutoSectionCandidate { Kind = AutoSectionKind.Height, Height = z, SortZ = z };
+                KesitTanimi t = Tanim(c);
+                ICollection<string> sec = KesitSecici.SecGenis(uyeler, t);
+                string d;
+                if (sec.Count < 8 || !sec.Any(gizli) || !PlanImzasi(uyeler, t, out d)) continue;
+                c.MemberKeys = sec.ToList();
+                c.Description = string.Format(CultureInfo.InvariantCulture, EkKesitOnEki + "yatay plan Z={0:0} mm, {1} eleman", z, sec.Count);
+                adaylar.Add(Tuple.Create(c, d));
+            }
+            // her desenden bir plan (bacak içindeki ardışık kotlar gibi aynı görünen planlar tekrarlanmaz), elemanı çok olan önce
+            foreach (var x in adaylar.OrderByDescending(x => x.Item1.MemberKeys.Count).ThenByDescending(x => x.Item1.SortZ))
+                if (desenler.Add(x.Item2)) sonuc.Add(x.Item1);
+            return sonuc;
+        }
+
+        /// <summary>Yatay planın deseni (doğrultusu aynı ardışık çizgiler tek çizgi sayılarak: çizgi, dış kontur dışındaki çizgi,
+        /// eğik çizgi ve bağlı parça sayısı). Plan anlamsızsa false:
+        /// yalnız dış kuşaklar (eğik ya da iç çizgi yok), birbirinden uzak parçalardan oluşan uzun plan (boy / en 3'ten büyük)
+        /// ya da büyük çerçevede küçük köşe parçaları (çizgi boyu toplamı kontur çevresinin %80'inden az).</summary>
+        private static bool PlanImzasi(IDictionary<string, FinalMember> uyeler, KesitTanimi t, out string desen)
+        {
+            desen = null;
+            List<string> a;
+            List<double[]> segs = KesitSecici.Sec(uyeler, t, out a).Select(q => (double[])q.Clone()).ToList();
+            if (segs.Count == 0) return false;
+            double x0 = segs.Min(q => Math.Min(q[0], q[2])), x1 = segs.Max(q => Math.Max(q[0], q[2]));
+            double y0 = segs.Min(q => Math.Min(q[1], q[3])), y1 = segs.Max(q => Math.Max(q[1], q[3]));
+            double en = Math.Max(x1 - x0, y1 - y0), boy = Math.Max(1, Math.Min(x1 - x0, y1 - y0));
+            double tol = 0.01 * en + 1;
+            Func<double, double, string> dug = (x, y) => Math.Round(x) + ";" + Math.Round(y);
+            // ardışık aynı doğrultulu çizgiler birleşir (düğümde yalnız ikisi buluşuyorsa)
+            for (bool degisti = true; degisti; )
+            {
+                degisti = false;
+                var uclar = new Dictionary<string, List<int>>();
+                for (int i = 0; i < segs.Count; i++)
+                    foreach (string d in new[] { dug(segs[i][0], segs[i][1]), dug(segs[i][2], segs[i][3]) })
+                    {
+                        List<int> l;
+                        if (!uclar.TryGetValue(d, out l)) uclar[d] = l = new List<int>();
+                        l.Add(i);
+                    }
+                foreach (var kv in uclar)
+                {
+                    if (kv.Value.Count != 2 || kv.Value[0] == kv.Value[1]) continue;
+                    double[] p = segs[kv.Value[0]], q = segs[kv.Value[1]];
+                    double ux = p[2] - p[0], uy = p[3] - p[1], vx = q[2] - q[0], vy = q[3] - q[1];
+                    double lu = Math.Sqrt(ux * ux + uy * uy), lv = Math.Sqrt(vx * vx + vy * vy);
+                    if (lu < 1e-6 || lv < 1e-6 || Math.Abs(ux * vy - uy * vx) / (lu * lv) > 0.01) continue;
+                    // ortak düğüm dışındaki uçlar yeni çizgi
+                    double[] pu = dug(p[0], p[1]) == kv.Key ? new[] { p[2], p[3] } : new[] { p[0], p[1] };
+                    double[] qu = dug(q[0], q[1]) == kv.Key ? new[] { q[2], q[3] } : new[] { q[0], q[1] };
+                    int i0 = Math.Max(kv.Value[0], kv.Value[1]), i1 = Math.Min(kv.Value[0], kv.Value[1]);
+                    segs.RemoveAt(i0); segs.RemoveAt(i1);
+                    segs.Add(new[] { pu[0], pu[1], qu[0], qu[1] });
+                    degisti = true;
+                    break;
+                }
+            }
+            Func<double, double, bool> kenar = (x, y) => Math.Abs(x - x0) < tol || Math.Abs(x - x1) < tol || Math.Abs(y - y0) < tol || Math.Abs(y - y1) < tol;
+            int ic = segs.Count(q => !(kenar(q[0], q[1]) && kenar(q[2], q[3])));
+            int egik = segs.Count(q => Math.Abs(q[2] - q[0]) > tol && Math.Abs(q[3] - q[1]) > tol);
+            if (ic == 0 && egik == 0) return false;
+            // bağlı parçalar
+            var kok = Enumerable.Range(0, segs.Count).ToArray();
+            Func<int, int> bul = null;
+            bul = i => kok[i] == i ? i : (kok[i] = bul(kok[i]));
+            var dugum = new Dictionary<string, int>();
+            for (int i = 0; i < segs.Count; i++)
+                foreach (string d in new[] { dug(segs[i][0], segs[i][1]), dug(segs[i][2], segs[i][3]) })
+                {
+                    int j;
+                    if (dugum.TryGetValue(d, out j)) kok[bul(i)] = bul(j); else dugum[d] = i;
+                }
+            int parca = Enumerable.Range(0, segs.Count).Select(bul).Distinct().Count();
+            if (parca > 1)
+            {
+                if (en / boy > 3) return false;
+                double uzunluk = segs.Sum(q => Math.Sqrt((q[2] - q[0]) * (q[2] - q[0]) + (q[3] - q[1]) * (q[3] - q[1])));
+                if (uzunluk < 0.8 * 2 * ((x1 - x0) + (y1 - y0))) return false;
+            }
+            desen = segs.Count + "|" + ic + "|" + egik + "|" + parca;
+            return true;
         }
 
         /// <summary>Adayın tabloya yazılan hali (yükseklik "0.###", noktalar FormatPoint ile 3 ondalık).</summary>
