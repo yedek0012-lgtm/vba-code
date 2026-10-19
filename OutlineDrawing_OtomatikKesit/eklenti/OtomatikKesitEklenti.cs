@@ -3995,12 +3995,12 @@ namespace OtomatikKesit
     /// olacak şekilde kesit 90° döndürülür (görünüşteki ve TAO paftasındaki gibi travers yatay). Yazılar okunur kalır,
     /// başlık yine altta ortalanır; döndürülen kesitin nesneleri kesit adıyla işaretlenir (ölçü / dizme onları tanır).
     /// </summary>
-    internal static class KesitYonu
+    public static class KesitYonu
     {
         internal const string Uygulama = "OTO_KESIT_YON";
 
         /// <summary>Derece, + saat yönü tersi; 0: döndürme gerekmez (yatay kesit, 45°'den dik düzlem, köşegen bacak düzlemi).</summary>
-        internal static int Aci(KesitTanimi t)
+        public static int Aci(KesitTanimi t)
         {
             double[] u, v;
             if (t == null || t.Yukseklik.HasValue || !KesitSecici.Eksenler(t, out u, out v)) return 0;
