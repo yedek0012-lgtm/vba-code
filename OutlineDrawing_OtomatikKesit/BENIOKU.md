@@ -10,6 +10,12 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
 
+**3.4: Yatay kesitte kopuk uç parçaları.** OutlineDrawing yatay kesitte o kottaki bütün elemanları çizer; YAA-R1'de
+Z=32500 (SECTION I) kol ucundaki 2 × 152 mm'lik "F" parçasını da alıyor, parça ana çizimden 7 m uzakta tek başına
+duruyordu (yanındaki kesite aitmiş gibi görünüyordu). Ana parçanın %10'undan kısa, ana parçaya max(2 m, genişliğin %25'i)'nden
+uzak ve elemanları başka bir kesitte gösterilen parçalar yatay kesit çiziminden kaldırılır (`KopukParca`,
+`KopukParcaTemizle`; ölçülerden önce). Diğer test kulelerinde böyle parça yok.
+
 **3.3: Bacak uzatması çizimlerinde üst çizgi.** Bacak uzatması görünüşlerinde ve L kesitlerinde üst yatay (bacak yüzünde
 H1, L kesitinde iki kasık düğümünü bağlayan SH1) çizilmiyordu: bu elemanlar bacak bloğunda değil, aynı konfigürasyonun
 gövde uzatması bloğunda tanımlı. Bacağın üst kotunda ve bacak alanının içindeki gövde uzatması yatayları bacağa eklenir.

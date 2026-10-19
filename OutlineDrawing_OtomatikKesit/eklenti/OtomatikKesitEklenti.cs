@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "3.3";
+        public const string Surum = "3.4";
         private static Timer _timer;
 
         public void Initialize()
@@ -443,6 +443,14 @@ namespace OtomatikKesit
                         {
                             try { return TraversCizimi.Uygula(f, chkR.Checked); }
                             catch (System.Exception ex) { sorun.Add("Tam travers kesitleri çizilemedi (OutlineDrawing çizimi kaldı): " + IcHata(ex).Message); return null; }
+                        });
+                        if (r != null) mesaj.Add(r);
+                    }
+                    {
+                        string r = adim("kopuk parça", () =>
+                        {
+                            try { return KopukParcaTemizle.Uygula(f); }
+                            catch (System.Exception ex) { Komutlar.Yaz("\nKopuk parçalar temizlenemedi: " + IcHata(ex).Message + "\n"); return null; }
                         });
                         if (r != null) mesaj.Add(r);
                     }
@@ -2549,6 +2557,142 @@ namespace OtomatikKesit
         private static double[] Fark(double[] a, double[] b) { return new[] { a[0] - b[0], a[1] - b[1], a[2] - b[2] }; }
         private static double[] Capraz(double[] a, double[] b) { return new[] { a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0] }; }
         private static double[] Birim(double[] a) { double l = Math.Sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]); return l < 1e-9 ? null : new[] { a[0] / l, a[1] / l, a[2] / l }; }
+    }
+
+    /// <summary>
+    /// Yatay kesitte ana çizimden uzakta kalan küçük kopuk parçalar. OutlineDrawing yatay kesitte o kottaki bütün elemanları
+    /// çizer; kol ucundaki kısa bir parça (YAA-R1 Z=32500'de 2 × 152 mm'lik "F") aynı kotta olduğu için ana çizimden 7 m
+    /// uzakta tek başına çıkıyordu. Toplam boyu ana parçanın %10'undan az, ana parçaya uzaklığı max(2 m, genişliğin %25'i)'nden
+    /// fazla ve bütün elemanları (ayna aileleriyle) başka bir kesitte gösterilen parçalar çizimden kaldırılır.
+    /// </summary>
+    public static class KopukParca
+    {
+        /// <summary>Sec'in döndürdüğü sıradaki atılacak indeksler (yalnız yükseklik kesiti).</summary>
+        public static HashSet<int> Atilacaklar(IDictionary<string, FinalMember> uyeler, KesitTanimi t, IEnumerable<KesitTanimi> digerleri)
+        {
+            var at = new HashSet<int>();
+            if (uyeler == null || t == null || !t.Yukseklik.HasValue) return at;
+            List<string> keys;
+            List<double[]> segs = KesitSecici.Sec(uyeler, t, out keys);
+            if (segs.Count < 2) return at;
+            // bağlı parçalar: uçları 5 mm içinde çakışan çizgiler
+            int n = segs.Count;
+            var ata = Enumerable.Range(0, n).ToArray();
+            Func<int, int> kok = null;
+            kok = x => ata[x] == x ? x : (ata[x] = kok(ata[x]));
+            var nokta = new Dictionary<string, int>();
+            Func<double, double, string> anahtar = (x, y) => Math.Round(x / 5).ToString(CultureInfo.InvariantCulture) + "|" + Math.Round(y / 5).ToString(CultureInfo.InvariantCulture);
+            for (int i = 0; i < n; i++)
+                foreach (var k in new[] { anahtar(segs[i][0], segs[i][1]), anahtar(segs[i][2], segs[i][3]) })
+                {
+                    int j;
+                    if (nokta.TryGetValue(k, out j)) ata[kok(i)] = kok(j); else nokta[k] = i;
+                }
+            var parcalar = Enumerable.Range(0, n).GroupBy(kok).Select(g => g.ToList()).ToList();
+            if (parcalar.Count < 2) return at;
+            Func<List<int>, double> boy = p => p.Sum(i => Math.Sqrt(Math.Pow(segs[i][2] - segs[i][0], 2) + Math.Pow(segs[i][3] - segs[i][1], 2)));
+            Func<List<int>, double[]> kutu = p => new[] { p.Min(i => Math.Min(segs[i][0], segs[i][2])), p.Min(i => Math.Min(segs[i][1], segs[i][3])),
+                                                          p.Max(i => Math.Max(segs[i][0], segs[i][2])), p.Max(i => Math.Max(segs[i][1], segs[i][3])) };
+            double enBoy = parcalar.Max(boy);
+            // büyük parçalar (ana): en büyüğün yarısından uzun olanlar (simetrik iki yarım da ana sayılır)
+            var ana = parcalar.Where(p => boy(p) >= 0.5 * enBoy).ToList();
+            double[] ak = null;
+            foreach (var p in ana) { var k = kutu(p); ak = ak == null ? k : new[] { Math.Min(ak[0], k[0]), Math.Min(ak[1], k[1]), Math.Max(ak[2], k[2]), Math.Max(ak[3], k[3]) }; }
+            double genislik = Math.Max(ak[2] - ak[0], ak[3] - ak[1]), esik = Math.Max(2000, 0.25 * genislik);
+            var baska = new HashSet<string>();
+            foreach (var d in digerleri ?? new KesitTanimi[0])
+                foreach (string k in KesitSecici.SecGenis(uyeler, d)) baska.Add(AutoSectionDetector.AileAnahtari(uyeler[k]));
+            foreach (var p in parcalar)
+            {
+                if (ana.Contains(p) || boy(p) >= 0.1 * enBoy) continue;
+                var k = kutu(p);
+                double dx = Math.Max(0, Math.Max(ak[0] - k[2], k[0] - ak[2])), dy = Math.Max(0, Math.Max(ak[1] - k[3], k[1] - ak[3]));
+                if (Math.Sqrt(dx * dx + dy * dy) <= esik) continue;
+                if (!p.All(i => baska.Contains(AutoSectionDetector.AileAnahtari(uyeler[keys[i]])))) continue;
+                foreach (int i in p) at.Add(i);
+            }
+            return at;
+        }
+    }
+
+    /// <summary>KopukParca'nın bulduğu parçaları çizilmiş yatay kesitlerden siler (çizgiler eşleştirilerek; o parçanın
+    /// etiket yazısı da). Ölçülerden önce çalışır: ölçüler kalan çizime göre konur.</summary>
+    internal static class KopukParcaTemizle
+    {
+        internal static string Uygula(Form f)
+        {
+            Document doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) return null;
+            Database db = doc.Database;
+            string yol = FormBaglayici.YolAl(f);
+            if (yol.Length == 0 || !File.Exists(yol)) return null;
+            KuleVerisi kule = KuleOkuyucu.Oku(f.GetType().Assembly, yol);
+            if (kule == null) return null;
+            Dictionary<string, KesitTanimi> tanimlar = KesitStili.GridTanimlari(f);
+            var atilacak = new Dictionary<string, HashSet<int>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in tanimlar)
+            {
+                if (!kv.Value.Yukseklik.HasValue) continue;
+                HashSet<int> at = KopukParca.Atilacaklar(kule.Uyeler, kv.Value, tanimlar.Where(x => x.Key != kv.Key).Select(x => x.Value));
+                if (at.Count > 0) atilacak[kv.Key] = at;
+            }
+            if (atilacak.Count == 0) return null;
+
+            int silinen = 0;
+            using (doc.LockDocument())
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
+                KesitDizici.Gruplar g = KesitDizici.Grupla(tr, ms);
+                foreach (KesitDizici.Baslik b in g.Kesitler)
+                {
+                    HashSet<int> at;
+                    if (!atilacak.TryGetValue(b.Ad, out at)) continue;
+                    var cizgiler = new List<Line>();
+                    var yazilar = new List<DBText>();
+                    foreach (ObjectId id in g.Nesneler[b.Ad])
+                    {
+                        if (id == b.Id) continue;
+                        var e = tr.GetObject(id, OpenMode.ForRead);
+                        if (e is Line) cizgiler.Add((Line)e);
+                        else if (e is DBText) yazilar.Add((DBText)e);
+                    }
+                    Func<Point3d, double[]> uv = p => g.XZ ? new[] { p.X, p.Z } : new[] { p.X, p.Y };
+                    var hedef = cizgiler.Select(l => { var a = uv(l.StartPoint); var c = uv(l.EndPoint); return new[] { a[0], a[1], c[0], c[1] }; }).ToList();
+                    List<string> keys;
+                    List<double[]> kaynak = KesitSecici.Sec(kule.Uyeler, tanimlar[b.Ad], out keys);
+                    int[] es = Eslestirici.Eslestir(kaynak, hedef, 2.0);
+                    var silinecek = new List<double[]>();
+                    var kalan = new List<double[]>();
+                    for (int i = 0; i < cizgiler.Count; i++)
+                    {
+                        if (es[i] >= 0 && at.Contains(es[i]))
+                        {
+                            silinecek.Add(hedef[i]);
+                            try { cizgiler[i].UpgradeOpen(); cizgiler[i].Erase(); silinen++; } catch { }
+                        }
+                        else kalan.Add(hedef[i]);
+                    }
+                    if (silinecek.Count == 0) continue;
+                    // etiket: silinen bir çizgiye kalanlardan daha yakın olan yazı
+                    Func<double[], double[], double> uzak = (q, s) =>
+                    {
+                        double sx = s[2] - s[0], sy = s[3] - s[1], l2 = sx * sx + sy * sy;
+                        double t = l2 < 1e-9 ? 0 : Math.Max(0, Math.Min(1, ((q[0] - s[0]) * sx + (q[1] - s[1]) * sy) / l2));
+                        double px = s[0] + t * sx - q[0], py = s[1] + t * sy - q[1];
+                        return Math.Sqrt(px * px + py * py);
+                    };
+                    foreach (DBText y in yazilar)
+                    {
+                        double[] q = uv(y.Position);
+                        double ds = silinecek.Min(s => uzak(q, s)), dk = kalan.Count > 0 ? kalan.Min(s => uzak(q, s)) : double.MaxValue;
+                        if (ds < dk && ds < 1500) { try { y.UpgradeOpen(); y.Erase(); } catch { } }
+                    }
+                }
+                tr.Commit();
+            }
+            return silinen == 0 ? null : string.Format("Kopuk parça: yatay kesitlerden {0} uzak küçük çizgi kaldırıldı (başka kesitte gösteriliyor)", silinen);
+        }
     }
 
     /// <summary>Grid'deki bir kesitin tanımı: yükseklik veya düzlem noktaları.</summary>

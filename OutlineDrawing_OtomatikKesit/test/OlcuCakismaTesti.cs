@@ -59,7 +59,16 @@ public static class OlcuCakismaTesti
         var kesitKutulari = new List<double[]>();
         // çizimdeki kesitler: OutlineDrawing'in (tam travers kesitleri eklentinin açılmış çizimiyle) + aile dosyasında
         // eklentinin çizdiği uzatma görünüşleri ve K / L kesitleri
-        var cizimler = secs.Select(c => KesitSecici.CizimSegmentleri(k.Uyeler, OtoKesitBulucu.Tanim(c))).ToList();
+        var tanimlar = secs.Select(c => OtoKesitBulucu.Tanim(c)).ToList();
+        var cizimler = new List<List<double[]>>();
+        for (int i = 0; i < tanimlar.Count; i++)
+        {
+            var segs = KesitSecici.CizimSegmentleri(k.Uyeler, tanimlar[i]);
+            // yatay kesitlerden uzak küçük kopuk parçalar kaldırılır (KopukParcaTemizle)
+            var at = KopukParca.Atilacaklar(k.Uyeler, tanimlar[i], tanimlar.Where((x, j) => j != i));
+            if (at.Count > 0) segs = segs.Where((q, j) => !at.Contains(j)).ToList();
+            cizimler.Add(segs);
+        }
         var uzatma = UzatmaPlani.Hesapla(AileParcalari.Oku(TowYama.SatirlarHam(a[0])));
         cizimler.AddRange(uzatma.Select(c => c.Cizgiler));
         if (uzatma.Count > 0) Console.WriteLine("Aile: {0} uzatma cizimi ({1})", uzatma.Count, string.Join(", ", uzatma.Select(c => c.Baslik)));
