@@ -4791,7 +4791,7 @@ namespace OtomatikKesit
 
         /// <summary>Ön yüz (+Y yüzü): köşe hattına göre y(z) doğrusu; iki ucu da bu düzlemde olan elemanlar (x, z). Yüzde
         /// olmayan elemanların görünüşte yeni çizgi oluşturan izdüşümleri (iç / kalça elemanları) gizli olarak eklenir.</summary>
-        internal static UzatmaCizimi Yuz(AileParcasi p, string baslik)
+        public static UzatmaCizimi Yuz(AileParcasi p, string baslik)
         {
             var c = new UzatmaCizimi { Baslik = baslik };
             var uclar = p.Elemanlar.SelectMany(e => new[] { e.A, e.B }).ToList();
