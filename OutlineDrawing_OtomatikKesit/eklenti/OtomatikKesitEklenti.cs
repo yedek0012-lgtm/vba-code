@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "3.2";
+        public const string Surum = "3.3";
         private static Timer _timer;
 
         public void Initialize()
@@ -4715,10 +4715,32 @@ namespace OtomatikKesit
                     if (mu.Success) double.TryParse(mu.Value, NumberStyles.Float, ci, out uz);
                     var p = new AileParcasi { Ad = ad, Bacak = bacak, Uzatma = uz, Konfig = konfig };
                     BlokOku(s, bs, bson, dx, dy, dz, p.Elemanlar);
+                    if (bacak && p.Elemanlar.Count > 0) UstYataylar(s, basliklar, son, p);
                     if (p.Elemanlar.Count > 0) sonuc.Add(p);
                 }
             }
             return sonuc;
+        }
+
+        /// <summary>Bacağın üst kotundaki yatay elemanlar (bacak yüzünün üst çizgisi H1, kasık düğümlerini bağlayan SH1)
+        /// bacak bloğunda değil, aynı konfigürasyonun gövde uzatması bloğunda tanımlı; bacak alanının (xy kutusu) içinde
+        /// kalanları bacağa eklenir: uzatma görünüşünde ve L kesitinde üst çizgi eksik kalmasın.</summary>
+        private static void UstYataylar(string[] s, List<int> basliklar, int son, AileParcasi p)
+        {
+            double zUst = p.Elemanlar.Max(e => Math.Max(e.A[2], e.B[2]));
+            var uclar = p.Elemanlar.SelectMany(e => new[] { e.A, e.B }).ToList();
+            double x0 = uclar.Min(q => q[0]) - 1, x1 = uclar.Max(q => q[0]) + 1, y0 = uclar.Min(q => q[1]) - 1, y1 = uclar.Max(q => q[1]) + 1;
+            for (int q = 0; q < basliklar.Count; q++)
+            {
+                Match mb = Baslik.Match(s[basliklar[q]]);
+                if (mb.Groups[2].Value.Equals("Leg", StringComparison.OrdinalIgnoreCase)) continue;
+                var govde = new List<ParcaElemani>();
+                BlokOku(s, basliklar[q], q + 1 < basliklar.Count ? basliklar[q + 1] : son, 0, 0, 0, govde);
+                Func<double[], bool> icinde = n => Math.Abs(n[2] - zUst) < 1 && n[0] >= x0 && n[0] <= x1 && n[1] >= y0 && n[1] <= y1;
+                foreach (var e in govde)
+                    if (icinde(e.A) && icinde(e.B)) p.Elemanlar.Add(e);
+                return;
+            }
         }
 
         private static void BlokOku(string[] s, int bas, int son, double dx, double dy, double dz, List<ParcaElemani> l)

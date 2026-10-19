@@ -10,6 +10,10 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
 
+**3.3: Bacak uzatması çizimlerinde üst çizgi.** Bacak uzatması görünüşlerinde ve L kesitlerinde üst yatay (bacak yüzünde
+H1, L kesitinde iki kasık düğümünü bağlayan SH1) çizilmiyordu: bu elemanlar bacak bloğunda değil, aynı konfigürasyonun
+gövde uzatması bloğunda tanımlı. Bacağın üst kotunda ve bacak alanının içindeki gövde uzatması yatayları bacağa eklenir.
+
 **3.2: Dizmede kopan parçalar düzeltildi.** Aile dosyasında (TAO) "Kesitleri diz" sonrası geniş kesitlerin (tam travers)
 uçları, bazı ölçüler ve K / L planlarının yarıları eski yerinde kalıyordu. Sebep: işaretsiz nesneler en yakın kesit
 başlığına tek bir pencereyle bağlanıyordu ve pencere en sık iki başlığın aralığından hesaplanıyordu; en sağa sık dizilen
