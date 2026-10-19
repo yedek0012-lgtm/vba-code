@@ -10,6 +10,19 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
 
+**3.5: Genel kontrol düzeltmeleri.** Kod incelemesi (AutoCAD tarafı, çalıştırılamayan kısımlar) ve üç kulenin pafta
+önizlemesiyle (`test/onizleme_ciz.py`, `OTO_ONIZLEME=dosya bash test/olcu_testi.sh ...`):
+- Aynı işlemde iki katman / uygulama kaydı eklenince tablo ikinci kez yazmaya açılıyordu (AutoCAD eWasOpenForWrite):
+  ilk Pafta (pafta + liste katmanı) düşebiliyordu. Bütün tablo yükseltmeleri korumalı.
+- Pafta / dizme sonrası tek başına OTOOLCU / OTOSTIL / OTODIZ / OTOPAFTA: işaretli nesnesi olan kesite yakınlıkla nesne
+  eklenmez (liste ve görünüş çizgileri kesite karışmıyordu), pafta / liste çizgileri kesit toplamasına girmez.
+- Kesit sırası başlıkta tutulur (OTO_KESIT_SIRA): dizilmiş kesitler tekrar dizilince ya da paftaya konunca A-B-C sırası
+  bozulmuyor (önce yatay konuma göre sıralanıp satırlar karışıyordu).
+- Bacak boyu çizgileri kendi katmanında (OTO_BACAK_BOYU): OTOIC artık onları silmiyor.
+- OTOSTIL tam travers kesitini (iki kol + gövde) tanır; öbür kolun redundantları kesikli kalır.
+- Eksi uzatma adları ("-1.5 LEG EXTENSION"), kilitli pafta katmanında yeniden pafta, pafta nesnelerinin "yabancı nesne"
+  uyarısı, katman adına uygun olmayan kesim etiketi, "Redundant" kapalıyken eklenti çizimlerinde kesikli redundant.
+
 **3.4: Yatay kesitte kopuk uç parçaları.** OutlineDrawing yatay kesitte o kottaki bütün elemanları çizer; YAA-R1'de
 Z=32500 (SECTION I) kol ucundaki 2 × 152 mm'lik "F" parçasını da alıyor, parça ana çizimden 7 m uzakta tek başına
 duruyordu (yanındaki kesite aitmiş gibi görünüyordu). Ana parçanın %10'undan kısa, ana parçaya max(2 m, genişliğin %25'i)'nden

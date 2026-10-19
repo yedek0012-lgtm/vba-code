@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "3.4";
+        public const string Surum = "3.5";
         private static Timer _timer;
 
         public void Initialize()
@@ -1124,7 +1124,7 @@ namespace OtomatikKesit
         internal const string Uygulama = "OTO_KESIT";
         private static readonly Regex KesitYazisi = new Regex(@"^SECTION\s+(\S+)$", RegexOptions.IgnoreCase);
         /// <summary>Aile dosyasındaki uzatma görünüşlerinin başlığı ("+9 BODY EXTENSION"): kesit gibi gruplanır ve dizilir.</summary>
-        internal static readonly Regex UzatmaYazisi = new Regex(@"^\+?\d+(\.\d+)?\s+(BODY|LEG)\s+EXTENSION$", RegexOptions.IgnoreCase);
+        internal static readonly Regex UzatmaYazisi = new Regex(@"^[+-]?\d+(\.\d+)?\s+(BODY|LEG)\s+EXTENSION$", RegexOptions.IgnoreCase);
 
         internal static string Etiket(Entity e)
         {
@@ -1141,7 +1141,33 @@ namespace OtomatikKesit
             return null;
         }
 
-        internal class Baslik { public string Ad; public double U, V, W; public bool XZ; public ObjectId Id; }
+        internal class Baslik { public string Ad; public double U, V, W; public bool XZ; public ObjectId Id; public int? Sira; }
+
+        /// <summary>Başlıktaki kesit sırası (A-B-C ...; uzatma çizimleri sonra). Dizme ve pafta kesitleri bu sırayla dizer:
+        /// dizilmiş kesitlerin yatay konumu sırayı artık göstermez.</summary>
+        internal const string SiraUygulama = "OTO_KESIT_SIRA";
+
+        internal static int? Sira(Entity e)
+        {
+            try
+            {
+                using (ResultBuffer rb = e.GetXDataForApplication(SiraUygulama))
+                {
+                    if (rb == null) return null;
+                    foreach (TypedValue tv in rb)
+                        if (tv.TypeCode == (int)DxfCode.ExtendedDataInteger32) return Convert.ToInt32(tv.Value);
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        internal static void SiraYaz(Database db, Transaction tr, Entity e, int sira)
+        {
+            SekilCizici.UygulamaKaydi(db, tr, SiraUygulama);
+            e.XData = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, SiraUygulama),
+                                       new TypedValue((int)DxfCode.ExtendedDataInteger32, sira));
+        }
 
         /// <summary>Model alanındaki kesitler (başlık sırasıyla) ve görünüş başlıkları.</summary>
         internal class Gruplar
@@ -1190,7 +1216,7 @@ namespace OtomatikKesit
                 Point3d p = t.HorizontalMode == TextHorizontalMode.TextLeft && t.VerticalMode == TextVerticalMode.TextBase ? t.Position : t.AlignmentPoint;
                 bool xz = Math.Abs(t.Normal.Y) > 0.9, xy = Math.Abs(t.Normal.Z) > 0.9;
                 if (!xz && !xy) continue;
-                var b = new Baslik { U = p.X, V = xz ? p.Z : p.Y, W = xz ? p.Y : p.Z, XZ = xz, Id = id };
+                var b = new Baslik { U = p.X, V = xz ? p.Z : p.Y, W = xz ? p.Y : p.Z, XZ = xz, Id = id, Sira = Sira(t) };
                 if (metin.Equals(GorunusYeri.OnBaslik, StringComparison.OrdinalIgnoreCase)) { b.Ad = GorunusYeri.OnBaslik; gorunus.Add(b); if (g.On == null) g.On = b; continue; }
                 if (metin.Equals(GorunusYeri.YanBaslik, StringComparison.OrdinalIgnoreCase)) { b.Ad = GorunusYeri.YanBaslik; gorunus.Add(b); if (g.Yan == null) g.Yan = b; continue; }
                 if (t.Height < 250) continue;
@@ -1200,7 +1226,7 @@ namespace OtomatikKesit
             }
             int nXZ = basliklar.Count(b => b.XZ) + gorunus.Count(b => b.XZ), nXY = basliklar.Count(b => !b.XZ) + gorunus.Count(b => !b.XZ);
             g.XZ = nXZ >= nXY;
-            g.Kesitler = basliklar.Where(b => b.XZ == g.XZ).OrderBy(b => b.U).ToList();
+            g.Kesitler = basliklar.Where(b => b.XZ == g.XZ).OrderBy(b => b.Sira ?? int.MaxValue).ThenBy(b => b.U).ToList();
             if (g.On != null && g.On.XZ != g.XZ) g.On = null;
             if (g.Yan != null && g.Yan.XZ != g.XZ) g.Yan = null;
             foreach (var b in g.Kesitler) { g.Nesneler[b.Ad] = new List<ObjectId>(); g.Kutular[b.Ad] = null; }
@@ -1217,6 +1243,16 @@ namespace OtomatikKesit
                 pencere[g.Kesitler[i].Ad] = w > 500 ? w : 15000;
             }
             var gorunusU = gorunus.Where(b => b.XZ == g.XZ).Select(b => b.U).ToList();
+            // İşaretli nesnesi olan kesite yakınlıkla nesne eklenmez: ÇALIŞTIR sonunda bütün kesit nesneleri işaretlidir;
+            // pafta / dizme sonrası kesitlerin yanına düşen görünüş ve liste nesneleri kesite katılmasın.
+            var isaretli = new HashSet<string>();
+            foreach (ObjectId id in ms)
+            {
+                if (id.IsErased) continue;
+                var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                string ad0 = e != null ? Etiket(e) : null;
+                if (ad0 != null) isaretli.Add(ad0);
+            }
             foreach (ObjectId id in ms)
             {
                 if (id.IsErased) continue;
@@ -1230,6 +1266,7 @@ namespace OtomatikKesit
                     double um = (k[0] + k[2]) / 2;
                     Baslik en = g.Kesitler.OrderBy(b => Math.Abs(b.U - um)).First();
                     if (Math.Abs(en.U - um) > pencere[en.Ad]) continue;
+                    if (isaretli.Contains(en.Ad)) continue;
                     if (gorunusU.Any(x => Math.Abs(x - um) < Math.Abs(en.U - um))) continue;   // görünüşe daha yakın
                     if (Etiket(e) != null) continue;   // başka (silinmiş) kesitin işareti
                     ad = en.Ad;
@@ -1245,7 +1282,7 @@ namespace OtomatikKesit
         {
             var rat = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
             if (rat.Has(Uygulama)) return;
-            rat.UpgradeOpen();
+            if (!rat.IsWriteEnabled) rat.UpgradeOpen();
             var r = new RegAppTableRecord { Name = Uygulama };
             rat.Add(r);
             tr.AddNewlyCreatedDBObject(r, true);
@@ -1286,7 +1323,14 @@ namespace OtomatikKesit
                 if (g.Kesitler.Count > 0)
                 {
                     UygulamaKaydi(db, tr);
-                    foreach (Baslik b in g.Kesitler) n += Tasi(tr, g.Nesneler[b.Ad], b.Ad, new Vector3d(0, 0, 0));
+                    int sira = 0;
+                    foreach (Baslik b in g.Kesitler)
+                    {
+                        n += Tasi(tr, g.Nesneler[b.Ad], b.Ad, new Vector3d(0, 0, 0));
+                        var baslik = tr.GetObject(b.Id, OpenMode.ForWrite) as Entity;
+                        if (baslik != null && !b.Sira.HasValue) SiraYaz(db, tr, baslik, sira);
+                        sira++;
+                    }
                 }
                 tr.Commit();
             }
@@ -1527,7 +1571,7 @@ namespace OtomatikKesit
             var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
             if (!lt.Has(ad))
             {
-                lt.UpgradeOpen();
+                if (!lt.IsWriteEnabled) lt.UpgradeOpen();
                 var r = new LayerTableRecord { Name = ad, Color = AcColor.FromColorIndex(Autodesk.AutoCAD.Colors.ColorMethod.ByAci, renk) };
                 lt.Add(r); tr.AddNewlyCreatedDBObject(r, true);
             }
@@ -1550,7 +1594,9 @@ namespace OtomatikKesit
                 using (Transaction tr = db.TransactionManager.StartTransaction())
                 {
                     var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForWrite);
-                    // önceki pafta ve liste silinir
+                    // önceki pafta ve liste silinir (katmanlar önce açılır / kilidi kaldırılır: kilitli katmanda silme hata verir)
+                    KatmanHazirla(db, tr, Katman, 7);
+                    KatmanHazirla(db, tr, ListeKatmani, 7);
                     foreach (ObjectId id in ms)
                     {
                         var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
@@ -1943,7 +1989,8 @@ namespace OtomatikKesit
                 }
                 var l = ent as Line;
                 if (l != null && !l.Layer.StartsWith("SECTION_MARK", StringComparison.OrdinalIgnoreCase)
-                    && !IcElemanlar.BizimKatman(l.Layer))
+                    && !IcElemanlar.BizimKatman(l.Layer) && !Pafta.PaftaNesnesi(l)
+                    && !string.Equals(l.Layer, UzatmaCizimleri.BacakKatmani, StringComparison.OrdinalIgnoreCase))
                 {
                     string etiket = KesitDizici.Etiket(l);
                     if (etiket != null) etiketli.Add(new KeyValuePair<string, KeyValuePair<ObjectId, Point3d[]>>(etiket,
@@ -1976,8 +2023,11 @@ namespace OtomatikKesit
             if (enKucukAralik < double.MaxValue) pencereU = Math.Max(15000, enKucukAralik / 2);
             double pv = Math.Max(40000, pencereV);
 
+            var isaretliKesit = new HashSet<string>(etiketli.Select(x => x.Key));
             foreach (KesitCizimi e in etiketler)
             {
+                // işaretli çizgisi olan kesite (ÇALIŞTIR sonrası hepsi) yakınlıkla çizgi eklenmez
+                if (isaretliKesit.Contains(e.Ad)) continue;
                 // Bu etikete ait çizgiler: aynı düzlemde, en yakın etiket bu olan ve pencere içinde kalanlar
                 foreach (var kv in cizgiler)
                 {
@@ -2171,7 +2221,7 @@ namespace OtomatikKesit
                     if (tt.TextSize > 1e-9) { tt.UpgradeOpen(); tt.TextSize = 0; }
                     return tt.ObjectId;
                 }
-                tst.UpgradeOpen();
+                if (!tst.IsWriteEnabled) tst.UpgradeOpen();
                 tt = new TextStyleTableRecord
                 {
                     Name = ad, TextSize = 0, FileName = stil.FileName, BigFontFileName = stil.BigFontFileName,
@@ -2189,7 +2239,7 @@ namespace OtomatikKesit
         {
             var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
             if (lt.Has(Katman)) return;
-            lt.UpgradeOpen();
+            if (!lt.IsWriteEnabled) lt.UpgradeOpen();
             var ltr = new LayerTableRecord { Name = Katman };
             lt.Add(ltr);
             tr.AddNewlyCreatedDBObject(ltr, true);
@@ -2279,6 +2329,14 @@ namespace OtomatikKesit
                     List<string> anahtarlar;
                     List<double[]> kaynak = KesitSecici.Sec(kule.Uyeler, tanim, out anahtarlar);
                     int[] eslesme = Eslestirici.Eslestir(kaynak, e.Segs, 2.0);
+                    // tam travers kesiti (TraversCizimi iki kol + gövde çizdi): o çizimle eşleşiyorsa onun grupları
+                    List<string> gruplar = null;
+                    TraversPlani tp = TraversKesiti.Hesapla(kule.Uyeler, tanim);
+                    if (tp != null)
+                    {
+                        int[] es2 = Eslestirici.Eslestir(tp.Cizgiler, e.Segs, 2.0);
+                        if (es2.Count(x => x >= 0) > eslesme.Count(x => x >= 0)) { eslesme = es2; gruplar = tp.Gruplar; }
+                    }
                     kesit++;
                     for (int i = 0; i < e.Ids.Count; i++)
                     {
@@ -2292,8 +2350,8 @@ namespace OtomatikKesit
                                 eslesmeyen++;
                                 continue;
                             }
-                            FinalMember m = kule.Uyeler[anahtarlar[eslesme[i]]];
-                            bool redundant = m.group_label != null && kule.RedundantGruplar.Contains(m.group_label.Trim());
+                            string grup = gruplar != null ? gruplar[eslesme[i]] : kule.Uyeler[anahtarlar[eslesme[i]]].group_label;
+                            bool redundant = grup != null && kule.RedundantGruplar.Contains(grup.Trim());
                             if (Boya(ent, redundant, kesik, duz, olcek)) red++; else ana++;
                         }
                         catch (System.Exception ex)
@@ -2369,7 +2427,7 @@ namespace OtomatikKesit
         {
             var ltt = (LinetypeTable)tr.GetObject(db.LinetypeTableId, OpenMode.ForRead);
             if (ltt.Has(CizgiTipiAdi)) return ltt[CizgiTipiAdi];
-            ltt.UpgradeOpen();
+            if (!ltt.IsWriteEnabled) ltt.UpgradeOpen();
             var r = new LinetypeTableRecord
             {
                 Name = CizgiTipiAdi,
@@ -3672,6 +3730,8 @@ namespace OtomatikKesit
 
         public ObjectId Katman(string ad)
         {
+            // kesim etiketi katman adı olur: AutoCAD'in kabul etmediği karakterler (< > / \ " : ; ? * | , = `) "_"
+            foreach (char c in "<>/\\\":;?*|,=`") ad = ad.Replace(c, '_');
             if (!_lt.Has(ad))
             {
                 if (!_lt.IsWriteEnabled) _lt.UpgradeOpen();
@@ -3723,7 +3783,7 @@ namespace OtomatikKesit
                 bool g = gizli != null && i < gizli.Count && gizli[i];
                 string grup = gruplar != null && i < gruplar.Count ? (gruplar[i] ?? "").Trim() : "";
                 string kesim = kesimler != null && i < kesimler.Count && !string.IsNullOrEmpty(kesimler[i]) ? kesimler[i] : "0";
-                Cizgi(q[0] + du, q[1] + dv, q[2] + du, q[3] + dv, "SECTION " + kesim, g || _redundant.Contains(grup));
+                Cizgi(q[0] + du, q[1] + dv, q[2] + du, q[3] + dv, "SECTION " + kesim, g || (_stil && _redundant.Contains(grup)));
                 int j;
                 if (!g && grup.Length > 0 && (!enUzun.TryGetValue(grup, out j) || Boy(cizgiler[j]) < Boy(q))) enUzun[grup] = i;
             }
@@ -3756,7 +3816,7 @@ namespace OtomatikKesit
         {
             var rat = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
             if (rat.Has(ad)) return;
-            rat.UpgradeOpen();
+            if (!rat.IsWriteEnabled) rat.UpgradeOpen();
             var r = new RegAppTableRecord { Name = ad };
             rat.Add(r);
             tr.AddNewlyCreatedDBObject(r, true);
@@ -3781,6 +3841,8 @@ namespace OtomatikKesit
     internal static class UzatmaCizimleri
     {
         internal const string Uygulama = "OTO_AILE";
+        /// <summary>Ana görünüşteki bacak boyu çizgileri (OTOIC iç eleman katmanını temizlerken silinmesin).</summary>
+        internal const string BacakKatmani = "OTO_BACAK_BOYU";
         /// <summary>Son çizilen uzatma çizimlerinin adları (K2, L3, "+9 BODY EXTENSION" ...): tabloda olmamaları beklenir.</summary>
         internal static readonly HashSet<string> SonAdlar = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -3842,6 +3904,7 @@ namespace OtomatikKesit
                     if (grupAdi != null) SekilCizici.XDataYaz(e, KesitDizici.Uygulama, grupAdi);
                 };
                 double ox = xMax + 10000, aralik = 6000;   // ölçüler geometrinin dışına taşar (yan ölçü + yazı)
+                int sira = 0;
                 foreach (UzatmaCizimi c in cizimler)
                 {
                     double u0 = c.Cizgiler.Min(q => Math.Min(q[0], q[2])), u1 = c.Cizgiler.Max(q => Math.Max(q[0], q[2]));
@@ -3850,6 +3913,9 @@ namespace OtomatikKesit
                     grupAdi = c.Kesit ? c.Baslik.Substring("SECTION ".Length) : c.Baslik;
                     sc.Sekil(c.Cizgiler, c.Gruplar, c.Kesimler, c.Gizli, du, dv, h);
                     sc.Yazi(c.Baslik, (u0 + u1) / 2 + du, zMin - 1200, 0, 400);
+                    // başlık (son eklenen yazı) sıra: OutlineDrawing kesitlerinden sonra, çizim sırasıyla
+                    var bas = tr.GetObject(sc.Eklenen[sc.Eklenen.Count - 1], OpenMode.ForWrite) as Entity;
+                    if (bas != null) KesitDizici.SiraYaz(db, tr, bas, 1000 + sira++);
                     ox += (u1 - u0) + aralik;
                 }
                 grupAdi = null;
@@ -3904,11 +3970,11 @@ namespace OtomatikKesit
                         double[] q = yuz.Cizgiler[i];
                         if (yuz.Gizli[i] || Math.Abs(q[3] - q[1]) < 0.5 * yuk) continue;
                         // sol bacağa (x < 0) aynalanır
-                        sc.Cizgi(-sx * q[0] + on.Ofs, q[1] + dz, -sx * q[2] + on.Ofs, q[3] + dz, IcElemanlar.Katman, true);
+                        sc.Cizgi(-sx * q[0] + on.Ofs, q[1] + dz, -sx * q[2] + on.Ofs, q[3] + dz, BacakKatmani, true);
                     }
                 }
-                sc.Cizgi(xYazi, a.Item3, a.Item2, a.Item3, IcElemanlar.Katman, false);
-                sc.Yazi("+" + p.Uzatma.ToString("0.#", CultureInfo.InvariantCulture) + " LEG", xYazi - 0.3 * th, a.Item3 + 0.2 * th, 0, th,
+                sc.Cizgi(xYazi, a.Item3, a.Item2, a.Item3, BacakKatmani, false);
+                sc.Yazi(UzatmaPlani.Isaretli(p.Uzatma) + " LEG", xYazi - 0.3 * th, a.Item3 + 0.2 * th, 0, th,
                         TextHorizontalMode.TextRight);
                 n++;
             }
@@ -4030,7 +4096,7 @@ namespace OtomatikKesit
                 var rat = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
                 if (!rat.Has(Uygulama))
                 {
-                    rat.UpgradeOpen();
+                    if (!rat.IsWriteEnabled) rat.UpgradeOpen();
                     var r = new RegAppTableRecord { Name = Uygulama };
                     rat.Add(r);
                     tr.AddNewlyCreatedDBObject(r, true);
@@ -4127,7 +4193,7 @@ namespace OtomatikKesit
                 var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
                 if (!lt.Has(Katman))
                 {
-                    lt.UpgradeOpen();
+                    if (!lt.IsWriteEnabled) lt.UpgradeOpen();
                     var ltr = new LayerTableRecord { Name = Katman };
                     lt.Add(ltr);
                     tr.AddNewlyCreatedDBObject(ltr, true);
@@ -4457,6 +4523,9 @@ namespace OtomatikKesit
                 || katman.StartsWith("SECTION", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(katman, KesitOlculeri.Katman, StringComparison.OrdinalIgnoreCase)
                 || IcElemanlar.BizimKatman(katman)
+                || string.Equals(katman, Pafta.Katman, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(katman, Pafta.ListeKatmani, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(katman, UzatmaCizimleri.BacakKatmani, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(katman, "Defpoints", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -4956,20 +5025,27 @@ namespace OtomatikKesit
             int k = 2;
             foreach (var p in govdeler)
             {
-                string u = p.Uzatma.ToString("0.#", ci);
-                sonuc.Add(Yuz(p, "+" + u + " BODY EXTENSION"));
+                string u = Isaretli(p.Uzatma);
+                sonuc.Add(Yuz(p, u + " BODY EXTENSION"));
                 UzatmaCizimi plan = AltPlan(p, "SECTION K" + k++);
                 if (plan != null) sonuc.Add(plan);
             }
             int l = 2;
             foreach (var p in bacaklar)
             {
-                string u = p.Uzatma.ToString("0.#", ci);
-                sonuc.Add(Yuz(p, "+" + u + " LEG EXTENSION"));
+                string u = Isaretli(p.Uzatma);
+                sonuc.Add(Yuz(p, u + " LEG EXTENSION"));
                 UzatmaCizimi ic = IcDuzlem(p, "SECTION L" + l++);
                 if (ic != null) sonuc.Add(ic);
             }
             return sonuc.Where(c => c.Cizgiler.Count > 0).ToList();
+        }
+
+        /// <summary>"+9", "+0", "-1.5": eksi uzatmada "+" eklenmez.</summary>
+        public static string Isaretli(double uzatma)
+        {
+            string u = uzatma.ToString("0.#", CultureInfo.InvariantCulture);
+            return uzatma < 0 ? u : "+" + u;
         }
 
         private static void Ekle(UzatmaCizimi c, ParcaElemani e, double u1, double v1, double u2, double v2, bool gizli = false)
