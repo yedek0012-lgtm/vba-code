@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "3.1";
+        public const string Surum = "3.2";
         private static Timer _timer;
 
         public void Initialize()
@@ -416,6 +416,11 @@ namespace OtomatikKesit
                         mesaj.Add("İç eleman: kapalı");
                         sorun.Add("'İç eleman' kutusu kapalı: görünüşlere iç eleman izdüşümleri (tepe, travers, iç çaprazlar) çizilmedi.");
                     }
+                    adim("kesit işaretle", () =>
+                    {
+                        try { return KesitDizici.Etiketle(); }
+                        catch (System.Exception ex) { Komutlar.Yaz("\nKesit nesneleri işaretlenemedi: " + IcHata(ex).Message + "\n"); return null; }
+                    });
                     {
                         string r = adim("aile uzatmaları", () =>
                         {
@@ -1193,10 +1198,16 @@ namespace OtomatikKesit
             foreach (var b in g.Kesitler) { g.Nesneler[b.Ad] = new List<ObjectId>(); g.Kutular[b.Ad] = null; }
             if (g.Kesitler.Count == 0) return g;
 
-            double enKucuk = double.MaxValue;
-            for (int i = 1; i < g.Kesitler.Count; i++)
-                if (g.Kesitler[i].U - g.Kesitler[i - 1].U > 1000) enKucuk = Math.Min(enKucuk, g.Kesitler[i].U - g.Kesitler[i - 1].U);
-            double yari = enKucuk < double.MaxValue ? enKucuk / 2 : 15000;
+            // Pencere her başlık için ayrı: komşu başlıklara uzaklıklarının büyüğünün yarısı. Eskiden en sık iki başlığın
+            // aralığından tek pencere hesaplanıyordu; sık dizilmiş küçük çizimler (aile uzatmaları) pencereyi daraltınca
+            // geniş kesitlerin uçtaki çizgi ve ölçüleri hiçbir kesite bağlanmayıp dizmede yerinde kalıyordu.
+            var pencere = new Dictionary<string, double>();
+            for (int i = 0; i < g.Kesitler.Count; i++)
+            {
+                double sol = i > 0 ? g.Kesitler[i].U - g.Kesitler[i - 1].U : 0, sag = i + 1 < g.Kesitler.Count ? g.Kesitler[i + 1].U - g.Kesitler[i].U : 0;
+                double w = Math.Max(sol, sag) / 2;
+                pencere[g.Kesitler[i].Ad] = w > 500 ? w : 15000;
+            }
             var gorunusU = gorunus.Where(b => b.XZ == g.XZ).Select(b => b.U).ToList();
             foreach (ObjectId id in ms)
             {
@@ -1210,7 +1221,7 @@ namespace OtomatikKesit
                 {
                     double um = (k[0] + k[2]) / 2;
                     Baslik en = g.Kesitler.OrderBy(b => Math.Abs(b.U - um)).First();
-                    if (Math.Abs(en.U - um) > yari) continue;
+                    if (Math.Abs(en.U - um) > pencere[en.Ad]) continue;
                     if (gorunusU.Any(x => Math.Abs(x - um) < Math.Abs(en.U - um))) continue;   // görünüşe daha yakın
                     if (Etiket(e) != null) continue;   // başka (silinmiş) kesitin işareti
                     ad = en.Ad;
@@ -1248,6 +1259,30 @@ namespace OtomatikKesit
                 n++;
             }
             return n;
+        }
+
+        /// <summary>OutlineDrawing'in çizdiği kesitlerin nesnelerini, düzen henüz eşit aralıklıyken kesit adıyla işaretler.
+        /// Sonraki adımlar (aile uzatmaları, tam travers, döndürme, ölçü, dizme, pafta) kesitleri bu işaretle tanır;
+        /// sonradan eklenen çizimler yakınlık gruplamasını bozamaz.</summary>
+        internal static string Etiketle()
+        {
+            Document doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) return null;
+            Database db = doc.Database;
+            int n = 0;
+            using (doc.LockDocument())
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
+                Gruplar g = Grupla(tr, ms);
+                if (g.Kesitler.Count > 0)
+                {
+                    UygulamaKaydi(db, tr);
+                    foreach (Baslik b in g.Kesitler) n += Tasi(tr, g.Nesneler[b.Ad], b.Ad, new Vector3d(0, 0, 0));
+                }
+                tr.Commit();
+            }
+            return n == 0 ? null : n + " kesit nesnesi işaretlendi";
         }
 
         internal static string Diz()
@@ -2011,7 +2046,8 @@ namespace OtomatikKesit
                     Matrix3d m = e.XZ
                         ? Matrix3d.Displacement(new Vector3d(0, e.W, 0)) * Matrix3d.Rotation(Math.PI / 2, Vector3d.XAxis, Point3d.Origin)
                         : Matrix3d.Displacement(new Vector3d(0, 0, e.W));
-                    foreach (OlcuTanimi o in olculer) { if (OlcuKoy(db, tr, ms, o, m)) adet++; else hatali++; }
+                    // ölçüler kesit adıyla işaretlenir: dizme / pafta onları kesitle birlikte taşır (yakınlığa bakmadan)
+                    foreach (OlcuTanimi o in olculer) { if (OlcuKoy(db, tr, ms, o, m, e.Ad)) adet++; else hatali++; }
                     kesit++;
                 }
 
@@ -2043,11 +2079,11 @@ namespace OtomatikKesit
         private static string _sonOlcuHatasi;
 
         /// <returns>false: AutoCAD ölçüyü kabul etmedi (öbür ölçüler etkilenmez)</returns>
-        private static bool OlcuKoy(Database db, Transaction tr, BlockTableRecord ms, OlcuTanimi o, Matrix3d m)
+        private static bool OlcuKoy(Database db, Transaction tr, BlockTableRecord ms, OlcuTanimi o, Matrix3d m, string kesit = null)
         {
             try
             {
-                OlcuOlustur(db, tr, ms, o, m);
+                OlcuOlustur(db, tr, ms, o, m, kesit);
                 return true;
             }
             catch (System.Exception ex)
@@ -2057,7 +2093,7 @@ namespace OtomatikKesit
             }
         }
 
-        private static void OlcuOlustur(Database db, Transaction tr, BlockTableRecord ms, OlcuTanimi o, Matrix3d m)
+        private static void OlcuOlustur(Database db, Transaction tr, BlockTableRecord ms, OlcuTanimi o, Matrix3d m, string kesit = null)
         {
             var dim = new RotatedDimension(o.Rotation,
                 new Point3d(o.U1, o.V1, 0), new Point3d(o.U2, o.V2, 0), new Point3d(o.UD, o.VD, 0),
@@ -2099,6 +2135,11 @@ namespace OtomatikKesit
                 throw;
             }
             tr.AddNewlyCreatedDBObject(dim, true);
+            if (kesit != null)
+            {
+                KesitDizici.UygulamaKaydi(db, tr);
+                SekilCizici.XDataYaz(dim, KesitDizici.Uygulama, kesit);
+            }
         }
 
         private static ObjectId _metinStili = ObjectId.Null;
@@ -3656,7 +3697,7 @@ namespace OtomatikKesit
                     SekilCizici.XDataYaz(e, Uygulama, "1");
                     if (grupAdi != null) SekilCizici.XDataYaz(e, KesitDizici.Uygulama, grupAdi);
                 };
-                double ox = xMax + 10000, aralik = 3000;
+                double ox = xMax + 10000, aralik = 6000;   // ölçüler geometrinin dışına taşar (yan ölçü + yazı)
                 foreach (UzatmaCizimi c in cizimler)
                 {
                     double u0 = c.Cizgiler.Min(q => Math.Min(q[0], q[2])), u1 = c.Cizgiler.Max(q => Math.Max(q[0], q[2]));

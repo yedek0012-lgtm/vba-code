@@ -10,6 +10,15 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
 
+**3.2: Dizmede kopan parçalar düzeltildi.** Aile dosyasında (TAO) "Kesitleri diz" sonrası geniş kesitlerin (tam travers)
+uçları, bazı ölçüler ve K / L planlarının yarıları eski yerinde kalıyordu. Sebep: işaretsiz nesneler en yakın kesit
+başlığına tek bir pencereyle bağlanıyordu ve pencere en sık iki başlığın aralığından hesaplanıyordu; en sağa sık dizilen
+uzatma çizimleri pencereyi daraltınca uçtaki nesneler hiçbir kesite bağlanmadı (benzetimde 273 nesne).
+- OutlineDrawing kesitleri çizer çizmez (düzen henüz eşit aralıklı) bütün kesit nesneleri kesit adıyla işaretlenir.
+- Ölçüler kesit adıyla işaretlenerek oluşturulur.
+- Gruplama penceresi başlık başına (komşu başlıklara uzaklığın büyüğünün yarısı).
+- Test: ölçü / pafta testi ÇALIŞTIR sonundaki yerleşimde her çizgi ve ölçünün kendi başlığına bağlandığını denetler.
+
 **3.1: Aile paftasının eksikleri tamamlandı, kararlılık.**
 - *Tam travers kesiti*: OutlineDrawing eğik travers düzleminde yalnız bir kolu çiziyordu. Gövdeye bağlı simetrik kolun
   eğik düzleminde (Y doğrultusunu içeren, 5°-45°, aynası elemanlı, kesit tek tarafta) kesit, çizimcinin B, D, F, H

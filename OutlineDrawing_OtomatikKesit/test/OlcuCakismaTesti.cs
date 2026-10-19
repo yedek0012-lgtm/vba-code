@@ -79,6 +79,53 @@ public static class OlcuCakismaTesti
             double kay = (kesitKutulari.Count) * k.KesitAraligi;
             kesitKutulari.Add(new[] { u0 + kay, v0, u1 + kay, v1 });
         }
+        // ---- gruplama (KesitDizici.Grupla): ÇALIŞTIR sonundaki yerleşimde (OutlineDrawing kesitleri kesit aralığıyla, aile
+        //      uzatma çizimleri en sağda sık) her çizgi ve ölçü kendi kesit başlığına bağlanmalı. Eski tek pencere (en sık iki
+        //      başlığın aralığı) geniş kesitlerin uçlarını bırakıyordu; şimdiki pencere başlık başına.
+        {
+            var merkez = new List<double>(); var nesneU = new List<List<double>>();
+            double ox = 0;
+            for (int i = 0; i < cizimler.Count; i++)
+            {
+                var segs = cizimler[i];
+                var us = new List<double>();
+                if (segs.Count == 0) { merkez.Add(double.NaN); nesneU.Add(us); continue; }
+                double u0 = segs.Min(q => Math.Min(q[0], q[2])), u1 = segs.Max(q => Math.Max(q[0], q[2]));
+                double kay;
+                if (i < secs.Count) { kay = i * k.KesitAraligi; ox = Math.Max(ox, u1 + kay); }
+                else { if (i == secs.Count) ox += 10000; kay = ox - u0; ox += (u1 - u0) + 6000; }   // UzatmaCizimleri ile aynı
+                foreach (var q in segs) us.Add((q[0] + q[2]) / 2 + kay);
+                foreach (var o in OlcuPlani.Hesapla(segs)) { var bk = Kutu(o); us.Add((bk[0] + bk[2]) / 2 + kay); }
+                merkez.Add((u0 + u1) / 2 + kay);
+                nesneU.Add(us);
+            }
+            var basliklar = Enumerable.Range(0, merkez.Count).Where(i => !double.IsNaN(merkez[i])).OrderBy(i => merkez[i]).ToList();
+            var pencere = new Dictionary<int, double>();
+            double enKucuk = double.MaxValue;
+            for (int j = 0; j < basliklar.Count; j++)
+            {
+                double sol = j > 0 ? merkez[basliklar[j]] - merkez[basliklar[j - 1]] : 0, sag = j + 1 < basliklar.Count ? merkez[basliklar[j + 1]] - merkez[basliklar[j]] : 0;
+                double w = Math.Max(sol, sag) / 2;
+                pencere[basliklar[j]] = w > 500 ? w : 15000;
+                if (j > 0 && sol > 1000) enKucuk = Math.Min(enKucuk, sol);
+            }
+            int yeniKopuk = 0, eskiKopuk = 0;
+            foreach (int i in basliklar)
+                foreach (double u in nesneU[i])
+                {
+                    int en = basliklar.OrderBy(j => Math.Abs(merkez[j] - u)).First();
+                    if (en != i || Math.Abs(merkez[en] - u) > pencere[en])
+                    {
+                        yeniKopuk++;
+                        rapor.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                            "gruplama: cizim {0} (merkez {1:0}) nesnesi u={2:0} -> en yakin cizim {3} (merkez {4:0}, pencere {5:0})", i + 1, merkez[i], u, en + 1, merkez[en], pencere[en]));
+                    }
+                    if (en != i || Math.Abs(merkez[en] - u) > enKucuk / 2) eskiKopuk++;
+                }
+            Console.WriteLine("Gruplama: {0} cizim, kendi basligina baglanmayan nesne {1} (eski tek pencereyle {2})", basliklar.Count, yeniKopuk, eskiKopuk);
+            if (yeniKopuk > 0) rapor.Add("gruplama: " + yeniKopuk + " nesne kendi kesitine baglanmiyor");
+            cak += yeniKopuk;
+        }
         // ---- kesit dizimi: ızgarada kesitler birbirine binmiyor, sıra korunuyor
         int satir; var kayma = KesitDizimi.Yerlestir(kesitKutulari, out satir);
         var yeni = kesitKutulari.Select((b, i) => new[] { b[0] + kayma[i][0], b[1] + kayma[i][1], b[2] + kayma[i][0], b[3] + kayma[i][1] }).ToList();
