@@ -48,7 +48,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "4.1";
+        public const string Surum = "4.1.1";
         private static Timer _timer;
 
         public void Initialize()
@@ -403,7 +403,12 @@ namespace OtomatikKesit
                 if (oldu && PdfIsteniyor(f))
                 {
                     string pdf = CiktiYolu(YolAl(f), ".pdf");
-                    try { PdfCikti.Yaz(pdf); Komutlar.Yaz("\nPDF: " + pdf + "\n"); Uyari(f, HataEtiketi(f, null) + " | PDF: " + Path.GetFileName(pdf)); }
+                    try
+                    {
+                        string not = PdfCikti.Yaz(pdf);
+                        Komutlar.Yaz("\nPDF: " + pdf + (not != null ? " (" + not + ")" : "") + "\n");
+                        Uyari(f, HataEtiketi(f, null) + " | PDF: " + Path.GetFileName(pdf) + (not != null ? " (" + not + ")" : ""));
+                    }
                     catch (System.Exception ex)
                     {
                         Komutlar.Yaz("\nPDF yazılamadı (" + pdf + "):\n" + IcHata(ex) + "\n");
@@ -811,7 +816,6 @@ namespace OtomatikKesit
                 "Otomatik Kesit - toplu çizim", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (c != DialogResult.Yes) return;
             Ayarlar.Kaydet(f);
-            _silmeOnaylandi = true;
             var sonuc = new List<string>();
             var sure = System.Diagnostics.Stopwatch.StartNew();
             Toplu = true;
@@ -861,8 +865,16 @@ namespace OtomatikKesit
             try { Tikla(calistir); }
             finally { _paftaGelecek = false; }
             if (_calistirSarili && !_sonCizdi) return "çizilmedi: " + (_sonOdMesaji ?? "OutlineDrawing çizmedi");
-            bool oldu = PaftaKur(f, null);
+            bool oldu;
+            try { oldu = PaftaKur(f, null); }
+            catch (System.Exception ex) { oldu = false; HataEtiketi(f, "Pafta hatası: " + IcHata(ex).Message); Komutlar.Yaz("\nPafta hatası:\n" + IcHata(ex) + "\n"); }
             string paftaOzet = (HataEtiketi(f, null) ?? "").Trim();
+            if (!oldu && _sonDiz)
+            {
+                // ÇİZ gibi: pafta kurulamadıysa kesitler OutlineDrawing'in tek sırasında kalmasın
+                try { string d = KesitDizici.Diz(); Goruntu.Yenile(); if (d != null) Komutlar.Yaz("\n" + d + ".\n"); }
+                catch (System.Exception ex) { Komutlar.Yaz("\nKesitler dizilemedi: " + IcHata(ex).Message + "\n"); }
+            }
             var parca = new List<string> { oldu ? paftaOzet : "pafta kurulamadı (" + paftaOzet + ")" };
             string dwg = CiktiYolu(yol, ".dwg");
             try { PdfCikti.DwgYaz(dwg); parca.Add(Path.GetFileName(dwg)); }
@@ -870,7 +882,7 @@ namespace OtomatikKesit
             if (pdf && oldu)
             {
                 string p = CiktiYolu(yol, ".pdf");
-                try { PdfCikti.Yaz(p); parca.Add(Path.GetFileName(p)); }
+                try { string not = PdfCikti.Yaz(p); parca.Add(Path.GetFileName(p) + (not != null ? " (" + not + ")" : "")); }
                 catch (System.Exception ex) { parca.Add("PDF yazılamadı: " + IcHata(ex).Message); Komutlar.Yaz("\nPDF yazılamadı:\n" + IcHata(ex) + "\n"); }
             }
             return string.Join(" | ", parca);
@@ -969,7 +981,7 @@ namespace OtomatikKesit
 
         private static bool SilmeOnayi(Form f, string ad)
         {
-            if (_silmeOnaylandi) return true;
+            if (_silmeOnaylandi || Toplu) return true;   // toplu çizimde başta onaylandı
             int n = YabanciNesneler.Say();
             if (n == 0) return true;
             DialogResult c = MessageBox.Show(f,
@@ -1184,6 +1196,7 @@ namespace OtomatikKesit
                 var grid = Alan(f, "dataGridView1") as DataGridView;
                 if (grid == null)
                 {
+                    if (Toplu) { TopluNotlar.Add("kesit tablosu (dataGridView1) bulunamadı"); return; }
                     MessageBox.Show(f, "Kesit tablosu (dataGridView1) bulunamadı.", "Otomatik Kesit");
                     return;
                 }
@@ -1249,7 +1262,9 @@ namespace OtomatikKesit
             }
             catch (System.Exception ex)
             {
-                System.Exception ic = ex is TargetInvocationException && ex.InnerException != null ? ex.InnerException : ex;
+                System.Exception ic = IcHata(ex);
+                Komutlar.Yaz("\nOtomatik kesit hatası:\n" + ic + "\n");
+                if (Toplu) { TopluNotlar.Add("otomatik kesit hatası: " + ic.Message); Uyari(f, "Otomatik kesit hatası: " + ic.Message); return; }
                 MessageBox.Show(f, "Otomatik kesit sırasında hata:\n" + ic.Message, "Otomatik Kesit",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -2088,8 +2103,9 @@ namespace OtomatikKesit
         /// taban; eleman doğrultusunda, elemandan biraz yukarıda): eleman boyunca t'de, elemanın iki yanında (öbür yanda üstten
         /// hizalı); başka elemanda o elemanın doğrultusunda (okunur yönde); şimdiki yazı kendi çizgisinin üstündeyse Zorla. Değilse
         /// kesit etiketi (sol, orta; elemanın ortasından başlar): elemanın t noktasından sağa ya da sola; yazı yatay kalır.</summary>
+        /// <param name="sagda">kesit etiketi şimdi noktanın solunda (yazı elemanın ortasında bitiyor; KesitYonu çevirmiş)</param>
         public static void AdaylarEkle(Etiket e, IList<double[]> dayanaklar, IList<int> indeksler, double qu, double qv, double du, double dv,
-                                       double w, double h, double cu, double cv, bool gorunus)
+                                       double w, double h, double cu, double cv, bool gorunus, bool sagda = false)
         {
             e.Adaylar.Add(new Aday { K = Dortgen(cu, cv, du, dv, w, h), U = qu, V = qv, Dayanak = indeksler[0] });
             e.Dayanak = indeksler[0];
@@ -2145,7 +2161,7 @@ namespace OtomatikKesit
                         double sk = (t - 0.5) * L;
                         foreach (bool sag in new[] { false, true })
                         {
-                            if (hi == 0 && t == 0.5 && !sag) continue;                // şimdiki yer
+                            if (hi == 0 && t == 0.5 && sag == sagda) continue;        // şimdiki yer
                             double au = mu + eu * sk, av = mv + ev * sk, isaret = sag ? -1 : 1;
                             double ku = au + du * yarimD * isaret + nu0 * ofsN, kv = av + dv * yarimD * isaret + nv0 * ofsN;
                             e.Adaylar.Add(new Aday { K = Dortgen(ku, kv, du, dv, w, h), U = au, V = av, Sag = sag, Dayanak = indeksler[hi] });
@@ -2196,7 +2212,9 @@ namespace OtomatikKesit
                 if (!e.Zorla && binenSayisi(e.Adaylar[0].K) == 0) sec = 0;
                 else
                 {
-                    int enIyi = -1, enAzKesen = int.MaxValue, yedek = e.Zorla && e.Adaylar.Count > 1 ? 1 : 0, yedekBinen = int.MaxValue;
+                    // hiç boş yer yoksa en az etikete binen aday; kendi çizgisindeki (Zorla) etiket yalnız şimdikinden fazla
+                    // etikete binmeyen bir yere gider (çizgiden kurtulmak için bir başka isme binmesin)
+                    int enIyi = -1, enAzKesen = int.MaxValue, yedek = 0, yedekBinen = e.Zorla ? binenSayisi(e.Adaylar[0].K) + 1 : int.MaxValue;
                     for (int c = e.Zorla ? 1 : 0; c < e.Adaylar.Count; c++)
                     {
                         double[] k = e.Adaylar[c].K;
@@ -2479,19 +2497,30 @@ namespace OtomatikKesit
                 kopya.SaveAs(yol, DwgVersion.Current);
         }
 
-        internal static void Yaz(string pdf)
+        /// <returns>not (PDF pafta ölçeğinde değilse), yoksa null</returns>
+        internal static string Yaz(string pdf)
         {
             Document doc = AcApp.DocumentManager.MdiActiveDocument;
             if (doc == null) throw new InvalidOperationException("açık çizim yok");
             Pafta.Bilgi b = Pafta.Son;
             if (b == null) throw new InvalidOperationException("önce pafta kurulmalı");
             Database db = doc.Database;
+            string not = null;
             object eskiArka = null;
             try { eskiArka = AcApp.GetSystemVariable("BACKGROUNDPLOT"); AcApp.SetSystemVariable("BACKGROUNDPLOT", (short)0); } catch { }
+            string eskiSekme = null;
             try
             {
                 using (doc.LockDocument())
                 {
+                    // çizdirilen Model sekmesi etkin olmalı (kâğıt alanı sekmesi açıksa çizdirme reddedilir)
+                    try
+                    {
+                        eskiSekme = LayoutManager.Current.CurrentLayout;
+                        if (!string.Equals(eskiSekme, "Model", StringComparison.OrdinalIgnoreCase)) LayoutManager.Current.CurrentLayout = "Model";
+                        else eskiSekme = null;
+                    }
+                    catch { eskiSekme = null; }
                     // 1) paftayı tam kaplayan adlı görünüş (önce kaydedilir: çizdirme motoru veritabanından okur)
                     using (Transaction tr = db.TransactionManager.StartTransaction())
                     {
@@ -2524,13 +2553,25 @@ namespace OtomatikKesit
                         PlotSettingsValidator psv = PlotSettingsValidator.Current;
                         psv.SetPlotConfigurationName(ps, Cizici, null);
                         psv.RefreshLists(ps);
-                        psv.SetPlotConfigurationName(ps, Cizici, A1Kagit(psv, ps));
+                        bool dondur;
+                        string kagit = Kagit(psv, ps, b.G, b.Y, out dondur);
+                        psv.SetPlotConfigurationName(ps, Cizici, kagit ?? psv.GetCanonicalMediaNameList(ps).Cast<string>().First());
                         psv.SetPlotPaperUnits(ps, PlotPaperUnit.Millimeters);
                         psv.SetPlotViewName(ps, GorunusAdi);
                         psv.SetPlotType(ps, Autodesk.AutoCAD.DatabaseServices.PlotType.View);
-                        psv.SetUseStandardScale(ps, false);
-                        psv.SetCustomPrintScale(ps, new CustomScale(1, b.Olcek));
-                        psv.SetPlotRotation(ps, PlotRotation.Degrees000);
+                        if (kagit != null)
+                        {
+                            psv.SetUseStandardScale(ps, false);
+                            psv.SetCustomPrintScale(ps, new CustomScale(1, b.Olcek));
+                        }
+                        else
+                        {
+                            // şablon hiçbir kâğıda sığmıyor: sığdırılır, ölçek tutmaz
+                            psv.SetUseStandardScale(ps, true);
+                            psv.SetStdScaleType(ps, StdScaleType.ScaleToFit);
+                            not = string.Format(CultureInfo.InvariantCulture, "PDF: {0:0} x {1:0} mm şablona uygun kâğıt yok, sayfaya sığdırıldı (1:{2:0} değil)", b.G, b.Y, b.Olcek);
+                        }
+                        psv.SetPlotRotation(ps, dondur ? PlotRotation.Degrees090 : PlotRotation.Degrees000);
                         psv.SetPlotCentered(ps, true);
                         try { psv.SetCurrentStyleSheet(ps, "monochrome.ctb"); } catch { /* kalem tablosu yoksa renkli */ }
                         var pi = new PlotInfo { Layout = ms.LayoutId, OverrideSettings = ps };
@@ -2556,19 +2597,32 @@ namespace OtomatikKesit
             }
             finally
             {
+                try { if (eskiSekme != null) using (doc.LockDocument()) LayoutManager.Current.CurrentLayout = eskiSekme; } catch { }
                 try { if (eskiArka != null) AcApp.SetSystemVariable("BACKGROUNDPLOT", eskiArka); } catch { }
             }
+            return not;
         }
 
-        /// <summary>DWG To PDF'in A1 kâğıdı: tam kâğıt (kenar boşluksuz) 841 x 594 yatay; yoksa herhangi bir A1.</summary>
-        private static string A1Kagit(PlotSettingsValidator psv, PlotSettings ps)
+        /// <summary>Şablonu (G x Y mm) 1:1 alan en küçük kâğıt; tam kâğıt (kenar boşluksuz) olanlar önce. Kâğıt dikse (kısa kenarı
+        /// yatayda) dondur. Sığan yoksa null.</summary>
+        private static string Kagit(PlotSettingsValidator psv, PlotSettings ps, double G, double Y, out bool dondur)
         {
-            var adlar = psv.GetCanonicalMediaNameList(ps).Cast<string>().ToList();
-            string a = adlar.FirstOrDefault(x => x.IndexOf("full_bleed_A1_(841", StringComparison.OrdinalIgnoreCase) >= 0)
-                    ?? adlar.FirstOrDefault(x => x.IndexOf("A1_(841", StringComparison.OrdinalIgnoreCase) >= 0)
-                    ?? adlar.FirstOrDefault(x => x.IndexOf("A1", StringComparison.OrdinalIgnoreCase) >= 0);
-            if (a == null) throw new InvalidOperationException(Cizici + " içinde A1 kâğıdı yok");
-            return a;
+            dondur = false;
+            string enIyi = null;
+            double enAz = double.MaxValue;
+            foreach (string ad in psv.GetCanonicalMediaNameList(ps).Cast<string>())
+            {
+                Match m = Regex.Match(ad, @"\((\d+(?:\.\d+)?)_x_(\d+(?:\.\d+)?)_MM\)", RegexOptions.IgnoreCase);
+                if (!m.Success) continue;
+                double w = double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture), h = double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+                bool duz = w >= G - 1 && h >= Y - 1, yan = h >= G - 1 && w >= Y - 1;
+                if (!duz && !yan) continue;
+                // tam kâğıt tercih: yazıcı boşluğu kenardaki çerçeveyi kesmesin
+                double puan = w * h * (ad.IndexOf("full_bleed", StringComparison.OrdinalIgnoreCase) >= 0 ? 1 : 1.5);
+                if (puan >= enAz) continue;
+                enAz = puan; enIyi = ad; dondur = !duz;
+            }
+            return enIyi;
         }
     }
 
@@ -2650,6 +2704,7 @@ namespace OtomatikKesit
                                    (t.VerticalMode == TextVerticalMode.TextBottom || t.VerticalMode == TextVerticalMode.TextBase);
                     bool kesit = t.Height < 250 && t.HorizontalMode == TextHorizontalMode.TextLeft && t.VerticalMode == TextVerticalMode.TextVerticalMid;
                     int dayanak = -1;
+                    bool sagda = false;
                     double du = 1, dv = 0, h = t.Height, qu = 0, qv = 0;
                     if (gorunus || kesit)
                     {
@@ -2662,6 +2717,14 @@ namespace OtomatikKesit
                             Point3d q = t.AlignmentPoint;
                             qu = U(q); qv = V(q);
                             dayanak = Dayanak(cizgiler, ortalar, anahtar, hucre, qu, qv, du, dv, h, gorunus);
+                            if (dayanak < 0 && kesit)
+                            {
+                                // döndürülen kesitte okunsun diye kendi ortasında 180° çevrilmiş isim (KesitYonu.Okunur): hizalama
+                                // noktası yazının öbür ucunda, yazı elemanın ortasında bitiyor
+                                double ru = k[0] + k[2] - qu, rv = k[1] + k[3] - qv;
+                                dayanak = Dayanak(cizgiler, ortalar, anahtar, hucre, ru, rv, du, dv, h, false);
+                                if (dayanak >= 0) { qu = ru; qv = rv; sagda = true; }
+                            }
                         }
                     }
                     if (dayanak < 0)
@@ -2685,7 +2748,7 @@ namespace OtomatikKesit
                                                                                      Math.Abs((cizgiler[j][1] + cizgiler[j][3]) / 2 - mv)).Take(12));
                     }
                     EtiketCozucu.AdaylarEkle(et, hostlar.Select(j => cizgiler[j]).ToList(), hostlar, qu, qv, du, dv, w, h,
-                                             (k[0] + k[2]) / 2, (k[1] + k[3]) / 2, gorunus);
+                                             (k[0] + k[2]) / 2, (k[1] + k[3]) / 2, gorunus, sagda);
                     boylar.Add(h);
                 }
                 if (boylar.Count == 0) { tr.Commit(); return null; }
@@ -2916,7 +2979,7 @@ namespace OtomatikKesit
                 var baslik = (DBText)tr.GetObject(kv.Value, OpenMode.ForRead);
                 bool xz = Math.Abs(baslik.Normal.Y) > 0.9;
                 Uygula(tr, nesneler[kv.Key], kv.Value, i.A, 1 / i.K, xz, i.Alta, hatalar);
-                baslik.UpgradeOpen();
+                if (!baslik.IsWriteEnabled) baslik.UpgradeOpen();   // Uygula başlığı zaten yazmaya açtı
                 baslik.XData = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, Uygulama));   // işaret silinir
             }
             return basliklar.Count;
@@ -3391,34 +3454,131 @@ namespace OtomatikKesit
             }
         }
 
+        private const string AntetUygulama = "OTO_ANTET";
+
+        /// <summary>Antete yazılan yazının şablondaki asıl hali XData'da saklanır (şablon bloğu paftalar arasında ortak: sonraki
+        /// pafta önce asıllarını geri yükler; boş proje adı önceki .tow'unkini taşımasın).</summary>
         private static void YaziDegistir(Transaction tr, ObjectId id, string deger)
         {
             var e = (Entity)tr.GetObject(id, OpenMode.ForWrite);
+            Sakla(tr, e);
             var t = e as DBText;
             if (t != null) { t.TextString = deger; return; }
             var m = e as MText;
             if (m != null) m.Contents = AntetBilgisi.MTextDegistir(m.Contents, deger);
         }
 
-        /// <summary>Antet: tarih (şablondaki gün.ay.yıl biçimli yazı) bugünün tarihi; "TITLE" etiketinin sağındaki iki satır proje ve
-        /// kule adı (.tow başlık satırları; proje boşsa şablondaki kalır, tek satır varsa o satır kule adı). G: şablon genişliği.</summary>
+        private static void Gizle(Transaction tr, ObjectId id)
+        {
+            var e = (Entity)tr.GetObject(id, OpenMode.ForWrite);
+            Sakla(tr, e);
+            e.Visible = false;
+        }
+
+        private static void Sakla(Transaction tr, Entity e)
+        {
+            string asil; bool gorunur;
+            if (Asli(e, out asil, out gorunur)) return;   // zaten saklı (ilk değişiklikten önceki hal)
+            SekilCizici.UygulamaKaydi(e.Database, tr, AntetUygulama);
+            string metin = e is DBText ? ((DBText)e).TextString ?? "" : e is MText ? ((MText)e).Contents ?? "" : "";
+            var rb = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, AntetUygulama),
+                                      new TypedValue((int)DxfCode.ExtendedDataInteger16, (short)(e.Visible ? 1 : 0)));
+            // XData dizesi en çok 255 bayt: parçalara bölünür
+            for (int i = 0; i < metin.Length; i += 100)
+                rb.Add(new TypedValue((int)DxfCode.ExtendedDataAsciiString, metin.Substring(i, Math.Min(100, metin.Length - i))));
+            if (!e.IsWriteEnabled) e.UpgradeOpen();
+            e.XData = rb;
+        }
+
+        private static bool Asli(Entity e, out string asil, out bool gorunur)
+        {
+            asil = null; gorunur = true;
+            try
+            {
+                using (ResultBuffer rb = e.GetXDataForApplication(AntetUygulama))
+                {
+                    if (rb == null) return false;
+                    var sb = new System.Text.StringBuilder();
+                    foreach (TypedValue tv in rb)
+                    {
+                        if (tv.TypeCode == (int)DxfCode.ExtendedDataInteger16) gorunur = Convert.ToInt16(tv.Value) != 0;
+                        else if (tv.TypeCode == (int)DxfCode.ExtendedDataAsciiString) sb.Append(tv.Value as string);
+                    }
+                    asil = sb.ToString();
+                    return true;
+                }
+            }
+            catch { return false; }
+        }
+
+        /// <summary>Önceki paftanın antete yazdıkları geri alınır. Bir şey geri alındıysa true.</summary>
+        private static bool AntetGeriAl(Transaction tr, List<Tuple<ObjectId, Point3d, string>> yazilar)
+        {
+            bool oldu = false;
+            foreach (var y in yazilar)
+            {
+                var e = (Entity)tr.GetObject(y.Item1, OpenMode.ForRead);
+                string asil; bool gorunur;
+                if (!Asli(e, out asil, out gorunur)) continue;
+                if (!e.IsWriteEnabled) e.UpgradeOpen();
+                var t = e as DBText;
+                if (t != null) t.TextString = asil;
+                var m = e as MText;
+                if (m != null) m.Contents = asil;
+                e.Visible = gorunur;
+                oldu = true;
+            }
+            return oldu;
+        }
+
+        /// <summary>Antet: tarih (şablonda DATE / TARİH etiketinin satırında, sağındaki gün.ay.yıl biçimli yazı; etiket yoksa tek tarih
+        /// yazısı) bugünün tarihi; "TITLE" etiketinin sağındaki (iç çerçevenin içinde) ilk iki satır proje ve kule adı (.tow başlık
+        /// satırları; proje boşsa şablondaki kalır, tek satır varsa o satır kule adı). Satır birden çok yazıdan oluşuyorsa (DXF R12
+        /// şablonda her kelime ayrı) soldaki yazıya tamamı yazılır, öbürleri gizlenir. G: şablon genişliği.</summary>
         private static void AntetDoldur(Transaction tr, ObjectId blok, AntetBilgisi a, double G)
         {
             var yazilar = new List<Tuple<ObjectId, Point3d, string>>();
             Yazilar(tr, blok, Matrix3d.Identity, yazilar, 0);
-            foreach (var y in yazilar)
-                if (AntetBilgisi.TarihMi(y.Item3)) YaziDegistir(tr, y.Item1, AntetBilgisi.TarihBicimi(y.Item3, a.Tarih));
+            if (AntetGeriAl(tr, yazilar)) { yazilar.Clear(); Yazilar(tr, blok, Matrix3d.Identity, yazilar, 0); }
+
+            var tarihler = yazilar.Where(y => AntetBilgisi.TarihMi(y.Item3)).ToList();
+            // birden çok DATE yazısı olabilir (revizyon tablosu başlığı): bir DATE etiketinin satırında, sağında en yakın tarih
+            var etiketler = yazilar.Where(y => Regex.IsMatch(y.Item3.Trim(), @"^(DATE|TAR[İIiı]H)\b", RegexOptions.IgnoreCase)).ToList();
+            Tuple<ObjectId, Point3d, string> tarih = null;
+            double enYakin = double.MaxValue;
+            foreach (var et in etiketler)
+                foreach (var y in tarihler)
+                    if (Math.Abs(y.Item2.Y - et.Item2.Y) < 0.01 * G && y.Item2.X > et.Item2.X && y.Item2.X - et.Item2.X < enYakin)
+                    { enYakin = y.Item2.X - et.Item2.X; tarih = y; }
+            if (etiketler.Count == 0 && tarihler.Count == 1) tarih = tarihler[0];
+            if (tarih != null) YaziDegistir(tr, tarih.Item1, AntetBilgisi.TarihBicimi(tarih.Item3, a.Tarih));
+
             var baslik = yazilar.FirstOrDefault(y => y.Item3.Trim().StartsWith("TITLE", StringComparison.OrdinalIgnoreCase));
             if (baslik == null) return;
-            double tol = 0.02 * G;
-            var satirlar = yazilar.Where(y => y != baslik && y.Item2.X > baslik.Item2.X && Math.Abs(y.Item2.Y - baslik.Item2.Y) < tol &&
-                                              y.Item3.Trim().Length > 0).OrderByDescending(y => y.Item2.Y).ToList();
+            // iç çerçevenin sağında kenar bölge harfleri (A..P) var: onlar aday değil
+            double tol = 0.02 * G, sag = PaftaPlani.Ic[2] * G, satirTol = 0.004 * G;
+            var adaylar = yazilar.Where(y => y != baslik && y.Item2.X > baslik.Item2.X && y.Item2.X < sag &&
+                                             Math.Abs(y.Item2.Y - baslik.Item2.Y) < tol && y.Item3.Trim().Length > 0)
+                                 .OrderByDescending(y => y.Item2.Y).ToList();
+            var satirlar = new List<List<Tuple<ObjectId, Point3d, string>>>();
+            foreach (var y in adaylar)
+            {
+                if (satirlar.Count == 0 || satirlar[satirlar.Count - 1][0].Item2.Y - y.Item2.Y > satirTol)
+                    satirlar.Add(new List<Tuple<ObjectId, Point3d, string>>());
+                satirlar[satirlar.Count - 1].Add(y);
+            }
+            Action<List<Tuple<ObjectId, Point3d, string>>, string> yaz = (satir, deger) =>
+            {
+                var sirali = satir.OrderBy(y => y.Item2.X).ToList();
+                YaziDegistir(tr, sirali[0].Item1, deger);
+                foreach (var y in sirali.Skip(1)) Gizle(tr, y.Item1);
+            };
             if (satirlar.Count >= 2)
             {
-                if (a.Proje.Length > 0) YaziDegistir(tr, satirlar[0].Item1, a.Proje);
-                if (a.Kule.Length > 0) YaziDegistir(tr, satirlar[1].Item1, a.Kule);
+                if (a.Proje.Length > 0) yaz(satirlar[0], a.Proje);
+                if (a.Kule.Length > 0) yaz(satirlar[1], a.Kule);
             }
-            else if (satirlar.Count == 1 && a.Kule.Length > 0) YaziDegistir(tr, satirlar[0].Item1, a.Kule);
+            else if (satirlar.Count == 1 && a.Kule.Length > 0) yaz(satirlar[0], a.Kule);
         }
 
         /// <summary>Şablonda nitelik (ATTDEF) varsa pafta bloğuna nitelikleri eklenir (eklenmezse görünmezler); etiketine göre

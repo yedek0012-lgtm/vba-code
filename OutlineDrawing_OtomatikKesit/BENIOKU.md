@@ -10,6 +10,16 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET, OTOISIM.
 
+**4.1.1: İnceleme düzeltmeleri.** Büyütülmüş kesitli pafta yeniden kurulurken (OTOPAFTA, şablon değiştirme) "eWasOpenForWrite"
+ile duruyordu (başlık iki kez yazmaya açılıyordu). Antet: proje adı sağ kenardaki çerçeve harfinin ("M") üstüne yazılıyordu;
+adaylar artık iç çerçevenin içinde, satır satır (R12 şablonda kelime kelime ayrı yazılar: soldakine tamamı yazılır, öbürleri
+gizlenir); tarih yalnız DATE etiketinin yanındaki hücreye (revizyon tablosundaki tarihlere dokunulmaz); antete yazılanların
+şablondaki asılları saklanır ve sonraki paftada önce geri yüklenir (proje adı boş .tow öncekinin adını taşımaz). PDF: kâğıt
+şablon boyuna göre seçilir (A1 dışı şablonda da 1:s; sığan kâğıt yoksa sayfaya sığdırılıp not edilir), çizdirmeden önce Model
+sekmesine geçilir. Toplu çizim: Oto Kesit hatası mesaj kutusu açmaz; silme onayı yalnız toplu çizim süresince atlanır; pafta
+kurulamazsa kesitler dizilir, DWG yine yazılır. İsim: kendi çizgisindeki isim, boş yer yoksa başka isme binecek yere taşınmaz;
+döndürülmüş kesitte çevrilmiş isimler de düzenlenir. (OutlineDrawing'in kendi hata kutuları toplu çizimi yine durdurabilir.)
+
 **4.1: Malzeme listesi aç/kapa, antet, büyük kesit, isim çakışması, toplu çizim + PDF.**
 - *Malzeme listesi:* ÇİZ'in yanındaki kutu satırında **Malzeme listesi** kutusu (varsayılan açık, seçim hatırlanır) paftadaki
   .tow malzeme listesini açıp kapatır. İşaretsizse liste konmaz, o alan kesitlere (ve "Paftayı doldur" ek kesitlerine) açılır.
