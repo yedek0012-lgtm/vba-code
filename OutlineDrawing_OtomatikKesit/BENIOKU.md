@@ -10,6 +10,16 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
 
+**3.9: Tek tıkta pafta, daha az tarama.**
+- *Hepsini Çiz* artık Oto Kesit + ÇALIŞTIR + Pafta: tek tıkla hazır pafta (son seçilen şablonla; şablon seçmek için Pafta'ya
+  Ctrl+tık). Pafta kesitleri zaten yeniden yerleştirdiği için bu akışta ÇALIŞTIR sonrası kesit dizme ve ara REGEN atlanır
+  (pafta kurulamazsa kesitler yine dizilir). Pafta ve REGEN süresi komut satırına yazılır.
+- Kesit gruplama (bir ÇALIŞTIR + paftada 6 kez çağrılıyor: işaretleme, tam travers, kopuk parça, kesit yönü, dizme, pafta)
+  model alanını üç yerine bir kez tarar; çizgilerin sınırı GeometricExtents yerine uç noktalarından alınır (çizimin çoğu
+  çizgi). Aile uzatma çizimlerinde eski çizimleri silme ve çizim sınırı tek taramada; redundant stilinde görünüş çizgileri ve
+  eleman isimleri tek taramada. Zaten aynı kesit adıyla işaretli nesnenin işareti yeniden yazılmaz (taşınmıyorsa nesne yazmaya
+  açılmaz). Hesap tarafı (kesit bulma, pafta tahmini, iç eleman, işaret) zaten 1,5 s'nin altında (YAA, TAO, Tangent).
+
 **3.8: Yerel kesit tam panel.** *Tüm elemanlar* işaretliyken görünüşlerde ve diğer kesitlerde olmayan tek bir eleman için
 açılan yerel kesit (Tangent: kafesin sol yüzünde alt traversin üstündeki CB-D9 çaprazı, SECTION F) elemanın doğrultusunda
 dönük dar bir dörtgendi: OutlineDrawing kuşakların yarısını, üst panelin tek çaprazını ve traversten bir çubuğu çiziyor,
