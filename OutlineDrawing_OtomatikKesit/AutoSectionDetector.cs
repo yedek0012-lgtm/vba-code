@@ -102,8 +102,9 @@ namespace OutlineDrawing
         /// kesit olur; tek panellik yerel kesitler, neredeyse yatay eğik kesitler ve tek çubuk gösteren parçalar alınmaz.
         /// Bunların gizli elemanları görünüşte iç eleman çizgisi olarak durur, raporda "kapsanmayan" listelenir.</summary>
         public bool Sade = true;
-        /// <summary>Derece. Sade modda bundan az eğimli (ama yatay olmayan) düzlemler kesit olmaz.</summary>
-        public double SadeMinEgim = 15.0;
+        /// <summary>Derece. Sade modda bundan az eğimli (ama yatay olmayan) düzlemler kesit olmaz. 3: konsolun hafif eğik alt / üst
+        /// başlık düzlemi (YAA alt konsolu 5,7°, köprü altı 14,3°) de kesit olur; eskiden 15 idi, konsollar tek düzlemden kalıyordu.</summary>
+        public double SadeMinEgim = 3.0;
         /// <summary>Sade modda bundan az elemanlı kesit (tek bir çubuğu gösteren parça) alınmaz.</summary>
         public int SadeMinEleman = 4;
         /// <summary>Sade modda dik olmayan (SadeDikEgim'den yatık) eğik düzlem kesitinin en az eleman sayısı.</summary>

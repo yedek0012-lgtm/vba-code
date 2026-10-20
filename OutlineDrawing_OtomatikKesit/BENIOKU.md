@@ -10,6 +10,12 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET, OTOISIM.
 
+**4.2: Konsolun altından ve üstünden kesit; büyük kesit kaldırıldı.** Sade modda "neredeyse yatay eğik düzlem kesit olmaz"
+eşiği 15°'den 3°'ye indi: konsolun hafif eğik alt başlık düzlemi de kesit olur (YAA alt konsolu 5,7°, köprü altı 14,3°
+atılıyordu; konsol yalnız üst düzleminden kesiliyor, 26 eleman kesitsiz kalıyordu, şimdi 4). Diğer kulelerde (Tangent, TAO)
+kesitler değişmedi. 4.1'in "Büyük kesit" özelliği (kesitleri paftada daha büyük ölçekte çizme) kaldırıldı: kesitler yine
+görünüşlerle aynı ölçekte. 4.1 ile kurulmuş paftada büyütülmüş kesitler, pafta yeniden kurulunca eski boyuna döner.
+
 **4.1.1: İnceleme düzeltmeleri.** Büyütülmüş kesitli pafta yeniden kurulurken (OTOPAFTA, şablon değiştirme) "eWasOpenForWrite"
 ile duruyordu (başlık iki kez yazmaya açılıyordu). Antet: proje adı sağ kenardaki çerçeve harfinin ("M") üstüne yazılıyordu;
 adaylar artık iç çerçevenin içinde, satır satır (R12 şablonda kelime kelime ayrı yazılar: soldakine tamamı yazılır, öbürleri
@@ -26,12 +32,6 @@ döndürülmüş kesitte çevrilmiş isimler de düzenlenir. (OutlineDrawing'in 
   OutlineDrawing'in Kesit Alma bölümündeki (hiç kullanılmayan) "Malzeme Listesi" kutusu da aynı işi görür; ikisi birbirini izler.
 - *Antet:* pafta kurulurken tarih (bugün), proje ve kule adı (.tow başlık satırları: "use edf suffixes" sonrası açıklama satırları)
   antete yazılır; şablonda nitelik (ATTDEF: DATE/TARIH, SCALE/OLCEK, PROJECT/PROJE, TOWER/KULE/TITLE) varsa onlar da doldurulur.
-- *Büyük kesit* (yeni kutu, varsayılan açık): görünüşlerin ölçeği belirlendikten sonra paftada yer kalıyorsa kesitler daha büyük
-  ölçekte çizilir (ör. kule 1:90, kesitler 1:70; 5'in katı, en az 1,15 en çok 3 kat). Çizgiler büyür; eleman isimleri ve ölçü
-  yazıları aynı boyda kalır; ölçüler büyür ama DIMLFAC 1/k ile gerçek mm yazar; başlık çizimle arası korunarak ortada kalır,
-  altına "SCALE 1:x" notu. Antetteki ölçek görünüşlerin ölçeğidir. Pafta yeniden kurulurken (OTOPAFTA) önceki büyütme geri
-  alınır; OTOOLCU ve OTOSTIL büyütülmüş kesiti tanır. Yerleşim artık "silüet" (skyline) yerleşimi: kesitler sırayla, her biri
-  bölgedeki en yüksek boş yere (okuma sırası korunur). Dolu paftada (yan görünüş + liste) yer kalmadığından büyütme olmaz.
 - *İsim çakışması* (ÇALIŞTIR sonrası yeni adım; komut OTOISIM): OutlineDrawing her grubun ismini bir elemanının ortasına koyar
   (hep kulenin +X yarısında, en sağdaki eleman). Birbirine binen isim kendi elemanı boyunca kaydırılır, elemanın öbür yanına ya
   da aynı grubun başka bir elemanına (ör. sol yarıdaki simetriği; grup .tow'dan) alınır; seçilen yer başka isme binmeyen ve en
