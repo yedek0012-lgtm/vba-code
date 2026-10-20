@@ -10,6 +10,13 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
 
+**3.9.1: Pafta hatasız kurulur (eInvalidDxfCode).** Pafta "eInvalidDxfCode" ile duruyordu (AutoCAD'in DXF okuma hata kodu;
+büyük olasılıkla şablon DXF'i okunurken, yığın izi olmadığı için kesin değil). Şablon artık sırayla denenir: seçilen şablon → gömülü ŞA-RA A1 (DXF R2018) → aynı şablonun DXF R12
+hali (ezdxf r12export, `sablon/SARA_A1_pafta_r12.dxf`; MTEXT yazıya, tarama SOLID'e açılmış) → eklentinin çizdiği sade A1
+çerçeve. Okunamayan şablonun sebebi uyarı etiketinde, ayrıntısı (yığın) komut satırında. Pafta içinde de aşamalar korumalı:
+taşınamayan tek bir nesne, ölçek yazısı ya da malzeme listesi paftayı durdurmaz (uyarıda not edilir); yine de bir hata olursa
+mesaj hangi aşamada olduğunu söyler ("Pafta (taşıma): ..."). Bütün eklenti hataları artık yığın iziyle komut satırına yazılır.
+
 **3.9: Tek tıkta pafta, daha az tarama.**
 - *Hepsini Çiz* artık Oto Kesit + ÇALIŞTIR + Pafta: tek tıkla hazır pafta (son seçilen şablonla; şablon seçmek için Pafta'ya
   Ctrl+tık). Pafta kesitleri zaten yeniden yerleştirdiği için bu akışta ÇALIŞTIR sonrası kesit dizme ve ara REGEN atlanır

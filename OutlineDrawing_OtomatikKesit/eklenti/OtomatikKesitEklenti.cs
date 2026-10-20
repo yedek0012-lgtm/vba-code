@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "3.9";
+        public const string Surum = "3.9.1";
         private static Timer _timer;
 
         public void Initialize()
@@ -537,11 +537,12 @@ namespace OtomatikKesit
             catch (System.Exception ex)
             {
                 System.Exception ic = IcHata(ex);
-                Komutlar.Yaz("\n" + ne + " hatası: " + ic.Message + "\n");
+                // yığın izi komut satırına (F2): hatanın yeri bulunabilsin
+                Komutlar.Yaz("\n" + ne + " hatası: " + ic + "\n");
                 try
                 {
                     if (f != null && !f.IsDisposed)
-                        MessageBox.Show(f, ne + " sırasında hata:\n" + ic.Message, "Otomatik Kesit", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show(f, ne + " sırasında hata:\n" + ic.Message + "\n\n(Ayrıntı komut satırında, F2.)", "Otomatik Kesit", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
                 catch { }
             }
@@ -1408,22 +1409,32 @@ namespace OtomatikKesit
 
         /// <summary>Kesitin nesnelerini kaydırır ve kesit adıyla işaretler. Zaten bu adla işaretli nesnenin işareti yeniden
         /// yazılmaz; kayma da yoksa nesne yazmaya açılmaz (geri alma kaydı ve ekran güncellemesi olmaz).</summary>
-        internal static int Tasi(Transaction tr, IEnumerable<ObjectId> ids, string ad, Vector3d v)
+        /// <param name="hatalar">Verilirse bir nesnedeki hata (taşınamayan / işaretlenemeyen nesne) öbürlerini durdurmaz, buraya
+        /// yazılır (pafta).</param>
+        internal static int Tasi(Transaction tr, IEnumerable<ObjectId> ids, string ad, Vector3d v, List<string> hatalar = null)
         {
             int n = 0;
             Matrix3d m = Matrix3d.Displacement(v);
             bool kaymaVar = v.Length > 1e-6;
             foreach (ObjectId id in ids)
             {
-                var e = (Entity)tr.GetObject(id, OpenMode.ForRead);
-                bool isaretle = ad != null && Etiket(e) != ad;
-                n++;
-                if (!kaymaVar && !isaretle) continue;
-                if (!e.IsWriteEnabled) e.UpgradeOpen();
-                if (kaymaVar) e.TransformBy(m);
-                if (isaretle)
-                    e.XData = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, Uygulama),
-                                               new TypedValue((int)DxfCode.ExtendedDataAsciiString, ad));
+                try
+                {
+                    var e = (Entity)tr.GetObject(id, OpenMode.ForRead);
+                    bool isaretle = ad != null && Etiket(e) != ad;
+                    n++;
+                    if (!kaymaVar && !isaretle) continue;
+                    if (!e.IsWriteEnabled) e.UpgradeOpen();
+                    if (kaymaVar) e.TransformBy(m);
+                    if (isaretle)
+                        e.XData = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, Uygulama),
+                                                   new TypedValue((int)DxfCode.ExtendedDataAsciiString, ad));
+                }
+                catch (System.Exception ex)
+                {
+                    if (hatalar == null) throw;
+                    hatalar.Add(id.ObjectClass != null ? id.ObjectClass.DxfName + ": " + ex.Message : ex.Message);
+                }
             }
             return n;
         }
@@ -1778,27 +1789,107 @@ namespace OtomatikKesit
     {
         internal const string Katman = "OTO_PAFTA", ListeKatmani = "OTO_LISTE";
         private const string GomuluAd = "SARA_A1_pafta.dxf";
+        /// <summary>Aynı şablonun DXF R12 hali (ezdxf r12export: MTEXT yazıya, tarama SOLID'e, eğri çoklu çizgiye açılmış): R2018
+        /// DXF'i okunamazsa (DXFIN hatası) bu denenir.</summary>
+        private const string GomuluR12Ad = "SARA_A1_pafta_r12.dxf";
 
         internal static bool PaftaNesnesi(Entity e)
         {
             return string.Equals(e.Layer, Katman, StringComparison.OrdinalIgnoreCase) || string.Equals(e.Layer, ListeKatmani, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string GomuluSablon()
+        private static string GomuluSablon(string kaynak)
         {
-            string yol = Path.Combine(Path.GetTempPath(), "OtoKesit_" + GomuluAd);
-            using (Stream st = typeof(Pafta).Assembly.GetManifestResourceStream(GomuluAd))
+            string yol = Path.Combine(Path.GetTempPath(), "OtoKesit_" + kaynak);
+            using (Stream st = typeof(Pafta).Assembly.GetManifestResourceStream(kaynak))
             {
-                if (st == null) throw new FileNotFoundException("Gömülü pafta şablonu yok: " + GomuluAd);
+                if (st == null) throw new FileNotFoundException("Gömülü pafta şablonu yok: " + kaynak);
                 using (var fs = File.Create(yol)) st.CopyTo(fs);
             }
             return yol;
         }
 
-        private static ObjectId SablonBlogu(Database db, string sablon, out double G, out double Y)
+        /// <summary>Pafta şablonu bloğu: seçilen şablon; okunamazsa gömülü ŞA-RA A1; o da okunamazsa eklentinin çizdiği sade
+        /// çerçeve (A1, iç çerçeve, antet kutusu). Okunamayan şablonun sebebi notlar'a ve (ayrıntısıyla) komut satırına yazılır.</summary>
+        private static ObjectId SablonBlogu(Database db, string sablon, out double G, out double Y, List<string> notlar)
+        {
+            if (!string.IsNullOrEmpty(sablon))
+            {
+                try { return SablonYukle(db, sablon, out G, out Y, null); }
+                catch (System.Exception ex)
+                {
+                    notlar.Add("şablon okunamadı (" + Path.GetFileName(sablon) + ": " + FormBaglayici.IcHata(ex).Message + "), gömülü şablon kullanıldı");
+                    Komutlar.Yaz("\nPafta şablonu okunamadı: " + sablon + "\n" + FormBaglayici.IcHata(ex) + "\n");
+                }
+            }
+            string ilkHata = null;
+            foreach (string kaynak in new[] { GomuluAd, GomuluR12Ad })
+            {
+                try
+                {
+                    ObjectId id = SablonYukle(db, null, out G, out Y, kaynak);
+                    if (ilkHata != null) notlar.Add("gömülü şablon R12 halinden okundu (" + ilkHata + ")");
+                    return id;
+                }
+                catch (System.Exception ex)
+                {
+                    if (ilkHata == null) ilkHata = FormBaglayici.IcHata(ex).Message;
+                    Komutlar.Yaz("\nGömülü pafta şablonu okunamadı (" + kaynak + "):\n" + FormBaglayici.IcHata(ex) + "\n");
+                }
+            }
+            notlar.Add("gömülü şablon okunamadı (" + ilkHata + "), sade çerçeve çizildi");
+            return Cerceve(db, out G, out Y);
+        }
+
+        /// <summary>Eklentinin çizdiği sade A1 çerçeve (şablon okunamazsa): dış kenar, iç çerçeve, antet ve liste bölgesi,
+        /// ölçek yazısı ("NTS": OlcekYaz günceller).</summary>
+        private static ObjectId Cerceve(Database db, out double G, out double Y)
+        {
+            G = 841; Y = 594.65;
+            const string ad = "OTO_PAFTA_CERCEVE";
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                if (bt.Has(ad)) { ObjectId mevcut = bt[ad]; tr.Commit(); return mevcut; }
+                bt.UpgradeOpen();
+                var btr = new BlockTableRecord { Name = ad };
+                ObjectId id = bt.Add(btr);
+                tr.AddNewlyCreatedDBObject(btr, true);
+                Action<double, double, double, double> dikdortgen = (x0, y0, x1, y1) =>
+                {
+                    foreach (double[] c in new[] { new[] { x0, y0, x1, y0 }, new[] { x1, y0, x1, y1 }, new[] { x1, y1, x0, y1 }, new[] { x0, y1, x0, y0 } })
+                    {
+                        var l = new Line(new Point3d(c[0], c[1], 0), new Point3d(c[2], c[3], 0));
+                        l.SetDatabaseDefaults(db);
+                        l.Layer = "0";   // blok referansının katmanını alsın
+                        btr.AppendEntity(l); tr.AddNewlyCreatedDBObject(l, true);
+                    }
+                };
+                dikdortgen(0, 0, G, Y);
+                double[] ic = PaftaPlani.Ic, an = PaftaPlani.Antet;
+                dikdortgen(ic[0] * G, ic[1] * Y, ic[2] * G, ic[3] * Y);
+                dikdortgen(an[0] * G, an[1] * Y, an[2] * G, an[3] * Y);
+                Action<string, double, double, double> yazi = (metin, x, y, h) =>
+                {
+                    var t = new DBText();
+                    t.SetDatabaseDefaults(db);
+                    t.TextString = metin; t.Height = h; t.Position = new Point3d(x, y, 0); t.Layer = "0";
+                    btr.AppendEntity(t); tr.AddNewlyCreatedDBObject(t, true);
+                };
+                double ax = an[0] * G + 4, ay = an[1] * Y + 4;
+                yazi("SCALE", ax, ay + 6, 3);
+                yazi("NTS", ax + 25, ay + 6, 3);
+                tr.Commit();
+                return id;
+            }
+        }
+
+        /// <param name="gomulu">sablon boşsa: gömülü şablonun kaynak adı</param>
+        private static ObjectId SablonYukle(Database db, string sablon, out double G, out double Y, string gomulu)
         {
             string dosya = string.IsNullOrEmpty(sablon) ? null : sablon;
-            string ad = "OTO_PAFTA_" + Regex.Replace(Path.GetFileNameWithoutExtension(dosya ?? GomuluAd), "[^A-Za-z0-9_]", "_");
+            string kaynak = gomulu ?? GomuluAd;
+            string ad = "OTO_PAFTA_" + Regex.Replace(Path.GetFileNameWithoutExtension(dosya ?? kaynak), "[^A-Za-z0-9_]", "_");
             ObjectId id = ObjectId.Null;
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
@@ -1808,7 +1899,7 @@ namespace OtomatikKesit
             }
             if (id.IsNull)
             {
-                if (dosya == null) dosya = GomuluSablon();
+                if (dosya == null) dosya = GomuluSablon(kaynak);
                 using (var tdb = new Database(false, true))
                 {
                     if (dosya.EndsWith(".dxf", StringComparison.OrdinalIgnoreCase)) tdb.DxfIn(dosya, Path.Combine(Path.GetTempPath(), "OtoKesit_dxfin.log"));
@@ -1827,7 +1918,7 @@ namespace OtomatikKesit
                     try { Extents3d x = ent.GeometricExtents; k = KesitDizici.Birlestir(k, new[] { x.MinPoint.X, x.MinPoint.Y, x.MaxPoint.X, x.MaxPoint.Y }); } catch { }
                 }
                 tr.Commit();
-                if (k == null) throw new InvalidOperationException("Pafta şablonu boş: " + (dosya ?? GomuluAd));
+                if (k == null) throw new InvalidOperationException("Pafta şablonu boş: " + (dosya ?? kaynak));
                 // Şablonun sol altı (0,0) olmalı; bölge oranları şablonun genişlik / yüksekliğine göre
                 G = k[2]; Y = k[3];
             }
@@ -1863,80 +1954,113 @@ namespace OtomatikKesit
             Database db = doc.Database;
             string yol = f != null ? FormBaglayici.YolAl(f) : "";
             List<string[]> liste = MalzemeListesi.Oku(yol);
-            using (doc.LockDocument())
+            var notlar = new List<string>();
+            string asama = "şablon";
+            try
             {
-                double G, Y;
-                ObjectId blok = SablonBlogu(db, sablon, out G, out Y);
-                using (Transaction tr = db.TransactionManager.StartTransaction())
+                using (doc.LockDocument())
                 {
-                    var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForWrite);
-                    // önceki pafta ve liste silinir (katmanlar önce açılır / kilidi kaldırılır: kilitli katmanda silme hata verir)
-                    KatmanHazirla(db, tr, Katman, 7);
-                    KatmanHazirla(db, tr, ListeKatmani, 7);
-                    foreach (ObjectId id in ms)
+                    double G, Y;
+                    ObjectId blok = SablonBlogu(db, sablon, out G, out Y, notlar);
+                    asama = "gruplama";
+                    using (Transaction tr = db.TransactionManager.StartTransaction())
                     {
-                        var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
-                        if (e != null && PaftaNesnesi(e)) { e.UpgradeOpen(); e.Erase(); }
+                        var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForWrite);
+                        // önceki pafta ve liste silinir (katmanlar önce açılır / kilidi kaldırılır: kilitli katmanda silme hata verir)
+                        KatmanHazirla(db, tr, Katman, 7);
+                        KatmanHazirla(db, tr, ListeKatmani, 7);
+                        foreach (ObjectId id in ms)
+                        {
+                            var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                            if (e != null && PaftaNesnesi(e)) { e.UpgradeOpen(); e.Erase(); }
+                        }
+                        KesitDizici.Gruplar g = KesitDizici.Grupla(tr, ms, PaftaNesnesi);
+                        if (g.On == null) { tr.Commit(); return "Pafta: çizimde TRANSVERSE FACE yok (önce ÇALIŞTIR, Ön Yüz işaretli)."; }
+
+                        // görünüşlerin nesneleri: kesit olmayan, en yakın görünüş başlığı
+                        var kesitNesnesi = new HashSet<ObjectId>(g.Nesneler.Values.SelectMany(x => x));
+                        double sinir = g.Yan != null ? Math.Abs(g.Yan.U - g.On.U) * 0.75 : 60000;
+                        var onIds = new List<ObjectId>(); var yanIds = new List<ObjectId>();
+                        double[] onK = null, yanK = null;
+                        foreach (ObjectId id in ms)
+                        {
+                            if (id.IsErased || kesitNesnesi.Contains(id)) continue;
+                            var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                            if (e == null || PaftaNesnesi(e) || KesitDizici.Etiket(e) != null) continue;
+                            double[] k = KesitDizici.Kutu(e, g.XZ);
+                            if (k == null) continue;
+                            double um = (k[0] + k[2]) / 2;
+                            double dOn = Math.Abs(um - g.On.U), dYan = g.Yan != null ? Math.Abs(um - g.Yan.U) : double.MaxValue;
+                            if (Math.Min(dOn, dYan) > sinir) continue;
+                            if (dOn <= dYan) { onIds.Add(id); onK = KesitDizici.Birlestir(onK, k); }
+                            else { yanIds.Add(id); yanK = KesitDizici.Birlestir(yanK, k); }
+                        }
+                        if (onK == null) { tr.Commit(); return "Pafta: ön görünüş bulunamadı."; }
+
+                        asama = "yerleşim";
+                        var kutular = g.Kesitler.Select(b => g.Kutular[b.Ad]).ToList();
+                        PaftaPlani.Sonuc p = PaftaPlani.Hesapla(onK, yanK, kutular, liste.Count > 0, G, Y);
+                        if (!p.Sigdi) { tr.Commit(); return "Pafta: yerleşim bulunamadı."; }
+
+                        // kâğıt -> model dönüşümü: ölçek, düzlem (XZ: kâğıt y -> model Z), öteleme
+                        double W = g.On.W;
+                        Matrix3d duzlem = g.XZ ? Matrix3d.Rotation(Math.PI / 2, Vector3d.XAxis, Point3d.Origin) : Matrix3d.Identity;
+                        Vector3d orjin = g.XZ ? new Vector3d(p.OrjinU, W, p.OrjinV) : new Vector3d(p.OrjinU, p.OrjinV, W);
+                        Matrix3d M = Matrix3d.Displacement(orjin) * duzlem * Matrix3d.Scaling(p.Olcek, Point3d.Origin);
+
+                        asama = "taşıma";
+                        KesitDizici.UygulamaKaydi(db, tr);
+                        int tasinan = 0;
+                        var tasimaHatasi = new List<string>();
+                        if (g.Yan != null && Math.Abs(p.YanDu) > 0.5)
+                            tasinan += KesitDizici.Tasi(tr, yanIds, null, new Vector3d(p.YanDu, 0, 0), tasimaHatasi);
+                        for (int i = 0; i < g.Kesitler.Count; i++)
+                        {
+                            double[] k = p.KesitKayma[i];
+                            Vector3d v = g.XZ ? new Vector3d(k[0], 0, k[1]) : new Vector3d(k[0], k[1], 0);
+                            tasinan += KesitDizici.Tasi(tr, g.Nesneler[g.Kesitler[i].Ad], g.Kesitler[i].Ad, v, tasimaHatasi);
+                        }
+                        if (tasimaHatasi.Count > 0)
+                        {
+                            notlar.Add(tasimaHatasi.Count + " nesne taşınamadı (" + tasimaHatasi[0] + ")");
+                            Komutlar.Yaz("\nPafta: taşınamayan nesneler: " + string.Join("; ", tasimaHatasi.Distinct().Take(10)) + "\n");
+                        }
+
+                        // şablon
+                        asama = "şablonu yerleştirme";
+                        KatmanHazirla(db, tr, Katman, 7);
+                        var br = new BlockReference(Point3d.Origin, blok) { Layer = Katman };
+                        br.TransformBy(M);
+                        ms.AppendEntity(br); tr.AddNewlyCreatedDBObject(br, true);
+                        try { OlcekYaz(tr, blok, p.Olcek); }
+                        catch (System.Exception ex) { notlar.Add("ölçek yazısı güncellenemedi (" + ex.Message + ")"); }
+
+                        // malzeme listesi
+                        if (liste.Count > 0)
+                        {
+                            try { ListeCiz(db, tr, ms, liste, p.ListeAlani, M); }
+                            catch (System.Exception ex)
+                            {
+                                notlar.Add("malzeme listesi çizilemedi (" + ex.Message + ")");
+                                Komutlar.Yaz("\nMalzeme listesi çizilemedi:\n" + ex + "\n");
+                            }
+                        }
+                        asama = "kaydetme";
+                        tr.Commit();
+                        string ozet = string.Format("Pafta: ölçek 1:{0:0}, {1} kesit, malzeme listesi {2} satır", p.Olcek, g.Kesitler.Count, liste.Count);
+                        if (notlar.Count > 0) ozet += " (" + string.Join("; ", notlar) + ")";
+                        Komutlar.Yaz("\n" + ozet + " (" + tasinan + " nesne taşındı).\n");
+                        oldu = true;
+                        return ozet;
                     }
-                    KesitDizici.Gruplar g = KesitDizici.Grupla(tr, ms, PaftaNesnesi);
-                    if (g.On == null) { tr.Commit(); return "Pafta: çizimde TRANSVERSE FACE yok (önce ÇALIŞTIR, Ön Yüz işaretli)."; }
-
-                    // görünüşlerin nesneleri: kesit olmayan, en yakın görünüş başlığı
-                    var kesitNesnesi = new HashSet<ObjectId>(g.Nesneler.Values.SelectMany(x => x));
-                    double sinir = g.Yan != null ? Math.Abs(g.Yan.U - g.On.U) * 0.75 : 60000;
-                    var onIds = new List<ObjectId>(); var yanIds = new List<ObjectId>();
-                    double[] onK = null, yanK = null;
-                    foreach (ObjectId id in ms)
-                    {
-                        if (id.IsErased || kesitNesnesi.Contains(id)) continue;
-                        var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
-                        if (e == null || PaftaNesnesi(e) || KesitDizici.Etiket(e) != null) continue;
-                        double[] k = KesitDizici.Kutu(e, g.XZ);
-                        if (k == null) continue;
-                        double um = (k[0] + k[2]) / 2;
-                        double dOn = Math.Abs(um - g.On.U), dYan = g.Yan != null ? Math.Abs(um - g.Yan.U) : double.MaxValue;
-                        if (Math.Min(dOn, dYan) > sinir) continue;
-                        if (dOn <= dYan) { onIds.Add(id); onK = KesitDizici.Birlestir(onK, k); }
-                        else { yanIds.Add(id); yanK = KesitDizici.Birlestir(yanK, k); }
-                    }
-                    if (onK == null) { tr.Commit(); return "Pafta: ön görünüş bulunamadı."; }
-
-                    var kutular = g.Kesitler.Select(b => g.Kutular[b.Ad]).ToList();
-                    PaftaPlani.Sonuc p = PaftaPlani.Hesapla(onK, yanK, kutular, liste.Count > 0, G, Y);
-                    if (!p.Sigdi) { tr.Commit(); return "Pafta: yerleşim bulunamadı."; }
-
-                    // kâğıt -> model dönüşümü: ölçek, düzlem (XZ: kâğıt y -> model Z), öteleme
-                    double W = g.On.W;
-                    Matrix3d duzlem = g.XZ ? Matrix3d.Rotation(Math.PI / 2, Vector3d.XAxis, Point3d.Origin) : Matrix3d.Identity;
-                    Vector3d orjin = g.XZ ? new Vector3d(p.OrjinU, W, p.OrjinV) : new Vector3d(p.OrjinU, p.OrjinV, W);
-                    Matrix3d M = Matrix3d.Displacement(orjin) * duzlem * Matrix3d.Scaling(p.Olcek, Point3d.Origin);
-
-                    KesitDizici.UygulamaKaydi(db, tr);
-                    int tasinan = 0;
-                    if (g.Yan != null && Math.Abs(p.YanDu) > 0.5)
-                        tasinan += KesitDizici.Tasi(tr, yanIds, null, new Vector3d(p.YanDu, 0, 0));
-                    for (int i = 0; i < g.Kesitler.Count; i++)
-                    {
-                        double[] k = p.KesitKayma[i];
-                        Vector3d v = g.XZ ? new Vector3d(k[0], 0, k[1]) : new Vector3d(k[0], k[1], 0);
-                        tasinan += KesitDizici.Tasi(tr, g.Nesneler[g.Kesitler[i].Ad], g.Kesitler[i].Ad, v);
-                    }
-
-                    // şablon
-                    KatmanHazirla(db, tr, Katman, 7);
-                    var br = new BlockReference(Point3d.Origin, blok) { Layer = Katman };
-                    br.TransformBy(M);
-                    ms.AppendEntity(br); tr.AddNewlyCreatedDBObject(br, true);
-                    OlcekYaz(tr, blok, p.Olcek);
-
-                    // malzeme listesi
-                    if (liste.Count > 0) ListeCiz(db, tr, ms, liste, p.ListeAlani, M);
-                    tr.Commit();
-                    string ozet = string.Format("Pafta: ölçek 1:{0:0}, {1} kesit, malzeme listesi {2} satır", p.Olcek, g.Kesitler.Count, liste.Count);
-                    Komutlar.Yaz("\n" + ozet + " (" + tasinan + " nesne taşındı).\n");
-                    oldu = true;
-                    return ozet;
                 }
+            }
+            catch (System.Exception ex)
+            {
+                // hangi aşamada olduğu mesajda; ayrıntı (yığın) komut satırında
+                System.Exception ic = FormBaglayici.IcHata(ex);
+                Komutlar.Yaz("\nPafta hatası (" + asama + "):\n" + ic + "\n");
+                throw new InvalidOperationException("Pafta (" + asama + "): " + ic.Message, ic);
             }
         }
 
