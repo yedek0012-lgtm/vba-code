@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "3.9.1";
+        public const string Surum = "4.0";
         private static Timer _timer;
 
         public void Initialize()
@@ -206,7 +206,7 @@ namespace OtomatikKesit
             Control kap = ornek != null ? ornek.Parent : (Control)f;
 
             var b = new Button { Name = ButonAdi, Text = "Oto Kesit" };
-            var bh = new Button { Name = HepsiButonAdi, Text = "Hepsini Çiz" };
+            var bh = new Button { Name = HepsiButonAdi, Text = "ÇİZ" };
             var bp = new Button { Name = "btnPafta", Text = "Pafta" };
             var chk = new CheckBox { Name = OlcuKutusuAdi, Text = "Ölçü", Checked = true, AutoSize = true };
             var chkR = new CheckBox { Name = "chkRedundant", Text = "Redundant", Checked = true, AutoSize = true };
@@ -241,7 +241,8 @@ namespace OtomatikKesit
                 Control calistir = kap.Controls.Find("btnRun", false).FirstOrDefault();
                 Control izgara = kap.Controls.Find("dataGridView1", false).FirstOrDefault();
                 int sutunAlt = kap.Controls.Cast<Control>().Where(c => c is Button && Math.Abs(c.Left - ornek.Left) <= 3).Max(c => c.Bottom);
-                int x0 = calistir != null ? calistir.Right + 10 : ornek.Left;
+                // tek düğme (ÇİZ) OutlineDrawing'in ÇALIŞTIR'ının yerine; ÇALIŞTIR, Oto Kesit ve Pafta gizli (ÇİZ hepsini yapar)
+                int x0 = calistir != null ? calistir.Left : ornek.Left;
                 int y0 = Math.Max(sutunAlt, izgara != null ? izgara.Bottom : 0) + 6;
                 int sag = kap.ClientSize.Width - 6, px = x0, py = y0, satirH = 0;
                 Action<Control, bool> koy = (c, yeniSatir) =>
@@ -252,7 +253,7 @@ namespace OtomatikKesit
                     c.Location = new Point(px, py);
                     px += sz.Width + 6; satirH = Math.Max(satirH, sz.Height);
                 };
-                koy(b, false); koy(bh, false); koy(bp, false);
+                koy(bh, false);
                 koy(chk, true); koy(chkR, false); koy(chkI, false); koy(chkD, false); koy(chkT, false); koy(chkP, false);
             }
             else
@@ -271,6 +272,10 @@ namespace OtomatikKesit
                 chkP.Location = new Point(8, 146);
             }
 
+            // tek düğme: ÇİZ; Oto Kesit, Pafta ve OutlineDrawing'in ÇALIŞTIR'ı gizli (ÇİZ onları sırayla çalıştırır)
+            b.Visible = false; bp.Visible = false;
+            var calistirDugmesi = Alan(f, "btnRun") as Button;
+            if (calistirDugmesi != null) calistirDugmesi.Visible = false;
             kap.Controls.Add(b);
             kap.Controls.Add(bh);
             kap.Controls.Add(bp);
@@ -300,22 +305,51 @@ namespace OtomatikKesit
             tip.SetToolTip(chkD, "ÇALIŞTIR'dan sonra kesitleri kendi boyutlarına göre satırlar halinde sıkı bir ızgaraya dizer (tek uzun sıra yerine); çizgiler, etiketler, başlık ve ölçüler birlikte taşınır (komut: OTODIZ)");
             tip.SetToolTip(chkI, "ÇALIŞTIR'dan sonra ön/yan görünüşe yüzde olmayan iç elemanların (kalça çaprazları, diyaframlar) izdüşümünü PLS-TOWER'daki gibi ekler; katman " + IcElemanlar.Katman + " (komut: OTOIC)");
             b.Click += (s, e) => Guvenli(f, "Otomatik kesit", () => TabloyuDoldur(f));
-            tip.SetToolTip(bh, "Tek tık: otomatik kesitleri bulup tabloya yazar, ÇALIŞTIR'ı çalıştırır (görünüşler, kesitler, iç eleman, ölçü, " +
-                               "redundant) ve paftayı kurar (son seçilen şablonla; şablon seçmek için Pafta'ya Ctrl+tık)");
-            bh.Click += (s, e) => Guvenli(f, "Hepsini Çiz", () =>
+            tip.SetToolTip(bh, "Tek düğme: otomatik kesitleri bulup tabloya yazar, çizer (görünüşler, kesitler, iç eleman, ölçü, redundant) " +
+                               "ve paftayı kurar. Shift+tık: yalnız kesitleri tabloya yaz (kontrol / düzenleme için; sonra ÇİZ tabloyu olduğu gibi " +
+                               "çizer). Ctrl+tık: önce pafta şablonu seç (DWG/DXF; varsayılan ŞA-RA A1)");
+            bh.Click += (s, e) => Guvenli(f, "Çiz", () =>
             {
                 Ayarlar.Kaydet(f);
-                // Tablo bu .tow için Oto Kesit'in yazdığı haliyle duruyorsa yeniden hesaplanıp "silinsin mi?" diye sorulmaz
+                Keys tus = Control.ModifierKeys;
+                if ((tus & Keys.Shift) != 0) { TabloyuDoldur(f); return; }
+                if ((tus & Keys.Control) != 0)
+                {
+                    using (var dlg = new OpenFileDialog { Filter = "Pafta şablonu (*.dwg;*.dxf)|*.dwg;*.dxf", Title = "Pafta şablonu (çerçeve + antet; sol alt köşe 0,0)" })
+                        if (dlg.ShowDialog(f) == DialogResult.OK) Ayarlar.PaftaSablonu = dlg.FileName; else return;
+                }
                 if (!TabloOtoHalinde(f))
                 {
-                    TabloyuDoldur(f);
-                    if (!_sonDoldurmaTamam) return;
+                    // tablo boşsa ya da son otomatik kesitlerden farklıysa: elle düzenlenmiş tablo sorulmadan silinmez
+                    var grid = Alan(f, "dataGridView1") as DataGridView;
+                    bool dolu = grid != null && grid.Rows.Cast<DataGridViewRow>().Any(r => !r.IsNewRow &&
+                        r.Cells.Cast<DataGridViewCell>().Any(c => c.OwningColumn.Name != "ColumnSection" && c.Value != null && c.Value.ToString().Trim().Length > 0));
+                    if (dolu)
+                    {
+                        DialogResult cevap = MessageBox.Show(f,
+                            "Tablo son otomatik kesitlerden farklı (elle değiştirilmiş ya da başka .tow / görünüş seçimi).\n\n" +
+                            "Evet = tabloyu olduğu gibi çiz\nHayır = otomatik kesitleri yeniden bul ve çiz",
+                            "Otomatik Kesit", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                        if (cevap == DialogResult.Cancel) return;
+                        if (cevap == DialogResult.No)
+                        {
+                            _tabloYaziliyor = true;
+                            try { grid.Rows.Clear(); } finally { _tabloYaziliyor = false; }
+                            TabloyuDoldur(f);
+                            if (!_sonDoldurmaTamam) return;
+                        }
+                    }
+                    else
+                    {
+                        TabloyuDoldur(f);
+                        if (!_sonDoldurmaTamam) return;
+                    }
                 }
                 var calistir = Alan(f, "btnRun") as Button;
                 if (calistir == null) return;
                 // ÇALIŞTIR sonrası kesit dizme ve REGEN atlanır: pafta kesitleri zaten yeniden yerleştirir ve sonunda REGEN yapar
                 _paftaGelecek = true;
-                try { calistir.PerformClick(); }
+                try { Tikla(calistir); }
                 finally { _paftaGelecek = false; }
                 if (_calistirSarili && !_sonCizdi) return;   // ÇALIŞTIR iptal edildi / çizmedi
                 string once = HataEtiketi(f, null);
@@ -680,6 +714,14 @@ namespace OtomatikKesit
         private static bool _calistirSarili; // ÇALIŞTIR sarmalandı mı (değilse _sonCizdi bilinmez)
         private static bool _paftaGelecek;   // Hepsini Çiz: ÇALIŞTIR'dan sonra pafta kurulacak (dizme ve REGEN atlanır)
         private static bool _sonDiz;         // son ÇALIŞTIR'da "Kesitleri diz" işaretliydi
+
+        /// <summary>Gizli düğmenin Click olayını çalıştırır (PerformClick görünmeyen düğmede çalışmaz).</summary>
+        private static void Tikla(Button b)
+        {
+            MethodInfo mi = typeof(Control).GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic);
+            if (mi != null) mi.Invoke(b, new object[] { EventArgs.Empty });
+            else b.PerformClick();
+        }
 
         /// <summary>Pafta (son seçilen şablonla, yoksa gömülü ŞA-RA A1) + REGEN. onceki: uyarı etiketinde paftanın önüne
         /// yazılacak özet (Hepsini Çiz'de ÇALIŞTIR'ın özeti). Pafta kurulduysa true.</summary>

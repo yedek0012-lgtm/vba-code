@@ -10,6 +10,12 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
 
+**4.0: Tek düğme (ÇİZ).** Oto Kesit, Hepsini Çiz, Pafta ve OutlineDrawing'in ÇALIŞTIR düğmeleri tek düğmede: **ÇİZ** otomatik
+kesitleri bulur, çizer (görünüşler, kesitler, iç eleman, ölçü, redundant) ve paftayı kurar. Shift+tık: yalnız kesitleri tabloya
+yazar (kontrol / satır silme için); sonraki ÇİZ tabloyu olduğu gibi çizer. Ctrl+tık: önce pafta şablonu seçilir. Tablo son
+otomatik kesitlerden farklıysa (elle düzenlenmiş) sorulur: olduğu gibi çiz / yeniden bul. Eski düğmeler gizli (OTOPAFTA vb.
+komutlar duruyor); YÜKLE (3D model) yerinde.
+
 **3.9.1: Pafta hatasız kurulur (eInvalidDxfCode).** Pafta "eInvalidDxfCode" ile duruyordu (AutoCAD'in DXF okuma hata kodu;
 büyük olasılıkla şablon DXF'i okunurken, yığın izi olmadığı için kesin değil). Şablon artık sırayla denenir: seçilen şablon → gömülü ŞA-RA A1 (DXF R2018) → aynı şablonun DXF R12
 hali (ezdxf r12export, `sablon/SARA_A1_pafta_r12.dxf`; MTEXT yazıya, tarama SOLID'e açılmış) → eklentinin çizdiği sade A1
