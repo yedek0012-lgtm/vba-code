@@ -8,7 +8,30 @@
 
 `eklenti/bin/tek/OutlineDrawing.dll` = OutlineDrawing v1.3 + Otomatik Kesit, tek dosya (ILRepack ile birleştirildi).
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
-Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
+Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET, OTOISIM.
+
+**4.1: Malzeme listesi aç/kapa, antet, büyük kesit, isim çakışması, toplu çizim + PDF.**
+- *Malzeme listesi:* OutlineDrawing formundaki **Malzeme Listesi** kutusu (OutlineDrawing hiç kullanmıyordu) artık paftadaki
+  .tow malzeme listesini açıp kapatır. İşaretsizse liste konmaz, o alan kesitlere (ve "Paftayı doldur" ek kesitlerine) açılır.
+- *Antet:* pafta kurulurken tarih (bugün), proje ve kule adı (.tow başlık satırları: "use edf suffixes" sonrası açıklama satırları)
+  antete yazılır; şablonda nitelik (ATTDEF: DATE/TARIH, SCALE/OLCEK, PROJECT/PROJE, TOWER/KULE/TITLE) varsa onlar da doldurulur.
+- *Büyük kesit* (yeni kutu, varsayılan açık): görünüşlerin ölçeği belirlendikten sonra paftada yer kalıyorsa kesitler daha büyük
+  ölçekte çizilir (ör. kule 1:90, kesitler 1:70; 5'in katı, en az 1,15 en çok 3 kat). Çizgiler büyür; eleman isimleri ve ölçü
+  yazıları aynı boyda kalır; ölçüler büyür ama DIMLFAC 1/k ile gerçek mm yazar; başlık çizimle arası korunarak ortada kalır,
+  altına "SCALE 1:x" notu. Antetteki ölçek görünüşlerin ölçeğidir. Pafta yeniden kurulurken (OTOPAFTA) önceki büyütme geri
+  alınır; OTOOLCU ve OTOSTIL büyütülmüş kesiti tanır. Yerleşim artık "silüet" (skyline) yerleşimi: kesitler sırayla, her biri
+  bölgedeki en yüksek boş yere (okuma sırası korunur). Dolu paftada (yan görünüş + liste) yer kalmadığından büyütme olmaz.
+- *İsim çakışması* (ÇALIŞTIR sonrası yeni adım; komut OTOISIM): OutlineDrawing her grubun ismini bir elemanının ortasına koyar
+  (hep kulenin +X yarısında, en sağdaki eleman). Birbirine binen isim kendi elemanı boyunca kaydırılır, elemanın öbür yanına ya
+  da aynı grubun başka bir elemanına (ör. sol yarıdaki simetriği; grup .tow'dan) alınır; seçilen yer başka isme binmeyen ve en
+  az çizgi keseni. Ayrıca OutlineDrawing'in .tow'da sağdan sola tanımlı elemanlarda ismi çizginin tam üstüne yazması
+  düzeltilir (yazı çizginin yanına alınır). Benzetimde (Tangent ön yüz) çakışma 12 -> 4 (kalanlar travers ucundaki çok kısa
+  elemanlarda), YAA 2 -> 0; kendi çizgisinin üstündeki isimler (ön yüzde ~%40) 0.
+- *Toplu çizim + PDF:* **Toplu...** düğmesi: birden çok .tow seçilir, her biri sırayla ÇİZ gibi çizilir (tablo otomatik
+  kesitlerle yeniden doldurulur, pafta kurulur) ve .tow'un yanına `<ad>_pafta.dwg` kaydedilir (açık çizim değişmez; WBLOCK
+  kopyası). **PDF** kutusu işaretliyse `<ad>_pafta.pdf` de yazılır (DWG To PDF.pc3, A1 tam kâğıt, pafta ölçeğinde,
+  monochrome.ctb; paftayı tam kaplayan "OTO_PAFTA" adlı görünüş). Toplu çizimde mesaj kutusu açılmaz; sonuçlar sonda listelenir.
+  PDF kutusu tek ÇİZ'de de çalışır.
 
 **4.0: Tek düğme (ÇİZ).** Oto Kesit, Hepsini Çiz, Pafta ve OutlineDrawing'in ÇALIŞTIR düğmeleri tek düğmede: **ÇİZ** otomatik
 kesitleri bulur, çizer (görünüşler, kesitler, iç eleman, ölçü, redundant) ve paftayı kurar. Shift+tık: yalnız kesitleri tabloya

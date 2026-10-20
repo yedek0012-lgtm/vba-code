@@ -18,6 +18,147 @@ public static class OlcuCakismaTesti
         return s;
     }
 
+    /// <summary>Kesitin paftadaki gerçek yeri (KesitBuyutucu kuralı): çizgiler ve ölçüler c'nin sol alt köşesi etrafında kb kat
+    /// (ölçü yazısının boyu aynı), başlık t yatayda kayar (düşeyde yerinde), büyütmede altına ölçek notu; (du, dv) kayma.
+    /// cizgi / yazi verilirse önizlemeye yazar. Kapladığı kutu döner.</summary>
+    static double[] Gercek(int i, List<double[]> segs, double kay, double[] c, double[] t, double kb, double ks, double du, double dv,
+                           Action<string, double[]> cizgi = null, Action<double, double, double, string> yazi = null, string baslik = null)
+    {
+        double au = c[0], av = c[1];
+        Func<double, double> X = x => au + kb * (x - au) + du;
+        Func<double, double> Yv = y => av + kb * (y - av) + dv;
+        double[] r = null;
+        Action<double[]> ekle = q => r = r == null ? (double[])q.Clone() : new[] { Math.Min(r[0], q[0]), Math.Min(r[1], q[1]), Math.Max(r[2], q[2]), Math.Max(r[3], q[3]) };
+        foreach (var q in segs)
+        {
+            var l = new[] { X(q[0] + kay), Yv(q[1]), X(q[2] + kay), Yv(q[3]) };
+            ekle(new[] { Math.Min(l[0], l[2]), Math.Min(l[1], l[3]), Math.Max(l[0], l[2]), Math.Max(l[1], l[3]) });
+            if (cizgi != null) cizgi("L", l);
+        }
+        foreach (var o in OlcuPlani.Hesapla(segs))
+        {
+            var b = Kutu(o);
+            double mx = X((b[0] + b[2]) / 2 + kay), my = Yv((b[1] + b[3]) / 2), hw = (b[2] - b[0]) / 2, hh = (b[3] - b[1]) / 2;
+            var d = new[] { mx - hw, my - hh, mx + hw, my + hh };
+            ekle(d);
+            if (cizgi != null) cizgi("D", d);
+        }
+        double tu = au + kb * ((t[0] + t[2]) / 2 - au) + du, tv0 = t[1] + dv, tw = (t[2] - t[0]) / 2;
+        ekle(new[] { tu - tw, tv0, tu + tw, t[3] + dv });
+        if (yazi != null) yazi(tu, tv0, 400, baslik);
+        if (kb > 1.0001)
+        {
+            double h = PaftaPlani.NotOrani * 400, ust = tv0 - PaftaPlani.NotAraligi * 400;
+            string not = PaftaPlani.NotYazisi(ks);
+            double nw = not.Length * 0.8 * h / 2;
+            ekle(new[] { tu - nw, ust - h, tu + nw, ust });
+            if (yazi != null) yazi(tu, ust - h, h, not);
+        }
+        return r;
+    }
+
+    // ---- eleman isimleri (EtiketCozucu): OutlineDrawing'in yerleşimi benzetilir (her grubun ismi bir elemanında: +X yarıda en
+    //      sağdaki; görünüşte eleman doğrultusunda, 0,15 boy yukarıda, yazı ortası / alt; kesitte yatay, elemanın ortasından sola
+    //      hizalı), sonra çakışmalar giderilir. Yazı genişliği karakter başına 0,75 boy, isim boyu 150.
+    static double EtiketBoyu = 150, KarakterOrani = 0.75;
+
+    static int EtiketTesti(KuleVerisi k, List<KesitTanimi> tanimlar, List<string> rapor)
+    {
+        double h = EtiketBoyu, pay = 0.05 * h;
+        int kalanToplam = 0;
+        string onizleme = Environment.GetEnvironmentVariable("OTO_ETIKET_ONIZLEME");
+        System.IO.StreamWriter w = string.IsNullOrEmpty(onizleme) ? null : new System.IO.StreamWriter(onizleme);
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+        Action<string, double[]> yaz = (tur, q) => { if (w != null) w.WriteLine(tur + " " + string.Join(" ", q.Select(x => x.ToString("0.#", ci)))); };
+        // görünüşler
+        foreach (var g in new[] { new { ad = "on", y = k.OnYuz, yan = false, du = 0.0 }, new { ad = "yan", y = k.YanYuz, yan = true, du = 60000.0 } })
+        {
+            var cizgiler = g.y.Concat(IcElemanPlani.Hesapla(k.Uyeler, g.y, g.yan)).Select(c => new[] { c.P[0] + g.du, c.P[2], c.P[3] + g.du, c.P[5] }).ToList();
+            var etiketler = new List<EtiketCozucu.Etiket>();
+            bool esli = Environment.GetEnvironmentVariable("OTO_ETIKET_ES") != "0";
+            foreach (var grup in g.y.Where(c => !string.IsNullOrEmpty(c.Grup)).GroupBy(c => c.Grup.Trim(), StringComparer.OrdinalIgnoreCase))
+            {
+                var arti = grup.Where(c => c.P[0] >= 0 && c.P[3] >= 0).ToList();
+                YuzCizgisi m = (arti.Count > 0 ? arti : grup.ToList()).OrderByDescending(c => (c.P[0] + c.P[3]) / 2).First();
+                double[] s = { m.P[0] + g.du, m.P[2], m.P[3] + g.du, m.P[5] };
+                int dayanak = g.y.IndexOf(m);
+                double dx = s[2] - s[0], dz = s[3] - s[1], L = Math.Sqrt(dx * dx + dz * dz);
+                if (L < 1e-6 || dayanak < 0) continue;
+                double nx = -dz / L, nz = dx / L, a = Math.Atan2(dz, dx);
+                if (a > Math.PI / 2 || a < -Math.PI / 2) a += Math.PI;
+                double tu = Math.Cos(a), tv = Math.Sin(a), uu = -tv, uv = tu;
+                double qu = (s[0] + s[2]) / 2 + nx * 0.15 * h, qv = (s[1] + s[3]) / 2 + nz * 0.15 * h;
+                double ww = grup.Key.Length * KarakterOrani * h;
+                var et = new EtiketCozucu.Etiket();
+                // aynı grubun öbür elemanları (EtiketDuzeni.GrupEsleri gibi), yakından uzağa
+                double mu = (s[0] + s[2]) / 2, mv = (s[1] + s[3]) / 2;
+                var hostlar = new List<int> { dayanak };
+                if (esli) hostlar.AddRange(grup.Select(c => g.y.IndexOf(c)).Where(j => j != dayanak)
+                    .OrderBy(j => Math.Abs((cizgiler[j][0] + cizgiler[j][2]) / 2 - mu) + Math.Abs((cizgiler[j][1] + cizgiler[j][3]) / 2 - mv)).Take(12));
+                EtiketCozucu.AdaylarEkle(et, hostlar.Select(j => cizgiler[j]).ToList(), hostlar, qu, qv, tu, tv, ww, h, qu + uu * h / 2, qv + uv * h / 2, true);
+                etiketler.Add(et);
+            }
+            kalanToplam += EtiketSay(g.ad, etiketler, cizgiler, pay, rapor, yaz);
+        }
+        // kesitler (yatay ya da düzlem kesiti; OutlineDrawing etiketi): tam travers ve döndürülen kesitler hariç
+        int kesitOnce = 0, kesitSonra = 0, kesitIsim = 0, kesitTasinan = 0;
+        for (int i = 0; i < tanimlar.Count; i++)
+        {
+            if (TraversKesiti.Hesapla(k.Uyeler, tanimlar[i]) != null || KesitYonu.Aci(tanimlar[i]) != 0) continue;
+            List<string> anahtarlar;
+            var segs = KesitSecici.Sec(k.Uyeler, tanimlar[i], out anahtarlar);
+            var etiketler = new List<EtiketCozucu.Etiket>();
+            foreach (var grup in Enumerable.Range(0, segs.Count).GroupBy(j => (k.Uyeler[anahtarlar[j]].group_label ?? "").Trim(), StringComparer.OrdinalIgnoreCase))
+            {
+                if (grup.Key.Length == 0) continue;
+                Func<int, double> midX = j => (k.Uyeler[anahtarlar[j]].start_x + k.Uyeler[anahtarlar[j]].end_x) / 2;
+                var arti = grup.Where(j => k.Uyeler[anahtarlar[j]].start_x >= 0 && k.Uyeler[anahtarlar[j]].end_x >= 0).ToList();
+                int m = (arti.Count > 0 ? arti : grup.ToList()).OrderByDescending(midX).First();
+                double[] s = segs[m];
+                double qu = (s[0] + s[2]) / 2, qv = (s[1] + s[3]) / 2, ww = grup.Key.Length * KarakterOrani * h;
+                var et = new EtiketCozucu.Etiket();
+                EtiketCozucu.AdaylarEkle(et, new List<double[]> { s }, new List<int> { m }, qu, qv, 1, 0, ww, h, qu + ww / 2, qv, false);
+                etiketler.Add(et);
+            }
+            int once = Cakisan(etiketler.Select(e => e.Adaylar[0].K).ToList(), pay);
+            int tasinan = EtiketCozucu.Coz(etiketler, segs, pay);
+            int sonra = Cakisan(etiketler.Select(e => e.Adaylar[e.Secim].K).ToList(), pay);
+            kesitOnce += once; kesitSonra += sonra; kesitIsim += etiketler.Count; kesitTasinan += tasinan;
+            if (sonra > 0) rapor.Add("etiket: kesit " + HarfAdi(i) + " " + sonra + " cakisma kaldi");
+        }
+        Console.WriteLine("Etiket kesitler: {0} isim, cakisma once {1}, sonra {2} ({3} isim tasindi)", kesitIsim, kesitOnce, kesitSonra, kesitTasinan);
+        kalanToplam += kesitSonra;
+        if (w != null) w.Dispose();
+        return kalanToplam;
+    }
+
+    static int Cakisan(List<double[]> kutular, double pay)
+    {
+        int n = 0;
+        for (int i = 0; i < kutular.Count; i++)
+            for (int j = i + 1; j < kutular.Count; j++)
+                if (EtiketCozucu.Biner(kutular[i], kutular[j], pay)) n++;
+        return n;
+    }
+
+    static int EtiketSay(string ad, List<EtiketCozucu.Etiket> etiketler, List<double[]> cizgiler, double pay, List<string> rapor, Action<string, double[]> yaz)
+    {
+        int once = Cakisan(etiketler.Select(e => e.Adaylar[0].K).ToList(), pay);
+        int ustunde = etiketler.Count(e => e.Zorla);
+        int tasinan = EtiketCozucu.Coz(etiketler, cizgiler, pay);
+        int sonra = Cakisan(etiketler.Select(e => e.Adaylar[e.Secim].K).ToList(), pay);
+        int ustundeSonra = etiketler.Count(e => EtiketCozucu.Keser(e.Adaylar[e.Secim].K, cizgiler[e.Dayanak], pay));
+        Console.WriteLine("Etiket {0}: {1} isim, cakisma once {2} (kendi cizgisi ustunde {3}), sonra {4} (ustunde {5}); {6} isim tasindi",
+            ad, etiketler.Count, once, ustunde, sonra, ustundeSonra, tasinan);
+        if (sonra > 0) rapor.Add("etiket: " + ad + " gorunuste " + sonra + " cakisma kaldi");
+        if (ad == "on")
+        {
+            foreach (var c in cizgiler) yaz("L", c);
+            foreach (var e in etiketler) { yaz("A", e.Adaylar[0].K); yaz("B", e.Adaylar[e.Secim].K); }
+        }
+        return sonra + ustundeSonra;
+    }
+
     static double[] Kutu(OlcuTanimi o)
     {
         double w = OlcuPlani.YaziGenisligi(o), h = o.Yazi, gap = 0.25 * o.Yazi;
@@ -80,6 +221,7 @@ public static class OlcuCakismaTesti
         var rapor = new List<string>();
         int toplam = 0, sig = 0, cak = 0, ki = 0;
         var kesitKutulari = new List<double[]>();
+        var cizimKutulari = new List<double[]>(); var baslikKutulari = new List<double[]>();   // başlık hariç çizim / başlık (büyütme)
         // çizimdeki kesitler: OutlineDrawing'in (tam travers kesitleri eklentinin açılmış çizimiyle) + aile dosyasında
         // eklentinin çizdiği uzatma görünüşleri ve K / L kesitleri
         var tanimlar = secs.Select(c => OtoKesitBulucu.Tanim(c)).ToList();
@@ -117,10 +259,13 @@ public static class OlcuCakismaTesti
             double u0 = segs.Min(q => Math.Min(q[0], q[2])), u1 = segs.Max(q => Math.Max(q[0], q[2]));
             double v0 = segs.Min(q => Math.Min(q[1], q[3])), v1 = segs.Max(q => Math.Max(q[1], q[3]));
             foreach (var o in l) { var b = Kutu(o); u0 = Math.Min(u0, b[0]); v0 = Math.Min(v0, b[1]); u1 = Math.Max(u1, b[2]); v1 = Math.Max(v1, b[3]); }
-            double baslikW = ("SECTION " + ki).Length * 0.8 * 400, um = (u0 + u1) / 2;
-            u0 = Math.Min(u0, um - baslikW / 2); u1 = Math.Max(u1, um + baslikW / 2); v0 -= 1400;
             // OutlineDrawing'in tek sıra düzeni: kesit i, kesit aralığı kadar sağda
             double kay = (kesitKutulari.Count) * k.KesitAraligi;
+            // başlık (400): çizimin ortasında, çizimden 600 aşağıda; kutu başlığın altında 400 pay
+            double baslikW = basliklar0[ci].Length * 0.8 * 400, um = (segs.Min(q => Math.Min(q[0], q[2])) + segs.Max(q => Math.Max(q[0], q[2]))) / 2;
+            cizimKutulari.Add(new[] { u0 + kay, v0, u1 + kay, v1 });
+            baslikKutulari.Add(new[] { um - baslikW / 2 + kay, v0 - 1000, um + baslikW / 2 + kay, v0 - 600 });
+            u0 = Math.Min(u0, um - baslikW / 2); u1 = Math.Max(u1, um + baslikW / 2); v0 -= 1400;
             kesitKutulari.Add(new[] { u0 + kay, v0, u1 + kay, v1 });
             kutuCizim.Add(ci); kaylar.Add(kay);
         }
@@ -197,7 +342,11 @@ public static class OlcuCakismaTesti
         var iki = new HashSet<string>(tan.Where(kv => TraversKesiti.Hesapla(k.Uyeler, kv.Value) != null).Select(kv => kv.Key));
         var isaretler = KesitIsaretPlani.Hesapla(k.OnYuz, tan, iki);
         foreach (var m in isaretler) onK = new[] { Math.Min(onK[0], m.Kutu[0]), Math.Min(onK[1], m.Kutu[1]), Math.Max(onK[2], m.Kutu[2]), Math.Max(onK[3], m.Kutu[3]) };
-        var pf = PaftaPlani.Hesapla(onK, yanK, kesitKutulari, liste.Count > 0);
+        // kesit büyütme (pafta "Büyük kesit"; OTO_BUYUT=0 ise yok): çizim sol alt köşesi etrafında pf.Buyutme kadar büyür, başlık
+        // yatayda kayar, altına ölçek notu (PaftaPlani.BuyukKutu; KesitBuyutucu aynı kuralla)
+        var pf = PaftaPlani.Hesapla(onK, yanK, kesitKutulari, liste.Count > 0, 841, 594.65, Environment.GetEnvironmentVariable("OTO_BUYUT") != "0",
+                                    (i, kb) => PaftaPlani.BuyukKutu(cizimKutulari[i], baslikKutulari[i], kb, 400));
+        Func<int, double[]> buyukKutu = i => pf.Buyutme > 1.0001 ? PaftaPlani.BuyukKutu(cizimKutulari[i], baslikKutulari[i], pf.Buyutme, 400) : kesitKutulari[i];
         int paftaSorun = 0;
         if (!pf.Sigdi) { paftaSorun++; rapor.Add("pafta: sigmadi"); }
         else
@@ -205,7 +354,19 @@ public static class OlcuCakismaTesti
             Func<double[], double, double, double[]> kagit = (b, du, dv) => new[] { (b[0] + du - pf.OrjinU) / pf.Olcek, (b[1] + dv - pf.OrjinV) / pf.Olcek, (b[2] + du - pf.OrjinU) / pf.Olcek, (b[3] + dv - pf.OrjinV) / pf.Olcek };
             var parca = new List<double[]> { kagit(onK, 0, 0) };
             if (yanK != null) parca.Add(kagit(yanK, pf.YanDu, 0));
-            for (int i = 0; i < kesitKutulari.Count; i++) parca.Add(kagit(kesitKutulari[i], pf.KesitKayma[i][0], pf.KesitKayma[i][1]));
+            for (int i = 0; i < kesitKutulari.Count; i++) parca.Add(kagit(buyukKutu(i), pf.KesitKayma[i][0], pf.KesitKayma[i][1]));
+            // büyütülmüş kesitin gerçekte kapladığı yer (çizgiler, ölçü yazıları, başlık, not) planlanan kutunun içinde mi
+            for (int i = 0; i < kesitKutulari.Count && pf.Buyutme > 1.0001; i++)
+            {
+                double[] g = Gercek(i, cizimler[kutuCizim[i]], kaylar[i], cizimKutulari[i], baslikKutulari[i], pf.Buyutme, pf.KesitOlcek, 0, 0);
+                double[] b = buyukKutu(i);
+                if (g[0] < b[0] - 1 || g[1] < b[1] - 1 || g[2] > b[2] + 1 || g[3] > b[3] + 1)
+                {
+                    paftaSorun++;
+                    rapor.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, "pafta: kesit {0} buyutulmus kutusundan tasiyor ({1:0} {2:0} {3:0} {4:0} / {5:0} {6:0} {7:0} {8:0})",
+                        i + 1, g[0], g[1], g[2], g[3], b[0], b[1], b[2], b[3]));
+                }
+            }
             double G = 841, Y = 594.65;
             double[] ic = { PaftaPlani.Ic[0] * G, PaftaPlani.Ic[1] * Y, PaftaPlani.Ic[2] * G, PaftaPlani.Ic[3] * Y };
             var yasak = new List<double[]> { new[] { PaftaPlani.Antet[0] * G, PaftaPlani.Antet[1] * Y, PaftaPlani.Antet[2] * G, PaftaPlani.Antet[3] * Y } };
@@ -218,7 +379,8 @@ public static class OlcuCakismaTesti
                 foreach (var y in yasak) if (biner(b, y)) { paftaSorun++; rapor.Add("pafta: parca " + i + " liste/antet ustunde"); }
                 for (int j = i + 1; j < parca.Count; j++) if (biner(b, parca[j])) { paftaSorun++; rapor.Add("pafta: parca " + i + " / " + j + " biniyor"); }
             }
-            Console.WriteLine("Pafta: olcek 1:{0:0}, {1} parca, malzeme listesi {2} satir, sorun {3}", pf.Olcek, parca.Count, liste.Count, paftaSorun);
+            Console.WriteLine("Pafta: olcek 1:{0:0}{4}, {1} parca, malzeme listesi {2} satir, sorun {3}", pf.Olcek, parca.Count, liste.Count, paftaSorun,
+                pf.Buyutme > 1.0001 ? string.Format(" (kesitler 1:{0:0})", pf.KesitOlcek) : "");
             // ---- önizleme: OTO_ONIZLEME=dosya ise paftanın kâğıt koordinatlarında (mm) çizgileri
             string onizleme = Environment.GetEnvironmentVariable("OTO_ONIZLEME");
             if (!string.IsNullOrEmpty(onizleme))
@@ -251,21 +413,21 @@ public static class OlcuCakismaTesti
                     }
                     for (int i = 0; i < kesitKutulari.Count; i++)
                     {
-                        var segs = cizimler[kutuCizim[i]];
-                        double du = kaylar[i] + pf.KesitKayma[i][0], dv = pf.KesitKayma[i][1];
-                        foreach (var q in segs) cizgi("L", q, du, dv);
-                        foreach (var o in OlcuPlani.Hesapla(segs)) { var b = Kutu(o); cizgi("D", new[] { b[0], b[1], b[2], b[3] }, du, dv); }
-                        double u0 = segs.Min(q => Math.Min(q[0], q[2])), u1 = segs.Max(q => Math.Max(q[0], q[2])), v0 = segs.Min(q => Math.Min(q[1], q[3]));
-                        var t = P((u0 + u1) / 2 + du, v0 - 1000 + dv);
-                        w.WriteLine("T {0} {1} {2} {3}", t[0].ToString("0.###", ci2), t[1].ToString("0.###", ci2), (400 / pf.Olcek).ToString("0.###", ci2), basliklar0[kutuCizim[i]]);
+                        // gerçek paftadaki gibi (KesitBuyutucu): çizim sol alt köşesi etrafında büyür, yazı boyları büyümez, başlık
+                        // yatayda kayar; sonra kaydırılır
+                        Gercek(i, cizimler[kutuCizim[i]], kaylar[i], cizimKutulari[i], baslikKutulari[i], pf.Buyutme, pf.KesitOlcek,
+                               pf.KesitKayma[i][0], pf.KesitKayma[i][1], (tur, q) => cizgi(tur, q, 0, 0),
+                               (u, v, h, m) => { var t = P(u, v); w.WriteLine("T {0} {1} {2} {3}", t[0].ToString("0.###", ci2), t[1].ToString("0.###", ci2), (h / pf.Olcek).ToString("0.###", ci2), m); },
+                               basliklar0[kutuCizim[i]]);
                     }
                     for (int i = 0; i < liste.Count && pf.ListeAlani != null; i++) { }
                     if (pf.ListeAlani != null) yaz("Q", pf.ListeAlani);
-                    w.WriteLine("S 1:{0:0}", pf.Olcek);
+                    w.WriteLine("S 1:{0:0}{1}", pf.Olcek, pf.Buyutme > 1.0001 ? string.Format(" / kesitler 1:{0:0}", pf.KesitOlcek) : "");
                 }
             }
         }
         cak += paftaSorun;
+        EtiketTesti(k, tanimlar, rapor);
         foreach (var g in new[] { new { ad = "on", y = k.OnYuz, o = 0 }, new { ad = "yan", y = k.YanYuz, o = k.GorunusAraligi } })
         {
             var l = GorunusOlcuPlani.Hesapla(g.y, g.o);

@@ -32,6 +32,7 @@ using System.Windows.Forms;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
+using Autodesk.AutoCAD.PlottingServices;
 using Autodesk.AutoCAD.Runtime;
 using AcApp = Autodesk.AutoCAD.ApplicationServices.Application;
 using AcColor = Autodesk.AutoCAD.Colors.Color;
@@ -47,7 +48,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "4.0";
+        public const string Surum = "4.1";
         private static Timer _timer;
 
         public void Initialize()
@@ -113,6 +114,13 @@ namespace OtomatikKesit
                 return;
             }
             FormBaglayici.Guvenli(f, "Kesit işaretleri", () => { Yaz("\n" + (KesitIsaretleri.Ciz(f) ?? "Kesit işareti yok (tablo boş ya da ön görünüş bulunamadı).") + "\n"); Goruntu.Yenile(); });
+        }
+
+        [CommandMethod("OTOISIM", CommandFlags.Session)]
+        public void OtoIsim()
+        {
+            try { Yaz("\n" + (EtiketDuzeni.Uygula(FormBaglayici.AcikFormuBul()) ?? "İsim: çakışan eleman ismi yok") + ".\n"); Goruntu.Yenile(); }
+            catch (System.Exception ex) { Yaz("\nEleman isimleri düzenlenemedi: " + FormBaglayici.IcHata(ex).Message + "\n"); }
         }
 
         [CommandMethod("OTOPAFTA", CommandFlags.Session)]
@@ -208,12 +216,15 @@ namespace OtomatikKesit
             var b = new Button { Name = ButonAdi, Text = "Oto Kesit" };
             var bh = new Button { Name = HepsiButonAdi, Text = "ÇİZ" };
             var bp = new Button { Name = "btnPafta", Text = "Pafta" };
+            var bt = new Button { Name = TopluButonAdi, Text = "Toplu..." };
             var chk = new CheckBox { Name = OlcuKutusuAdi, Text = "Ölçü", Checked = true, AutoSize = true };
             var chkR = new CheckBox { Name = "chkRedundant", Text = "Redundant", Checked = true, AutoSize = true };
             var chkI = new CheckBox { Name = "chkIcEleman", Text = "İç eleman", Checked = true, AutoSize = true };
             var chkD = new CheckBox { Name = "chkKesitDiz", Text = "Kesitleri diz", Checked = true, AutoSize = true };
             var chkT = new CheckBox { Name = TumElemanKutusuAdi, Text = "Tüm elemanlar", Checked = false, AutoSize = true };
             var chkP = new CheckBox { Name = PaftaDoldurKutusuAdi, Text = "Paftayı doldur", Checked = true, AutoSize = true };
+            var chkB = new CheckBox { Name = BuyukKesitKutusuAdi, Text = "Büyük kesit", Checked = true, AutoSize = true };
+            var chkPdf = new CheckBox { Name = PdfKutusuAdi, Text = "PDF", Checked = false, AutoSize = true };
             if (ornek != null)
             {
                 b.Size = ornek.Size;
@@ -226,7 +237,7 @@ namespace OtomatikKesit
                 b.Anchor = ornek.Anchor;
                 b.FlatAppearance.BorderColor = ornek.FlatAppearance.BorderColor;
                 b.FlatAppearance.BorderSize = ornek.FlatAppearance.BorderSize;
-                foreach (Button bb in new[] { bh, bp })
+                foreach (Button bb in new[] { bh, bp, bt })
                 {
                     bb.Size = ornek.Size; bb.Font = ornek.Font; bb.FlatStyle = ornek.FlatStyle;
                     bb.BackColor = ornek.BackColor; bb.ForeColor = ornek.ForeColor; bb.UseVisualStyleBackColor = ornek.UseVisualStyleBackColor;
@@ -235,7 +246,7 @@ namespace OtomatikKesit
                 }
                 bh.Font = new System.Drawing.Font(ornek.Font, FontStyle.Bold);
                 b.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-                foreach (CheckBox c in new[] { chk, chkR, chkI, chkD, chkT, chkP }) { c.Font = ornek.Font; c.ForeColor = kap.ForeColor; c.Anchor = AnchorStyles.Top | AnchorStyles.Left; }
+                foreach (CheckBox c in new[] { chk, chkR, chkI, chkD, chkT, chkP, chkB, chkPdf }) { c.Font = ornek.Font; c.ForeColor = kap.ForeColor; c.Anchor = AnchorStyles.Top | AnchorStyles.Left; }
                 // Yer: ÇALIŞTIR'ın sağı, tablonun ve sağ buton sütununun (Nokta ... Liste) altı. Soldan sağa dizilir, kutunun
                 // sağ kenarına gelince alt satıra geçer (önceden kutucuklar sağ kenarın dışına düşüp görünmüyordu).
                 Control calistir = kap.Controls.Find("btnRun", false).FirstOrDefault();
@@ -253,8 +264,8 @@ namespace OtomatikKesit
                     c.Location = new Point(px, py);
                     px += sz.Width + 6; satirH = Math.Max(satirH, sz.Height);
                 };
-                koy(bh, false);
-                koy(chk, true); koy(chkR, false); koy(chkI, false); koy(chkD, false); koy(chkT, false); koy(chkP, false);
+                koy(bh, false); koy(bt, false); koy(chkPdf, false);
+                koy(chk, true); koy(chkR, false); koy(chkI, false); koy(chkD, false); koy(chkT, false); koy(chkP, false); koy(chkB, false);
             }
             else
             {
@@ -264,12 +275,16 @@ namespace OtomatikKesit
                 bh.Location = new Point(84, 8);
                 bp.Size = new Size(60, 24);
                 bp.Location = new Point(180, 8);
+                bt.Size = new Size(70, 24);
+                bt.Location = new Point(250, 8);
+                chkPdf.Location = new Point(330, 12);
                 chk.Location = new Point(8, 36);
                 chkR.Location = new Point(8, 58);
                 chkI.Location = new Point(8, 80);
                 chkD.Location = new Point(8, 102);
                 chkT.Location = new Point(8, 124);
                 chkP.Location = new Point(8, 146);
+                chkB.Location = new Point(8, 168);
             }
 
             // tek düğme: ÇİZ; Oto Kesit, Pafta ve OutlineDrawing'in ÇALIŞTIR'ı gizli (ÇİZ onları sırayla çalıştırır)
@@ -285,6 +300,9 @@ namespace OtomatikKesit
             kap.Controls.Add(chkD);
             kap.Controls.Add(chkT);
             kap.Controls.Add(chkP);
+            kap.Controls.Add(chkB);
+            kap.Controls.Add(bt);
+            kap.Controls.Add(chkPdf);
             b.BringToFront();
             bh.BringToFront();
             bp.BringToFront();
@@ -294,12 +312,26 @@ namespace OtomatikKesit
             chkD.BringToFront();
             chkT.BringToFront();
             chkP.BringToFront();
+            chkB.BringToFront();
+            bt.BringToFront();
+            chkPdf.BringToFront();
             var tip = new ToolTip();
             tip.SetToolTip(b, "Çizimci gibi sade kesitleri bulup tabloya yazar: yatay planlar, travers düzlemleri, çerçeveler, bacak iç düzlemleri");
             tip.SetToolTip(chkT, "İşaretliyse her gizli eleman mutlaka bir kesitte gösterilir (küçük, eğik parça kesitler de alınır). " +
                                  "İşaretsizse sade: yalnız mantıklı yerlerden kesit, kalan elemanlar görünüşte iç eleman çizgisi olarak durur");
+            var listeKutusu = Alan(f, "chkTable") as CheckBox;
+            if (listeKutusu != null)
+                tip.SetToolTip(listeKutusu, "Paftaya .tow'dan malzeme listesi (Group Label, Desc., Angle Size, Strength) konsun. İşaretsizse liste yok, " +
+                                            "o alan da kesitlere açılır");
             tip.SetToolTip(chkP, "Oto Kesit, paftada boş kalacak yer varsa ek kesitler de yazar (bacak başı köşe planı, kafes / gövde plan " +
                                  "çaprazları gibi); pafta ölçeği büyümez. Ek kesitler tabloda \"Ek kesit\" ipucuyla görünür, istenmeyen satır silinebilir");
+            tip.SetToolTip(chkB, "Paftada görünüşlerden sonra yer kalırsa kesitler daha büyük ölçekte çizilir (ör. kule 1:100, kesitler 1:75): " +
+                                 "çizgiler büyür, eleman isimleri ve ölçü yazıları aynı boyda kalır, ölçüler gerçek mm yazar; başlığın altına " +
+                                 "\"SCALE 1:x\" notu. Antetteki ölçek görünüşlerin ölçeğidir");
+            tip.SetToolTip(chkPdf, "ÇİZ ve Toplu: pafta kurulunca PDF'i de yaz (DWG To PDF, A1, pafta ölçeğinde, siyah-beyaz); .tow'un yanına <ad>_pafta.pdf");
+            tip.SetToolTip(bt, "Toplu çizim: birden çok .tow seçin; her biri sırayla çizilir (otomatik kesit, çizim, pafta) ve .tow'un yanına " +
+                               "<ad>_pafta.dwg (PDF işaretliyse <ad>_pafta.pdf) olarak kaydedilir. Mesaj kutusu açılmaz, sonuç sonda listelenir");
+            bt.Click += (s, e) => Guvenli(f, "Toplu çizim", () => TopluCiz(f));
             tip.SetToolTip(chk, "ÇALIŞTIR'dan sonra kesitlere ölçü koy (komut: OTOOLCU)");
             tip.SetToolTip(chkR, "YÜKLE ve ÇALIŞTIR'dan sonra 3D modelde, görünüşlerde ve kesitlerde ana elemanlar düz, redundant elemanlar kesikli; isimler tek renk (komut: OTOSTIL)");
             tip.SetToolTip(chkD, "ÇALIŞTIR'dan sonra kesitleri kendi boyutlarına göre satırlar halinde sıkı bir ızgaraya dizer (tek uzun sıra yerine); çizgiler, etiketler, başlık ve ölçüler birlikte taşınır (komut: OTODIZ)");
@@ -354,6 +386,17 @@ namespace OtomatikKesit
                 if (_calistirSarili && !_sonCizdi) return;   // ÇALIŞTIR iptal edildi / çizmedi
                 string once = HataEtiketi(f, null);
                 bool oldu = PaftaKur(f, once);
+                if (oldu && PdfIsteniyor(f))
+                {
+                    string pdf = CiktiYolu(YolAl(f), ".pdf");
+                    try { PdfCikti.Yaz(pdf); Komutlar.Yaz("\nPDF: " + pdf + "\n"); Uyari(f, HataEtiketi(f, null) + " | PDF: " + Path.GetFileName(pdf)); }
+                    catch (System.Exception ex)
+                    {
+                        Komutlar.Yaz("\nPDF yazılamadı (" + pdf + "):\n" + IcHata(ex) + "\n");
+                        MessageBox.Show(f, "PDF yazılamadı:\n" + IcHata(ex).Message + "\n\n(Ayrıntı komut satırında, F2.)", "Otomatik Kesit",
+                                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                }
                 if (!oldu && _sonDiz)
                 {
                     // pafta kurulamadı: kesitler OutlineDrawing'in tek sırasında kalmasın
@@ -429,7 +472,7 @@ namespace OtomatikKesit
                     if (runSarili && !_sonCizdi)
                     {
                         // Tablo hatası vb.: OutlineDrawing çizmedi. Eski çizime dokunulmaz, sebebi gözden kaçmasın.
-                        if (_sonOdMesaji != null)
+                        if (_sonOdMesaji != null && !Toplu)
                             MessageBox.Show(f, "ÇİZİM YENİLENMEDİ.\n\n" + _sonOdMesaji, "Otomatik Kesit", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
@@ -530,6 +573,14 @@ namespace OtomatikKesit
                         });
                         if (r != null) Komutlar.Yaz("\n" + r + ".\n");
                     }
+                    {
+                        string r = adim("isim çakışması", () =>
+                        {
+                            try { return EtiketDuzeni.Uygula(f); }
+                            catch (System.Exception ex) { Komutlar.Yaz("\nEleman isimleri düzenlenemedi: " + IcHata(ex).Message + "\n"); return null; }
+                        });
+                        if (r != null) mesaj.Add(r);
+                    }
                     _sonDiz = chkD.Checked;
                     if (chkD.Checked && !_paftaGelecek)
                     {
@@ -550,7 +601,8 @@ namespace OtomatikKesit
                     Komutlar.Yaz("\n" + sureOzet + " (" + string.Join(", ", sureler) + ").\n");
                     mesaj.Add(sureOzet);
                     Uyari(f, string.Join(" | ", mesaj));
-                    if (sorun.Count > 0)
+                    if (sorun.Count > 0 && Toplu) TopluNotlar.AddRange(sorun);
+                    else if (sorun.Count > 0)
                         MessageBox.Show(f, string.Join("\n\n", sorun) + "\n\n(Ayrıntı komut satırında, F2.)", "Otomatik Kesit - kontrol edin",
                             MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }); } finally { GorunusYeri.OnbellekKapat(); } };
@@ -573,6 +625,7 @@ namespace OtomatikKesit
                 System.Exception ic = IcHata(ex);
                 // yığın izi komut satırına (F2): hatanın yeri bulunabilsin
                 Komutlar.Yaz("\n" + ne + " hatası: " + ic + "\n");
+                if (Toplu) { TopluNotlar.Add(ne + " hatası: " + ic.Message); return; }
                 try
                 {
                     if (f != null && !f.IsDisposed)
@@ -715,6 +768,100 @@ namespace OtomatikKesit
         private static bool _paftaGelecek;   // Hepsini Çiz: ÇALIŞTIR'dan sonra pafta kurulacak (dizme ve REGEN atlanır)
         private static bool _sonDiz;         // son ÇALIŞTIR'da "Kesitleri diz" işaretliydi
 
+        /// <summary>Toplu çizim sürüyor: mesaj kutuları açılmaz, notlar TopluNotlar'a.</summary>
+        internal static bool Toplu;
+        internal static readonly List<string> TopluNotlar = new List<string>();
+
+        /// <summary>.tow'un yanında çıktı: "&lt;ad&gt;_pafta.dwg" / ".pdf" (kullanıcının kendi dosyasının üstüne yazılmasın).</summary>
+        internal static string CiktiYolu(string tow, string uzanti)
+        {
+            string klasor = Path.GetDirectoryName(tow);
+            if (string.IsNullOrEmpty(klasor)) klasor = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            return Path.Combine(klasor, Path.GetFileNameWithoutExtension(tow) + "_pafta" + uzanti);
+        }
+
+        /// <summary>Toplu çizim: seçilen .tow dosyalarının her biri için ÇİZ (otomatik kesit, çizim, pafta); her biri .tow'un yanına
+        /// &lt;ad&gt;_pafta.dwg (PDF işaretliyse &lt;ad&gt;_pafta.pdf) olarak kaydedilir. Mesaj kutusu açılmaz; sonuçlar sonda.</summary>
+        private static void TopluCiz(Form f)
+        {
+            string[] dosyalar;
+            using (var dlg = new OpenFileDialog { Filter = "PLS-TOWER (*.tow)|*.tow", Multiselect = true, Title = "Toplu çizim: .tow dosyalarını seçin" })
+            {
+                if (dlg.ShowDialog(f) != DialogResult.OK || dlg.FileNames.Length == 0) return;
+                dosyalar = dlg.FileNames;
+            }
+            bool pdf = PdfIsteniyor(f);
+            DialogResult c = MessageBox.Show(f,
+                string.Format("{0} dosya sırayla çizilecek. Her biri için model alanı silinip yeniden çizilir, pafta kurulur ve .tow'un yanına " +
+                              "<ad>_pafta.dwg{1} kaydedilir (varsa üstüne yazılır).\n\nDevam edilsin mi?", dosyalar.Length, pdf ? " ve <ad>_pafta.pdf" : ""),
+                "Otomatik Kesit - toplu çizim", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (c != DialogResult.Yes) return;
+            Ayarlar.Kaydet(f);
+            _silmeOnaylandi = true;
+            var sonuc = new List<string>();
+            var sure = System.Diagnostics.Stopwatch.StartNew();
+            Toplu = true;
+            try
+            {
+                for (int i = 0; i < dosyalar.Length; i++)
+                {
+                    string yol = dosyalar[i];
+                    TopluNotlar.Clear();
+                    Uyari(f, string.Format("Toplu çizim {0}/{1}: {2}", i + 1, dosyalar.Length, Path.GetFileName(yol)));
+                    try { f.Refresh(); } catch { }   // yalnız boyama (DoEvents değil: çizim sürerken tıklama işlenmesin)
+                    string r;
+                    try { r = TekCiz(f, yol, pdf); }
+                    catch (System.Exception ex) { r = "HATA: " + IcHata(ex).Message; Komutlar.Yaz("\nToplu çizim hatası (" + yol + "):\n" + IcHata(ex) + "\n"); }
+                    if (TopluNotlar.Count > 0) r += " [" + string.Join("; ", TopluNotlar.Distinct().Take(3)) + "]";
+                    sonuc.Add(Path.GetFileName(yol) + ": " + r);
+                    Komutlar.Yaz("\nToplu çizim " + (i + 1) + "/" + dosyalar.Length + " " + sonuc[sonuc.Count - 1] + "\n");
+                }
+            }
+            finally { Toplu = false; TopluNotlar.Clear(); }
+            string ozet = string.Format(CultureInfo.InvariantCulture, "Toplu çizim bitti ({0} dosya, {1:0} s):\n\n", dosyalar.Length, sure.Elapsed.TotalSeconds) +
+                          string.Join("\n", sonuc);
+            Komutlar.Yaz("\n" + ozet + "\n");
+            Uyari(f, string.Format("Toplu çizim bitti: {0} dosya (sonuçlar komut satırında)", dosyalar.Length));
+            MessageBox.Show(f, ozet, "Otomatik Kesit - toplu çizim", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        /// <summary>Bir .tow'u ÇİZ gibi çizer (tablo her zaman otomatik kesitlerle yeniden doldurulur), DWG ve isteğe bağlı PDF yazar.</summary>
+        private static string TekCiz(Form f, string yol, bool pdf)
+        {
+            var txt = Alan(f, "txtTowerPath") as TextBox;
+            if (txt == null) return "OutlineDrawing formunda .tow kutusu yok";
+            txt.Text = yol;
+            PropertyInfo sp = f.GetType().GetProperty("SelectedFilePath", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (sp != null && sp.CanWrite && sp.PropertyType == typeof(string)) sp.SetValue(f, yol, null);
+            var grid = Alan(f, "dataGridView1") as DataGridView;
+            if (grid != null)
+            {
+                _tabloYaziliyor = true;
+                try { grid.Rows.Clear(); } finally { _tabloYaziliyor = false; }
+            }
+            TabloyuDoldur(f);
+            if (!_sonDoldurmaTamam) return "çizilmedi: " + (HataEtiketi(f, null) ?? "otomatik kesit bulunamadı");
+            var calistir = Alan(f, "btnRun") as Button;
+            if (calistir == null) return "ÇALIŞTIR düğmesi bulunamadı";
+            _paftaGelecek = true;
+            try { Tikla(calistir); }
+            finally { _paftaGelecek = false; }
+            if (_calistirSarili && !_sonCizdi) return "çizilmedi: " + (_sonOdMesaji ?? "OutlineDrawing çizmedi");
+            bool oldu = PaftaKur(f, null);
+            string paftaOzet = (HataEtiketi(f, null) ?? "").Trim();
+            var parca = new List<string> { oldu ? paftaOzet : "pafta kurulamadı (" + paftaOzet + ")" };
+            string dwg = CiktiYolu(yol, ".dwg");
+            try { PdfCikti.DwgYaz(dwg); parca.Add(Path.GetFileName(dwg)); }
+            catch (System.Exception ex) { parca.Add("DWG yazılamadı: " + IcHata(ex).Message); Komutlar.Yaz("\nDWG yazılamadı:\n" + IcHata(ex) + "\n"); }
+            if (pdf && oldu)
+            {
+                string p = CiktiYolu(yol, ".pdf");
+                try { PdfCikti.Yaz(p); parca.Add(Path.GetFileName(p)); }
+                catch (System.Exception ex) { parca.Add("PDF yazılamadı: " + IcHata(ex).Message); Komutlar.Yaz("\nPDF yazılamadı:\n" + IcHata(ex) + "\n"); }
+            }
+            return string.Join(" | ", parca);
+        }
+
         /// <summary>Gizli düğmenin Click olayını çalıştırır (PerformClick görünmeyen düğmede çalışmaz).</summary>
         private static void Tikla(Button b)
         {
@@ -801,6 +948,7 @@ namespace OtomatikKesit
             string m = "OutlineDrawing bu .tow dosyasını okuyamadı; " + ad + " yapılmadı (model alanı silinmedi).\n\nSebep: " + hata +
                        "\n\nDosyayı PLS-TOWER'da açıp yeniden kaydedin; düzelmezse dosyayı geliştiriciye gönderin.";
             Komutlar.Yaz("\n" + m.Replace("\n\n", " ") + "\n");
+            if (Toplu) { TopluNotlar.Add(".tow okunamadı: " + hata); return false; }
             try { MessageBox.Show(f, m, "Otomatik Kesit", MessageBoxButtons.OK, MessageBoxIcon.Error); } catch { }
             return false;
         }
@@ -873,6 +1021,30 @@ namespace OtomatikKesit
         }
 
         internal const string PaftaDoldurKutusuAdi = "chkPaftaDoldur";
+        internal const string BuyukKesitKutusuAdi = "chkBuyukKesit";
+        internal const string PdfKutusuAdi = "chkPafta_Pdf";
+        private const string TopluButonAdi = "btnToplu";
+
+        internal static bool PdfIsteniyor(Form f)
+        {
+            var c = f.Controls.Find(PdfKutusuAdi, true).FirstOrDefault() as CheckBox;
+            return c != null && c.Checked;
+        }
+
+        /// <summary>"Büyük kesit" işaretli mi: paftada yer kalırsa kesitler daha büyük ölçekte (kutu yoksa evet).</summary>
+        internal static bool BuyukKesitIsteniyor(Form f)
+        {
+            var c = f.Controls.Find(BuyukKesitKutusuAdi, true).FirstOrDefault() as CheckBox;
+            return c == null || c.Checked;
+        }
+
+        /// <summary>Paftaya malzeme listesi konsun mu: OutlineDrawing formundaki "Malzeme Listesi" kutusu (chkTable). OutlineDrawing
+        /// bu kutuyu hiçbir yerde kullanmıyordu; artık paftadaki .tow malzeme listesini açıp kapatır. Kutu yoksa evet.</summary>
+        internal static bool ListeIsteniyor(Form f)
+        {
+            var c = f != null ? Alan(f, "chkTable") as CheckBox : null;
+            return c == null || c.Checked;
+        }
 
         /// <summary>"Paftayı doldur" işaretli mi (kutu yoksa evet).</summary>
         internal static bool PaftaDoldur(Form f)
@@ -881,12 +1053,13 @@ namespace OtomatikKesit
             return c == null || c.Checked;
         }
 
-        internal static string OtoAnahtar(string path, bool on, bool yan, bool tum, bool doldur)
+        internal static string OtoAnahtar(string path, bool on, bool yan, bool tum, bool doldur, bool liste)
         {
             try
             {
                 var fi = new FileInfo(path);
-                return fi.Exists ? fi.FullName + "|" + fi.LastWriteTimeUtc.Ticks + "|" + fi.Length + "|" + on + "|" + yan + "|" + tum + "|" + doldur : null;
+                // liste: paftada liste yeri ek kesitlerin sığmasını değiştirir
+                return fi.Exists ? fi.FullName + "|" + fi.LastWriteTimeUtc.Ticks + "|" + fi.Length + "|" + on + "|" + yan + "|" + tum + "|" + doldur + "|" + (doldur && liste) : null;
             }
             catch { return null; }
         }
@@ -897,13 +1070,13 @@ namespace OtomatikKesit
             if (_otoTabloAnahtari == null) return false;
             bool on, yan;
             GorunusSecimi(f, out on, out yan);
-            return _otoTabloAnahtari == OtoAnahtar(YolAl(f), on, yan, TumElemanlar(f), PaftaDoldur(f));
+            return _otoTabloAnahtari == OtoAnahtar(YolAl(f), on, yan, TumElemanlar(f), PaftaDoldur(f), ListeIsteniyor(f));
         }
 
         /// <summary>Paftada boş kalacak yere sığan ek kesitler (PaftaTahmini; aile dosyasında eklentinin uzatma çizimleri de
         /// paftada yer tutar). Hata olursa ek kesit yok.</summary>
         private static List<AutoSectionCandidate> PaftaEkleri(KuleVerisi kule, string path, ICollection<string> gorunen,
-            List<AutoSectionCandidate> bulunan, bool yan)
+            List<AutoSectionCandidate> bulunan, bool yan, bool listeVar)
         {
             try
             {
@@ -911,7 +1084,7 @@ namespace OtomatikKesit
                 if (adaylar.Count == 0) return adaylar;
                 List<UzatmaCizimi> uzatma = new List<UzatmaCizimi>();
                 try { uzatma = UzatmaPlani.Hesapla(AileParcalari.Oku(TowYama.SatirlarHam(path))); } catch { }
-                bool liste = MalzemeListesi.Oku(path).Count > 0;
+                bool liste = listeVar && MalzemeListesi.Oku(path).Count > 0;
                 double olcek;
                 List<AutoSectionCandidate> ek = PaftaTahmini.Doldur(kule, bulunan, adaylar, uzatma.Select(c => c.Cizgiler).ToList(),
                     uzatma.Select(c => c.Baslik).ToList(), yan, liste, out olcek);
@@ -960,7 +1133,7 @@ namespace OtomatikKesit
                 // elemanlarıdır; görünüş seçimi yalnız sade modu belirler.
                 ICollection<string> gorunen = GorunenAnahtarlar(kule, true, true);
                 bool tum = TumElemanlar(f), doldur = PaftaDoldur(f);
-                string anahtar = OtoAnahtar(path, onSecili, yanSecili, tum, doldur);
+                string anahtar = OtoAnahtar(path, onSecili, yanSecili, tum, doldur, ListeIsteniyor(f));
                 if (anahtar != null && anahtar == _otoHesapAnahtar)
                 {
                     bulunan = _otoHesapBulunan; rapor = _otoHesapRapor;   // aynı .tow ve görünüş seçimi: yeniden hesaplanmaz
@@ -973,7 +1146,7 @@ namespace OtomatikKesit
                         // paftada boş kalacak yere ek kesitler (yalnız ön görünüş çizilirken pafta kurulur)
                         if (doldur && onSecili && bulunan.Count > 0)
                         {
-                            List<AutoSectionCandidate> ek = PaftaEkleri(kule, path, gorunen, bulunan, yanSecili);
+                            List<AutoSectionCandidate> ek = PaftaEkleri(kule, path, gorunen, bulunan, yanSecili, ListeIsteniyor(f));
                             if (ek.Count > 0) bulunan = OtoKesitBulucu.Sirala(bulunan.Concat(ek));
                         }
                     }
@@ -1033,7 +1206,7 @@ namespace OtomatikKesit
 
                 HarfleriYenile(f);
                 } finally { _tabloYaziliyor = false; }
-                _otoTabloAnahtari = OtoAnahtar(path, onSecili, yanSecili, tum, doldur);   // tablo bu .tow + seçim için Oto Kesit'in ürettiği hal
+                _otoTabloAnahtari = OtoAnahtar(path, onSecili, yanSecili, tum, doldur, ListeIsteniyor(f));   // tablo bu .tow + seçim için Oto Kesit'in ürettiği hal
 
                 string ozet = string.Format("{0} kesit eklendi", bulunan.Count);
                 int ekSayisi = bulunan.Count(c => c.Description != null && c.Description.StartsWith(OtoKesitBulucu.EkKesitOnEki, StringComparison.Ordinal));
@@ -1174,7 +1347,8 @@ namespace OtomatikKesit
                     var r = fi.GetValue(f) as RadioButton;
                     if (r != null && r.Checked) satir.Add("secim:" + fi.Name + "=1");
                 }
-                foreach (string ad in new[] { "chkAutoDim", "chkRedundant", "chkIcEleman", "chkKesitDiz", FormBaglayici.TumElemanKutusuAdi, FormBaglayici.PaftaDoldurKutusuAdi })
+                foreach (string ad in new[] { "chkAutoDim", "chkRedundant", "chkIcEleman", "chkKesitDiz", FormBaglayici.TumElemanKutusuAdi, FormBaglayici.PaftaDoldurKutusuAdi,
+                                              FormBaglayici.BuyukKesitKutusuAdi, FormBaglayici.PdfKutusuAdi })
                 {
                     var c = f.Controls.Find(ad, true).FirstOrDefault() as CheckBox;
                     if (c != null) satir.Add("eklenti:" + ad + "=" + (c.Checked ? "1" : "0"));
@@ -1578,6 +1752,71 @@ namespace OtomatikKesit
         }
     }
 
+    /// <summary>Antet bilgileri (AutoCAD'den bağımsız): .tow'un PLS-TOWER başlık satırları ("0 ; use edf suffixes"tan sonraki iki
+    /// satır: Title 1 = proje, Title 2 = kule; YAA-R1: "Angola" / "YAA Tower"), tarih ve ölçek.</summary>
+    public class AntetBilgisi
+    {
+        public string Proje = "", Kule = "", Tarih = "";
+
+        public static AntetBilgisi Oku(string towPath, DateTime tarih)
+        {
+            var a = new AntetBilgisi { Tarih = tarih.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture) };
+            if (string.IsNullOrEmpty(towPath)) return a;
+            try
+            {
+                string[] b = Basliklar(TowYama.SatirlarHam(towPath));
+                a.Proje = b[0]; a.Kule = b[1];
+            }
+            catch { }
+            if (a.Kule.Length == 0) a.Kule = Path.GetFileNameWithoutExtension(towPath).Replace('_', ' ').Trim();
+            return a;
+        }
+
+        /// <summary>{ Title 1, Title 2 } (yoksa boş).</summary>
+        public static string[] Basliklar(string[] satirlar)
+        {
+            var r = new[] { "", "" };
+            if (satirlar == null) return r;
+            int i = Array.FindIndex(satirlar, x => x != null && x.IndexOf("use edf suffixes", StringComparison.OrdinalIgnoreCase) >= 0);
+            if (i < 0) return r;
+            for (int k = 0; k < 2 && i + 1 + k < satirlar.Length; k++)
+            {
+                string t = (satirlar[i + 1 + k] ?? "").Trim();
+                if (t.Contains(";")) break;   // başlık satırı değil (bir sonraki tablo)
+                r[k] = t;
+            }
+            return r;
+        }
+
+        /// <summary>Şablondaki tarihin ayırıcısıyla bugünün tarihi ("15.10.2026" -> "20.10.2026", "14/10/2026" -> "20/10/2026").</summary>
+        public static string TarihBicimi(string eski, string yeni)
+        {
+            Match m = Regex.Match(eski ?? "", @"^\s*\d{1,2}([./-])\d{1,2}[./-]\d{4}\s*$");
+            return m.Success ? yeni.Replace(".", m.Groups[1].Value) : yeni;
+        }
+
+        public static bool TarihMi(string metin)
+        {
+            return Regex.IsMatch((metin ?? "").Trim(), @"^\d{1,2}[./-]\d{1,2}[./-]\d{4}$");
+        }
+
+        /// <summary>MTEXT içeriğinin yazısını değiştirir, biçimini (yükseklik, yazı tipi, renk kodları) korur:
+        /// "{\H1.66667x;400kV INTERCONNECT PROJECT}" -> "{\H1.66667x;YAA Tower}".</summary>
+        public static string MTextDegistir(string icerik, string yeni)
+        {
+            string y = (yeni ?? "").Replace("\\", "\\\\").Replace("{", "\\{").Replace("}", "\\}");
+            if (string.IsNullOrEmpty(icerik)) return y;
+            int son = icerik.LastIndexOf(';');
+            string bas = son >= 0 ? icerik.Substring(0, son + 1) : "";
+            int k = icerik.Length;
+            while (k > son + 1 && icerik[k - 1] == '}') k--;
+            // ';' biçim kodu değil de yazının parçasıysa (öncesinde \ kodu yok) biçimsiz say
+            if (son >= 0 && icerik.LastIndexOf('\\', son) < 0) { bas = ""; k = icerik.Length; while (k > 0 && icerik[k - 1] == '}') k--; }
+            int acik = bas.Count(c => c == '{'), kapali = icerik.Length - k;
+            return bas + y + new string('}', Math.Min(acik, kapali));
+        }
+    }
+
     /// <summary>Pafta yerleşimi (AutoCAD'den bağımsız). Kâğıt koordinatı: şablonun (0,0)-(G,Y) dikdörtgeni; bölgeler şirketin A1
     /// paftasından (YAA_OUTLINE_rev0) ölçülmüş oranlar. Ön görünüş solda, yan görünüş yanında (yalnız yatay kayar), kesitler
     /// kalan alana (sol blok, malzeme listesinin altı) raf raf; sığmazsa ölçek büyür. Ölçek 5'in katına yuvarlanır (1:x).</summary>
@@ -1596,12 +1835,88 @@ namespace OtomatikKesit
             public List<double[]> KesitKayma = new List<double[]>();   // { du, dv }
             public double[] ListeAlani;       // kâğıtta { x0, y0, x1, y1 } (liste yoksa null)
             public bool Sigdi;
+            /// <summary>Kesitlerin büyütme çarpanı (1: görünüşle aynı ölçek). KesitKayma büyütülmüş kutuya göredir: kesit önce
+            /// kutusunun sol alt köşesi etrafında Buyutme kadar büyütülür, sonra kaydırılır.</summary>
+            public double Buyutme = 1;
+            /// <summary>Kesitlerin ölçeği 1:KesitOlcek (büyütme yoksa Olcek).</summary>
+            public double KesitOlcek;
+        }
+
+        /// <summary>Kesit büyütme sınırları: bundan az büyütme değmez, bundan çoğu görünüşün yanında orantısız durur. Kesit ölçeği
+        /// paftanınki gibi 5'in katı (1:x).</summary>
+        public static double EnAzBuyutme = 1.15, EnCokBuyutme = 3;
+
+        /// <summary>Büyütülmüş kesitin başlığı altındaki ölçek notu ("SCALE 1:x"): yüksekliği başlığınkinin NotOrani katı, başlıkla
+        /// arası başlık yüksekliğinin NotAraligi katı. Kutu hesabında genişliği NotKarakter karakterlik (en uzun hali) sayılır.</summary>
+        public const double NotOrani = 0.7, NotAraligi = 0.35;
+        const int NotKarakter = 11;
+
+        public static string NotYazisi(double ks) { return "SCALE 1:" + ks.ToString("0", CultureInfo.InvariantCulture); }
+
+        /// <summary>Büyütülmüş kesitin kutusu (model { u0, v0, u1, v1 }). c: başlık hariç çizim (çizgiler, eleman isimleri, ölçüler);
+        /// sol alt köşesi etrafında k kat büyür (yazıların boyu aynı kalır, yerleri büyür: sonuç bu kutunun içinde). t: başlık
+        /// (null: yok); çizimin altındaysa boyu ve düşey yeri aynı, yatayda merkezi çizimle birlikte kayar (çizimle arası değişmez);
+        /// değilse merkezi çizimle birlikte büyür. Başlığın (yoksa çizimin) altına ölçek notu. baslikYuk: başlık yazısının
+        /// yüksekliği. KesitBuyutucu nesneleri aynı kuralla taşır.</summary>
+        public static double[] BuyukKutu(double[] c, double[] t, double k, double baslikYuk)
+        {
+            var r = new[] { c[0], c[1], c[0] + k * (c[2] - c[0]), c[1] + k * (c[3] - c[1]) };
+            double nu = (r[0] + r[2]) / 2, nv = r[1];   // notun ortası ve üstünün dayanacağı kot
+            if (t != null)
+            {
+                double tu = (t[0] + t[2]) / 2, tv = (t[1] + t[3]) / 2, yw = (t[2] - t[0]) / 2, yh = (t[3] - t[1]) / 2;
+                double yu = c[0] + k * (tu - c[0]), yv = BaslikAlta(c, t) ? tv : c[1] + k * (tv - c[1]);
+                r = Birlestir(r, new[] { yu - yw, yv - yh, yu + yw, yv + yh });
+                nu = yu; nv = yv - yh;
+            }
+            double h = NotOrani * baslikYuk, nw = NotKarakter * 0.9 * h / 2, ust = nv - NotAraligi * baslikYuk;
+            return Birlestir(r, new[] { nu - nw, ust - h, nu + nw, ust });
+        }
+
+        /// <summary>Başlık çizimin altında mı (üstü çizimin altından aşağıda; küçük taşma toleranslı).</summary>
+        public static bool BaslikAlta(double[] c, double[] t) { return t[3] <= c[1] + 0.25 * (t[3] - t[1]); }
+
+        static double[] Birlestir(double[] a, double[] b)
+        {
+            return new[] { Math.Min(a[0], b[0]), Math.Min(a[1], b[1]), Math.Max(a[2], b[2]), Math.Max(a[3], b[3]) };
         }
 
         static double[] Olc(double[] f, double G, double Y) { return new[] { f[0] * G, f[1] * Y, f[2] * G, f[3] * Y }; }
 
         /// <param name="on">Ön görünüş kutusu (model { u0, v0, u1, v1 }); yerinde kalır, pafta onun etrafına kurulur.</param>
         /// <param name="yan">Yan görünüş kutusu (yoksa null).</param>
+        /// <param name="buyut">Görünüşlerin ölçeği belirlendikten sonra paftada yer kalıyorsa kesitler daha büyük bir ölçekte (1:x, x 5'in
+        /// katı, görünüşün EnAzBuyutme..EnCokBuyutme katı) yerleştirilir; sığan en büyüğü seçilir.</param>
+        /// <param name="buyukKutu">(kesit sırası, k) -> büyütülmüş kesitin kutusu (BuyukKutu); null: kutu sol alt köşesi etrafında k kat.
+        /// KesitKayma bu kutuya göredir.</param>
+        public static Sonuc Hesapla(double[] on, double[] yan, List<double[]> kesitler, bool liste, double G, double Y, bool buyut,
+                                    Func<int, double, double[]> buyukKutu = null)
+        {
+            Sonuc r = Hesapla(on, yan, kesitler, liste, G, Y);
+            r.KesitOlcek = r.Olcek;
+            if (!buyut || !r.Sigdi || kesitler.Count == 0) return r;
+            double[] ic = Olc(Ic, G, Y), ant = Olc(Antet, G, Y), lst = Olc(Liste, G, Y);
+            double B = Bosluk;
+            var L = new[] { ic[0] + B, ic[1] + B, (liste ? lst[0] : ant[0]) - B, ic[3] - B };
+            var bolgeler = new List<double[]>();
+            if (liste) bolgeler.Add(new[] { lst[0], ic[1] + B, ant[0] - B, lst[1] - B });
+            else bolgeler.Add(new[] { ant[0] + B, ant[3] + B, ic[2] - B, ic[3] - B });
+            for (double ks = 5; ks < r.Olcek; ks += 5)
+            {
+                double k = r.Olcek / ks;
+                if (k > EnCokBuyutme || k < EnAzBuyutme) continue;
+                var buyuk = kesitler.Select((b, i) => b == null ? null : buyukKutu != null ? buyukKutu(i, k)
+                                                                     : new[] { b[0], b[1], b[0] + k * (b[2] - b[0]), b[1] + k * (b[3] - b[1]) }).ToList();
+                Sonuc r2 = Dene(on, yan, buyuk, r.Olcek, L, bolgeler, B);
+                if (r2 == null) continue;
+                r2.ListeAlani = r.ListeAlani;
+                r2.Buyutme = k;
+                r2.KesitOlcek = ks;
+                return r2;
+            }
+            return r;
+        }
+
         public static Sonuc Hesapla(double[] on, double[] yan, List<double[]> kesitler, bool liste, double G = 841, double Y = 594.65)
         {
             double[] ic = Olc(Ic, G, Y), ant = Olc(Antet, G, Y), lst = Olc(Liste, G, Y);
@@ -1649,11 +1964,13 @@ namespace OtomatikKesit
             bolgeler = bolgeler.Where(b => b[2] - b[0] > 1 && b[3] - b[1] > 1).ToList();
             var r = new Sonuc { Olcek = s, OrjinU = on[0] - pxF * s, OrjinV = on[1] - pyF * s, Sigdi = true };
             if (yan != null) r.YanDu = Math.Round(r.OrjinU + pxS * s - yan[0]);
-            // Her bölgede raf (satır) düzeni; kesit, sırayla, sığdığı ilk bölgeye (önce o bölgenin açık satırına, sonra yeni
-            // satıra). Geniş bir kesit bir bölgeye sığmayınca küçükler o bölgeyi boş bırakmaz.
+            // Her bölgede üst siluet (skyline) düzeni: kesit, sırayla, sığdığı ilk bölgede en üstteki (eşitse en soldaki) yere; ama
+            // bir öncekinden yukarı ya da aynı hizada soluna konmaz (okuma sırası A, B, C ... korunur). Eskiden raf (satır) düzeniydi:
+            // satırdaki uzun bir kesit, yanındaki kısa kesitlerin altını boş bırakıyordu.
             int n = bolgeler.Count;
-            var x = new double[n]; var ust = new double[n]; var satirH = new double[n];
-            for (int i = 0; i < n; i++) { x[i] = bolgeler[i][0]; ust[i] = bolgeler[i][3]; }
+            var siluet = bolgeler.Select(R => new List<double[]> { new[] { R[0], R[2], R[3] } }).ToList();   // { x0, x1, dolu alt kot }
+            var oncekiUst = bolgeler.Select(R => R[3]).ToArray();
+            var oncekiX = bolgeler.Select(R => R[0]).ToArray();
             foreach (double[] k in kesitler)
             {
                 double w = (k[2] - k[0]) / s, h = (k[3] - k[1]) / s, px = 0, py = 0;
@@ -1661,12 +1978,12 @@ namespace OtomatikKesit
                 for (int i = 0; i < n && !kondu; i++)
                 {
                     double[] R = bolgeler[i];
-                    if (w > R[2] - R[0]) continue;
-                    if (x[i] + w <= R[2] && ust[i] - h >= R[1]) { px = x[i]; py = ust[i] - h; }                 // açık satır
-                    else if (ust[i] - satirH[i] - B - h >= R[1])                                               // yeni satır
-                    { ust[i] -= satirH[i] + B; x[i] = R[0]; satirH[i] = 0; px = x[i]; py = ust[i] - h; }
-                    else continue;
-                    x[i] = px + w + B; satirH[i] = Math.Max(satirH[i], h); kondu = true;
+                    double[] yer = SiluetYeri(R, siluet[i], w, h, oncekiUst[i], oncekiX[i]);
+                    if (yer == null) continue;
+                    px = yer[0]; py = yer[1] - h;
+                    siluet[i] = SiluetGuncelle(siluet[i], px, px + w + B, py - B);
+                    oncekiUst[i] = yer[1]; oncekiX[i] = px;
+                    kondu = true;
                 }
                 if (!kondu) return null;
                 r.KesitKayma.Add(new[] { r.OrjinU + px * s - k[0], r.OrjinV + py * s - k[1] });
@@ -1674,10 +1991,311 @@ namespace OtomatikKesit
             return r;
         }
 
+        /// <summary>Bölgede w x h kutunun en üst (eşitse en sol) yeri: { x, üst kot }; sığmazsa null. Aday x'ler siluet parçalarının
+        /// başları; kutunun üst kotu, altına düştüğü parçaların en düşük dolu kotu. Önceki kesitten (üst kotu sonUst, x'i sonX)
+        /// yukarı ya da aynı hizada soluna konmaz.</summary>
+        static double[] SiluetYeri(double[] R, List<double[]> siluet, double w, double h, double sonUst, double sonX)
+        {
+            double[] enIyi = null;
+            foreach (double x in siluet.Select(p => p[0]).Concat(new[] { R[0] }).Distinct().OrderBy(v => v))
+            {
+                if (x + w > R[2] + 1e-9) continue;
+                double ust = double.MaxValue;
+                foreach (double[] p in siluet) if (p[1] > x + 1e-9 && p[0] < x + w - 1e-9) ust = Math.Min(ust, p[2]);
+                if (ust == double.MaxValue || ust - h < R[1] - 1e-9) continue;
+                if (ust > sonUst + 1e-9 || (ust > sonUst - 1e-9 && x < sonX - 1e-9)) continue;
+                if (enIyi == null || ust > enIyi[1] + 1e-9) enIyi = new[] { x, ust };
+            }
+            return enIyi;
+        }
+
+        static List<double[]> SiluetGuncelle(List<double[]> siluet, double x0, double x1, double kot)
+        {
+            var yeni = new List<double[]>();
+            foreach (double[] p in siluet)
+            {
+                if (p[1] <= x0 || p[0] >= x1) { yeni.Add(p); continue; }
+                if (p[0] < x0) yeni.Add(new[] { p[0], x0, p[2] });
+                if (p[1] > x1) yeni.Add(new[] { x1, p[1], p[2] });
+            }
+            yeni.Add(new[] { x0, x1, kot });
+            return yeni.OrderBy(p => p[0]).ToList();
+        }
+
         /// <summary>Malzeme listesi tabloları (kâğıt koordinatı): satırlar sütunlara bölünür. Döner: her hücre { x0, y0, x1, y1 } ve
         /// yazı yüksekliği; çizim için.</summary>
         public static int TabloSutunu = 3;
         public static double[] SutunOranlari = { 0.17, 0.45, 0.22, 0.16 };
+    }
+
+    /// <summary>Eleman isimlerinin (etiketlerin) birbirine binmesini giderir; AutoCAD'siz, test edilebilir (AutoCAD tarafı:
+    /// EtiketDuzeni). Her etiketin aday yerleri döndürülmüş dikdörtgen olarak verilir, ilk aday şimdiki yeri. Başka etikete
+    /// binmeyen etiket yerinde kalır. Binenler yukarıdan aşağı, soldan sağa sırayla: şimdiki yeri yerleşmiş etiketlere binmiyorsa
+    /// orada kalır; yoksa binmeyen adaylardan en az çizgi keseni (eşitse listede önce geleni) seçilir; hiçbiri boş değilse en az
+    /// etikete bineni. Zorla: şimdiki yer zaten kötü (kendi elemanının çizgisinin üstünde), yeniden seçilir.</summary>
+    public static class EtiketCozucu
+    {
+        public class Aday
+        {
+            public double[] K;          // köşeler { x0, y0, x1, y1, x2, y2, x3, y3 } (dikdörtgen, sırayla)
+            public double U, V;         // yazının hizalama noktası
+            public bool Ust;            // görünüş etiketi: elemanın öbür yanında, üstten hizalı
+            public bool Sag;            // kesit etiketi: noktanın solunda, sağdan hizalı
+            public double? Aci;         // yazının yeni yönü (düzlemde, radyan); null: aynı
+            public int Dayanak = -1;    // çizgiler listesinde dayandığı eleman (kesişmede sayılmaz)
+        }
+
+        public class Etiket
+        {
+            public List<Aday> Adaylar = new List<Aday>();
+            public int Dayanak = -1;    // çizgiler listesinde kendi elemanı
+            public bool Zorla;
+            public bool Sabit;          // taşınmaz (başlık, kesit işareti vb.): yalnız engel
+            public int Secim;           // sonuç: seçilen aday
+        }
+
+        // Kaydırma sırası: eleman ortası, sonra ortaya yakından uca doğru
+        static readonly double[] Tler = { 0.5, 0.38, 0.62, 0.28, 0.72, 0.18, 0.82 };
+
+        public static double[] Dortgen(double cu, double cv, double du, double dv, double w, double h)
+        {
+            double nu = -dv, nv = du, a = w / 2, b = h / 2;
+            return new[] { cu - du * a - nu * b, cv - dv * a - nv * b, cu + du * a - nu * b, cv + dv * a - nv * b,
+                           cu + du * a + nu * b, cv + dv * a + nv * b, cu - du * a + nu * b, cv - dv * a + nv * b };
+        }
+
+        /// <summary>Etiketin aday yerleri (ilki şimdiki yer). q: hizalama noktası, (du, dv): yazının yönü (birim), w x h: yazı kutusu,
+        /// c: kutunun ortası (hepsi düzlem koordinatı). dayanaklar: ilki kendi elemanı, sonrakiler aynı grubun öbür elemanları
+        /// (yakından uzağa; indeksler: çizgiler listesindeki yerleri). gorunus: OutlineDrawing görünüş etiketi (yazı ortası, alt /
+        /// taban; eleman doğrultusunda, elemandan biraz yukarıda): eleman boyunca t'de, elemanın iki yanında (öbür yanda üstten
+        /// hizalı); başka elemanda o elemanın doğrultusunda (okunur yönde); şimdiki yazı kendi çizgisinin üstündeyse Zorla. Değilse
+        /// kesit etiketi (sol, orta; elemanın ortasından başlar): elemanın t noktasından sağa ya da sola; yazı yatay kalır.</summary>
+        public static void AdaylarEkle(Etiket e, IList<double[]> dayanaklar, IList<int> indeksler, double qu, double qv, double du, double dv,
+                                       double w, double h, double cu, double cv, bool gorunus)
+        {
+            e.Adaylar.Add(new Aday { K = Dortgen(cu, cv, du, dv, w, h), U = qu, V = qv, Dayanak = indeksler[0] });
+            e.Dayanak = indeksler[0];
+            double[] d0 = dayanaklar[0];
+            double mu0 = (d0[0] + d0[2]) / 2, mv0 = (d0[1] + d0[3]) / 2;
+            double nu0 = -dv, nv0 = du;                                              // yazının yukarısı
+            double ofsD = (cu - qu) * du + (cv - qv) * dv, ofsN = (cu - qu) * nu0 + (cv - qv) * nv0;   // kutu ortası, noktaya göre
+            double o = (qu - mu0) * nu0 + (qv - mv0) * nv0;                         // noktanın elemana dik uzaklığı (yukarı +)
+            if (gorunus)
+            {
+                double alt = o + ofsN - h / 2, ust = o + ofsN + h / 2;
+                e.Zorla = alt < -0.1 * h && ust > 0.1 * h;                          // yazı kendi çizgisinin üstünde
+            }
+            double g = Math.Abs(o) > 0.05 * h ? Math.Abs(o) : 0.15 * h, yarimN = Math.Abs(ofsN), yarimD = Math.Abs(ofsD);
+            for (int hi = 0; hi < dayanaklar.Count; hi++)
+            {
+                double[] d = dayanaklar[hi];
+                double eu = d[2] - d[0], ev = d[3] - d[1], L = Math.Sqrt(eu * eu + ev * ev);
+                if (L < 1e-6) continue;
+                eu /= L; ev /= L;
+                double mu = (d[0] + d[2]) / 2, mv = (d[1] + d[3]) / 2;
+                double tu = du, tv = dv;
+                double? aci = null;
+                if (gorunus && hi > 0)
+                {
+                    // başka eleman: yazı o elemanın doğrultusunda, okunur yönde (OutlineDrawing gibi -90°..90°)
+                    double a = Math.Atan2(ev, eu);
+                    if (a > Math.PI / 2 + 1e-9) a -= Math.PI; else if (a < -Math.PI / 2 - 1e-9) a += Math.PI;
+                    tu = Math.Cos(a); tv = Math.Sin(a); aci = a;
+                }
+                if (eu * tu + ev * tv < 0) { eu = -eu; ev = -ev; }
+                double nu = -tv, nv = tu;
+                if (gorunus)
+                {
+                    int dogru = hi > 0 || o >= 0 ? 1 : -1;                           // noktanın olduğu yan (başka elemanda üstü)
+                    foreach (double t in Tler)
+                    {
+                        double sk = (t - 0.5) * L;
+                        if (t != 0.5 && Math.Abs(sk) + w / 2 > L / 2) continue;      // yazı elemanın boyunu aşmasın
+                        foreach (int yan in new[] { dogru, -dogru })
+                        {
+                            if (hi == 0 && t == 0.5 && yan == dogru && !e.Zorla) continue;   // şimdiki yer
+                            double au = mu + eu * sk + nu * g * yan, av = mv + ev * sk + nv * g * yan;
+                            double ku = au + tu * ofsD + nu * yarimN * yan, kv = av + tv * ofsD + nv * yarimN * yan;
+                            e.Adaylar.Add(new Aday { K = Dortgen(ku, kv, tu, tv, w, h), U = au, V = av, Ust = yan < 0, Aci = aci, Dayanak = indeksler[hi] });
+                        }
+                    }
+                }
+                else
+                {
+                    foreach (double t in Tler)
+                    {
+                        double sk = (t - 0.5) * L;
+                        foreach (bool sag in new[] { false, true })
+                        {
+                            if (hi == 0 && t == 0.5 && !sag) continue;                // şimdiki yer
+                            double au = mu + eu * sk, av = mv + ev * sk, isaret = sag ? -1 : 1;
+                            double ku = au + du * yarimD * isaret + nu0 * ofsN, kv = av + dv * yarimD * isaret + nv0 * ofsN;
+                            e.Adaylar.Add(new Aday { K = Dortgen(ku, kv, du, dv, w, h), U = au, V = av, Sag = sag, Dayanak = indeksler[hi] });
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <param name="pay">bu kadar (çizim birimi) içe girme binme sayılmaz</param>
+        /// <returns>yeri değişen etiket sayısı</returns>
+        public static int Coz(List<Etiket> etiketler, List<double[]> cizgiler, double pay)
+        {
+            var aktif = etiketler.Where(x => x.Adaylar.Count > 0).ToList();
+            foreach (Etiket x in aktif) x.Secim = 0;
+            if (aktif.Count == 0) return 0;
+            double hucre = Math.Max(1e-3, 2 * aktif.Average(x => Capraz(x.Adaylar[0].K)));
+            var simdiki = new Izgara(hucre);
+            for (int i = 0; i < aktif.Count; i++) simdiki.Ekle(Kutu(aktif[i].Adaylar[0].K), i);
+            var binen = new bool[aktif.Count];
+            for (int i = 0; i < aktif.Count; i++)
+            {
+                if (aktif[i].Zorla && !aktif[i].Sabit && aktif[i].Adaylar.Count > 1) binen[i] = true;
+                foreach (int j in simdiki.Yakin(Kutu(aktif[i].Adaylar[0].K)))
+                {
+                    if (j <= i || (aktif[i].Sabit && aktif[j].Sabit)) continue;
+                    if (!Biner(aktif[i].Adaylar[0].K, aktif[j].Adaylar[0].K, pay)) continue;
+                    if (!aktif[i].Sabit) binen[i] = true;
+                    if (!aktif[j].Sabit) binen[j] = true;
+                }
+            }
+            var yerlesik = new List<double[]>();
+            var izgara = new Izgara(hucre);
+            Action<double[]> yerlestir = k => { izgara.Ekle(Kutu(k), yerlesik.Count); yerlesik.Add(k); };
+            for (int i = 0; i < aktif.Count; i++) if (!binen[i]) yerlestir(aktif[i].Adaylar[0].K);
+            var cizgiIzgara = new Izgara(hucre);
+            for (int i = 0; i < cizgiler.Count; i++) cizgiIzgara.EkleCizgi(cizgiler[i], i);
+            Func<double[], int> binenSayisi = k => izgara.Yakin(Kutu(k)).Count(j => Biner(k, yerlesik[j], pay));
+            Func<Aday, int> kesenSayisi = a => cizgiIzgara.Yakin(Kutu(a.K)).Count(j => j != a.Dayanak && Keser(a.K, cizgiler[j], pay));
+
+            int degisen = 0;
+            var sira = Enumerable.Range(0, aktif.Count).Where(i => binen[i])
+                                 .OrderByDescending(i => Orta(aktif[i].Adaylar[0].K)[1]).ThenBy(i => Orta(aktif[i].Adaylar[0].K)[0]).ToList();
+            foreach (int i in sira)
+            {
+                Etiket e = aktif[i];
+                int sec = -1;
+                if (!e.Zorla && binenSayisi(e.Adaylar[0].K) == 0) sec = 0;
+                else
+                {
+                    int enIyi = -1, enAzKesen = int.MaxValue, yedek = e.Zorla && e.Adaylar.Count > 1 ? 1 : 0, yedekBinen = int.MaxValue;
+                    for (int c = e.Zorla ? 1 : 0; c < e.Adaylar.Count; c++)
+                    {
+                        double[] k = e.Adaylar[c].K;
+                        int b = binenSayisi(k);
+                        if (b > 0) { if (b < yedekBinen) { yedekBinen = b; yedek = c; } continue; }
+                        int n = kesenSayisi(e.Adaylar[c]);
+                        if (n < enAzKesen) { enAzKesen = n; enIyi = c; }
+                    }
+                    sec = enIyi >= 0 ? enIyi : yedek;
+                }
+                e.Secim = sec;
+                if (sec != 0) degisen++;
+                yerlestir(e.Adaylar[sec].K);
+            }
+            return degisen;
+        }
+
+        /// <summary>İki dışbükey dörtgen biniyor mu (ayırma ekseni); pay kadar içe girme sayılmaz.</summary>
+        public static bool Biner(double[] a, double[] b, double pay)
+        {
+            return !Ayrik(a, b, a, pay) && !Ayrik(a, b, b, pay);
+        }
+
+        /// <summary>Çizgi (s = { u1, v1, u2, v2 }) dörtgeni kesiyor mu; pay kadar içe girme sayılmaz.</summary>
+        public static bool Keser(double[] k, double[] s, double pay)
+        {
+            double[] c = { s[0], s[1], s[2], s[3], s[2], s[3], s[0], s[1] };   // dört köşeli say: iki kez
+            if (Ayrik(k, c, k, pay)) return false;
+            double eu = s[2] - s[0], ev = s[3] - s[1];
+            return !EksendeAyrik(k, c, -ev, eu, pay);
+        }
+
+        static bool Ayrik(double[] a, double[] b, double[] kenarlar, double pay)
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                int j = (i + 1) % 4;
+                double eu = kenarlar[2 * j] - kenarlar[2 * i], ev = kenarlar[2 * j + 1] - kenarlar[2 * i + 1];
+                if (EksendeAyrik(a, b, -ev, eu, pay)) return true;
+            }
+            return false;
+        }
+
+        static bool EksendeAyrik(double[] a, double[] b, double ax, double ay, double pay)
+        {
+            double L = Math.Sqrt(ax * ax + ay * ay);
+            if (L < 1e-12) return false;
+            ax /= L; ay /= L;
+            double a0 = double.MaxValue, a1 = double.MinValue, b0 = double.MaxValue, b1 = double.MinValue;
+            for (int i = 0; i < 4; i++)
+            {
+                double pa = a[2 * i] * ax + a[2 * i + 1] * ay, pb = b[2 * i] * ax + b[2 * i + 1] * ay;
+                a0 = Math.Min(a0, pa); a1 = Math.Max(a1, pa); b0 = Math.Min(b0, pb); b1 = Math.Max(b1, pb);
+            }
+            return a1 <= b0 + pay || b1 <= a0 + pay;
+        }
+
+        public static double[] Kutu(double[] k)
+        {
+            return new[] { Math.Min(Math.Min(k[0], k[2]), Math.Min(k[4], k[6])), Math.Min(Math.Min(k[1], k[3]), Math.Min(k[5], k[7])),
+                           Math.Max(Math.Max(k[0], k[2]), Math.Max(k[4], k[6])), Math.Max(Math.Max(k[1], k[3]), Math.Max(k[5], k[7])) };
+        }
+
+        static double[] Orta(double[] k) { return new[] { (k[0] + k[4]) / 2, (k[1] + k[5]) / 2 }; }
+        static double Capraz(double[] k) { return Math.Sqrt((k[4] - k[0]) * (k[4] - k[0]) + (k[5] - k[1]) * (k[5] - k[1])); }
+
+        /// <summary>Düzlemde kare hücreli arama ızgarası.</summary>
+        class Izgara
+        {
+            readonly double h;
+            readonly Dictionary<long, List<int>> hucreler = new Dictionary<long, List<int>>();
+            public Izgara(double hucre) { h = hucre; }
+            static long Anahtar(long i, long j) { return (i << 32) ^ (j & 0xffffffffL); }
+
+            public void Ekle(double[] kutu, int id)
+            {
+                long i0 = (long)Math.Floor(kutu[0] / h), i1 = (long)Math.Floor(kutu[2] / h), j0 = (long)Math.Floor(kutu[1] / h), j1 = (long)Math.Floor(kutu[3] / h);
+                for (long i = i0; i <= i1; i++)
+                    for (long j = j0; j <= j1; j++) Koy(Anahtar(i, j), id);
+            }
+
+            /// <summary>Uzun çizgi: kutusu yerine üzerinden geçtiği hücreler (yarım hücre adımla ve komşularıyla).</summary>
+            public void EkleCizgi(double[] s, int id)
+            {
+                double L = Math.Sqrt((s[2] - s[0]) * (s[2] - s[0]) + (s[3] - s[1]) * (s[3] - s[1]));
+                int n = Math.Max(1, (int)Math.Ceiling(2 * L / h));
+                var goruldu = new HashSet<long>();
+                for (int k = 0; k <= n; k++)
+                {
+                    double u = s[0] + (s[2] - s[0]) * k / n, v = s[1] + (s[3] - s[1]) * k / n;
+                    long i = (long)Math.Floor(u / h), j = (long)Math.Floor(v / h);
+                    for (long a = i - 1; a <= i + 1; a++)
+                        for (long b = j - 1; b <= j + 1; b++)
+                            if (goruldu.Add(Anahtar(a, b))) Koy(Anahtar(a, b), id);
+                }
+            }
+
+            void Koy(long a, int id)
+            {
+                List<int> l;
+                if (!hucreler.TryGetValue(a, out l)) hucreler[a] = l = new List<int>();
+                l.Add(id);
+            }
+
+            public IEnumerable<int> Yakin(double[] kutu)
+            {
+                var r = new HashSet<int>();
+                long i0 = (long)Math.Floor(kutu[0] / h), i1 = (long)Math.Floor(kutu[2] / h), j0 = (long)Math.Floor(kutu[1] / h), j1 = (long)Math.Floor(kutu[3] / h);
+                for (long i = i0; i <= i1; i++)
+                    for (long j = j0; j <= j1; j++)
+                    {
+                        List<int> l;
+                        if (hucreler.TryGetValue(Anahtar(i, j), out l)) foreach (int x in l) r.Add(x);
+                    }
+                return r;
+            }
+        }
     }
 
     /// <summary>ÇALIŞTIR'dan önce (Oto Kesit tabloyu doldururken) paftanın tahmini: görünüşlerin ve kesitlerin paftada
@@ -1827,6 +2445,558 @@ namespace OtomatikKesit
     }
 
     /// <summary>Pafta: şablon (gömülü ŞA-RA A1 ya da seçilen DWG/DXF) çerçevesine ön / yan görünüş, kesitler ve malzeme listesi.</summary>
+    /// <summary>Paftanın dışa çıktısı: çizimin DWG kopyası ve PDF (DWG To PDF.pc3, A1 tam kâğıt, pafta ölçeğinde). PDF, paftayı
+    /// önden (XZ; 2D Aktar sonrası üstten) tam kaplayan "OTO_PAFTA" adlı görünüşün çizdirilmesidir.</summary>
+    internal static class PdfCikti
+    {
+        internal const string GorunusAdi = "OTO_PAFTA", Cizici = "DWG To PDF.pc3";
+
+        /// <summary>Etkin çizimin kopyası (WBLOCK *): açık çizimin adı ve kaydı değişmez.</summary>
+        internal static void DwgYaz(string yol)
+        {
+            Document doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) throw new InvalidOperationException("açık çizim yok");
+            using (doc.LockDocument())
+            using (Database kopya = doc.Database.Wblock())
+                kopya.SaveAs(yol, DwgVersion.Current);
+        }
+
+        internal static void Yaz(string pdf)
+        {
+            Document doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) throw new InvalidOperationException("açık çizim yok");
+            Pafta.Bilgi b = Pafta.Son;
+            if (b == null) throw new InvalidOperationException("önce pafta kurulmalı");
+            Database db = doc.Database;
+            object eskiArka = null;
+            try { eskiArka = AcApp.GetSystemVariable("BACKGROUNDPLOT"); AcApp.SetSystemVariable("BACKGROUNDPLOT", (short)0); } catch { }
+            try
+            {
+                using (doc.LockDocument())
+                {
+                    // 1) paftayı tam kaplayan adlı görünüş (önce kaydedilir: çizdirme motoru veritabanından okur)
+                    using (Transaction tr = db.TransactionManager.StartTransaction())
+                    {
+                        var vt = (ViewTable)tr.GetObject(db.ViewTableId, OpenMode.ForRead);
+                        ViewTableRecord v;
+                        if (vt.Has(GorunusAdi)) v = (ViewTableRecord)tr.GetObject(vt[GorunusAdi], OpenMode.ForWrite);
+                        else
+                        {
+                            vt.UpgradeOpen();
+                            v = new ViewTableRecord { Name = GorunusAdi };
+                            vt.Add(v);
+                            tr.AddNewlyCreatedDBObject(v, true);
+                        }
+                        double gw = b.G * b.Olcek, gh = b.Y * b.Olcek;
+                        v.ViewDirection = b.XZ ? new Vector3d(0, -1, 0) : Vector3d.ZAxis;
+                        v.Target = b.XZ ? new Point3d(b.U0 + gw / 2, b.W, b.V0 + gh / 2) : new Point3d(b.U0 + gw / 2, b.V0 + gh / 2, b.W);
+                        v.CenterPoint = Point2d.Origin;
+                        v.ViewTwist = 0;
+                        v.Width = gw;
+                        v.Height = gh;
+                        tr.Commit();
+                    }
+                    // 2) çizdirme ayarı: görünüş, özel ölçek 1:s, A1 tam kâğıt, ortalı, siyah-beyaz
+                    using (Transaction tr = db.TransactionManager.StartTransaction())
+                    {
+                        var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
+                        var lo = (Layout)tr.GetObject(ms.LayoutId, OpenMode.ForRead);
+                        var ps = new PlotSettings(lo.ModelType);
+                        ps.CopyFrom(lo);
+                        PlotSettingsValidator psv = PlotSettingsValidator.Current;
+                        psv.SetPlotConfigurationName(ps, Cizici, null);
+                        psv.RefreshLists(ps);
+                        psv.SetPlotConfigurationName(ps, Cizici, A1Kagit(psv, ps));
+                        psv.SetPlotPaperUnits(ps, PlotPaperUnit.Millimeters);
+                        psv.SetPlotViewName(ps, GorunusAdi);
+                        psv.SetPlotType(ps, Autodesk.AutoCAD.DatabaseServices.PlotType.View);
+                        psv.SetUseStandardScale(ps, false);
+                        psv.SetCustomPrintScale(ps, new CustomScale(1, b.Olcek));
+                        psv.SetPlotRotation(ps, PlotRotation.Degrees000);
+                        psv.SetPlotCentered(ps, true);
+                        try { psv.SetCurrentStyleSheet(ps, "monochrome.ctb"); } catch { /* kalem tablosu yoksa renkli */ }
+                        var pi = new PlotInfo { Layout = ms.LayoutId, OverrideSettings = ps };
+                        var piv = new PlotInfoValidator { MediaMatchingPolicy = MatchingPolicy.MatchEnabled };
+                        piv.Validate(pi);
+                        if (PlotFactory.ProcessPlotState != ProcessPlotState.NotPlotting)
+                            throw new InvalidOperationException("başka bir çizdirme sürüyor");
+                        if (File.Exists(pdf)) File.Delete(pdf);   // açıksa (PDF okuyucuda) burada anlaşılır
+                        using (PlotEngine pe = PlotFactory.CreatePublishEngine())
+                        {
+                            pe.BeginPlot(null, null);
+                            pe.BeginDocument(pi, doc.Name, null, 1, true, pdf);
+                            pe.BeginPage(new PlotPageInfo(), pi, true, null);
+                            pe.BeginGenerateGraphics(null);
+                            pe.EndGenerateGraphics(null);
+                            pe.EndPage(null);
+                            pe.EndDocument(null);
+                            pe.EndPlot(null);
+                        }
+                        tr.Commit();
+                    }
+                }
+            }
+            finally
+            {
+                try { if (eskiArka != null) AcApp.SetSystemVariable("BACKGROUNDPLOT", eskiArka); } catch { }
+            }
+        }
+
+        /// <summary>DWG To PDF'in A1 kâğıdı: tam kâğıt (kenar boşluksuz) 841 x 594 yatay; yoksa herhangi bir A1.</summary>
+        private static string A1Kagit(PlotSettingsValidator psv, PlotSettings ps)
+        {
+            var adlar = psv.GetCanonicalMediaNameList(ps).Cast<string>().ToList();
+            string a = adlar.FirstOrDefault(x => x.IndexOf("full_bleed_A1_(841", StringComparison.OrdinalIgnoreCase) >= 0)
+                    ?? adlar.FirstOrDefault(x => x.IndexOf("A1_(841", StringComparison.OrdinalIgnoreCase) >= 0)
+                    ?? adlar.FirstOrDefault(x => x.IndexOf("A1", StringComparison.OrdinalIgnoreCase) >= 0);
+            if (a == null) throw new InvalidOperationException(Cizici + " içinde A1 kâğıdı yok");
+            return a;
+        }
+    }
+
+    /// <summary>ÇALIŞTIR sonrası: görünüş ve kesitlerdeki eleman isimlerinin birbirine binmesini giderir (EtiketCozucu).
+    /// OutlineDrawing her grubun ismini bir elemanının ortasına koyar: görünüşte eleman doğrultusunda, elemandan biraz yukarıda
+    /// (yazı ortası, alt); kesitte yatay, elemanın ortasından başlayarak (sol, orta). Binen isim kendi elemanı boyunca kaydırılır ya
+    /// da elemanın öbür yanına alınır; yönü, boyu, katmanı aynı kalır. Görünüşte kendi çizgisinin üstüne düşmüş isim
+    /// (OutlineDrawing sağdan sola tanımlı elemanda yazıyı çizginin üstüne koyuyordu) çizginin yanına alınır. Başlıklar, kesit
+    /// işaretleri ve öbür yazılar engel sayılır.</summary>
+    internal static class EtiketDuzeni
+    {
+        /// <param name="f">OutlineDrawing formu (.tow'dan görünüş elemanlarının grupları: isim aynı grubun başka elemanına da
+        /// alınabilir); null ya da okunamazsa yalnız kendi elemanı.</param>
+        internal static string Uygula(Form f)
+        {
+            Document doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null) return null;
+            Database db = doc.Database;
+            KuleVerisi kule = null;
+            try
+            {
+                string yol = f != null ? FormBaglayici.YolAl(f) : "";
+                if (yol.Length > 0 && File.Exists(yol)) kule = KuleOkuyucu.Oku(f.GetType().Assembly, yol);
+            }
+            catch (System.Exception ex) { Komutlar.Yaz("\nİsim düzeni: .tow okunamadı (" + ex.Message + "); isimler yalnız kendi elemanında kayar.\n"); }
+            int tasinan = 0, duzelen = 0, kalan = 0, hata = 0;
+            string ilkHata = null;
+            using (doc.LockDocument())
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
+                var cizgiler3 = new List<Point3d[]>();
+                var yazilar = new List<DBText>();
+                foreach (ObjectId id in ms)
+                {
+                    if (id.IsErased) continue;
+                    var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (e == null || Pafta.PaftaNesnesi(e)) continue;
+                    var l = e as Line;
+                    if (l != null) { cizgiler3.Add(new[] { l.StartPoint, l.EndPoint }); continue; }
+                    var t = e as DBText;
+                    if (t != null && !(t is AttributeDefinition) && !string.IsNullOrWhiteSpace(t.TextString)) yazilar.Add(t);
+                }
+                int nXZ = yazilar.Count(t => Math.Abs(t.Normal.Y) > 0.9), nXY = yazilar.Count(t => Math.Abs(t.Normal.Z) > 0.9);
+                if (nXZ + nXY == 0) { tr.Commit(); return null; }
+                bool xz = nXZ >= nXY;   // OutlineDrawing'in çizdiği hali XZ; 2D Aktar sonrası XY
+                Func<Point3d, double> U = p => p.X, V = p => xz ? p.Z : p.Y, D = p => xz ? p.Y : p.Z;
+                // görünüş çizgileri derinlikte eğik (yüz eğimi): XZ'de hepsi izdüşümüyle; XY'de (2D Aktar) düzlemdekiler
+                var cizgiler = new List<double[]>();
+                foreach (Point3d[] c in cizgiler3)
+                    if (xz || Math.Abs(D(c[0]) - D(c[1])) <= 1) cizgiler.Add(new[] { U(c[0]), V(c[0]), U(c[1]), V(c[1]) });
+                // çizgi ortaları ızgarası (etiketin kendi elemanı ortasının yakınında aranır)
+                const double hucre = 1000;
+                var ortalar = new Dictionary<long, List<int>>();
+                Func<double, double, long> anahtar = (u, v) => ((long)Math.Floor(u / hucre) << 32) ^ ((long)Math.Floor(v / hucre) & 0xffffffffL);
+                for (int i = 0; i < cizgiler.Count; i++)
+                {
+                    double[] c = cizgiler[i];
+                    long a = anahtar((c[0] + c[2]) / 2, (c[1] + c[3]) / 2);
+                    List<int> l;
+                    if (!ortalar.TryGetValue(a, out l)) ortalar[a] = l = new List<int>();
+                    l.Add(i);
+                }
+
+                Dictionary<int, List<int>> esler = kule != null ? GrupEsleri(tr, ms, kule, cizgiler, ortalar, anahtar, hucre) : new Dictionary<int, List<int>>();
+
+                var etiketler = new List<EtiketCozucu.Etiket>();
+                var kaynak = new List<DBText>();
+                var boylar = new List<double>();
+                foreach (DBText t in yazilar)
+                {
+                    if (xz ? Math.Abs(t.Normal.Y) <= 0.9 : Math.Abs(t.Normal.Z) <= 0.9) continue;
+                    Point3d a, b;
+                    if (!KesitDizici.Sinirlar(t, out a, out b)) continue;
+                    double[] k = KesitDizici.Kutu(a, b, xz);
+                    var et = new EtiketCozucu.Etiket();
+                    etiketler.Add(et); kaynak.Add(t);
+                    bool gorunus = t.Height < 250 && t.HorizontalMode == TextHorizontalMode.TextCenter &&
+                                   (t.VerticalMode == TextVerticalMode.TextBottom || t.VerticalMode == TextVerticalMode.TextBase);
+                    bool kesit = t.Height < 250 && t.HorizontalMode == TextHorizontalMode.TextLeft && t.VerticalMode == TextVerticalMode.TextVerticalMid;
+                    int dayanak = -1;
+                    double du = 1, dv = 0, h = t.Height, qu = 0, qv = 0;
+                    if (gorunus || kesit)
+                    {
+                        Vector3d d3 = Vector3d.XAxis.RotateBy(t.Rotation, Vector3d.ZAxis).TransformBy(Matrix3d.PlaneToWorld(t.Normal));
+                        du = d3.X; dv = xz ? d3.Z : d3.Y;
+                        double dl = Math.Sqrt(du * du + dv * dv);
+                        if (dl > 1e-9)
+                        {
+                            du /= dl; dv /= dl;
+                            Point3d q = t.AlignmentPoint;
+                            qu = U(q); qv = V(q);
+                            dayanak = Dayanak(cizgiler, ortalar, anahtar, hucre, qu, qv, du, dv, h, gorunus);
+                        }
+                    }
+                    if (dayanak < 0)
+                    {
+                        // engel: kutusu olduğu gibi
+                        et.Sabit = true;
+                        et.Adaylar.Add(new EtiketCozucu.Aday { K = new[] { k[0], k[1], k[2], k[1], k[2], k[3], k[0], k[3] } });
+                        continue;
+                    }
+                    // döndürülmüş yazının kutusu: eksenlere paralel kutusundan (W + H = (w + h)(|cos| + |sin|))
+                    double W = k[2] - k[0], H = k[3] - k[1];
+                    double w = (W + H) / (Math.Abs(du) + Math.Abs(dv)) - h;
+                    if (w < 0.3 * h) w = Math.Max(0.3 * h, t.TextString.Length * 0.8 * h * t.WidthFactor);
+                    var hostlar = new List<int> { dayanak };
+                    List<int> es;
+                    if (gorunus && esler.TryGetValue(dayanak, out es))
+                    {
+                        double[] c0 = cizgiler[dayanak];
+                        double mu = (c0[0] + c0[2]) / 2, mv = (c0[1] + c0[3]) / 2;
+                        hostlar.AddRange(es.Where(j => j != dayanak).OrderBy(j => Math.Abs((cizgiler[j][0] + cizgiler[j][2]) / 2 - mu) +
+                                                                                     Math.Abs((cizgiler[j][1] + cizgiler[j][3]) / 2 - mv)).Take(12));
+                    }
+                    EtiketCozucu.AdaylarEkle(et, hostlar.Select(j => cizgiler[j]).ToList(), hostlar, qu, qv, du, dv, w, h,
+                                             (k[0] + k[2]) / 2, (k[1] + k[3]) / 2, gorunus);
+                    boylar.Add(h);
+                }
+                if (boylar.Count == 0) { tr.Commit(); return null; }
+                boylar.Sort();
+                double pay = 0.05 * boylar[boylar.Count / 2];
+                int zorla = etiketler.Count(x => x.Zorla);
+                EtiketCozucu.Coz(etiketler, cizgiler, pay);
+
+                for (int i = 0; i < etiketler.Count; i++)
+                {
+                    EtiketCozucu.Etiket et = etiketler[i];
+                    if (et.Sabit || et.Secim == 0) continue;
+                    EtiketCozucu.Aday ad = et.Adaylar[et.Secim];
+                    DBText t = kaynak[i];
+                    try
+                    {
+                        bool gorunus = t.HorizontalMode == TextHorizontalMode.TextCenter;
+                        double w0 = D(t.AlignmentPoint);
+                        t.UpgradeOpen();
+                        if (gorunus) { if (ad.Ust) t.VerticalMode = TextVerticalMode.TextTop; }
+                        else t.HorizontalMode = ad.Sag ? TextHorizontalMode.TextRight : TextHorizontalMode.TextLeft;
+                        if (ad.Aci.HasValue)
+                        {
+                            // düzlemdeki yön -> yazının kendi (OCS) dönüş açısı
+                            double a = ad.Aci.Value;
+                            Vector3d d3 = xz ? new Vector3d(Math.Cos(a), 0, Math.Sin(a)) : new Vector3d(Math.Cos(a), Math.Sin(a), 0);
+                            Vector3d o = d3.TransformBy(Matrix3d.WorldToPlane(t.Normal));
+                            t.Rotation = Math.Atan2(o.Y, o.X);
+                        }
+                        t.AlignmentPoint = xz ? new Point3d(ad.U, w0, ad.V) : new Point3d(ad.U, ad.V, w0);
+                        try { t.AdjustAlignment(db); } catch { }
+                        if (et.Zorla) duzelen++; else tasinan++;
+                    }
+                    catch (System.Exception ex) { hata++; if (ilkHata == null) ilkHata = ex.Message; }
+                }
+                // hâlâ binenler (yer bulunamadı): yalnız bilgi
+                for (int i = 0; i < etiketler.Count; i++)
+                {
+                    EtiketCozucu.Etiket a = etiketler[i];
+                    if (a.Sabit) continue;
+                    double[] ka = a.Adaylar[a.Secim].K;
+                    for (int j = i + 1; j < etiketler.Count; j++)
+                    {
+                        EtiketCozucu.Etiket b = etiketler[j];
+                        if (b.Sabit) continue;
+                        double[] kb = b.Adaylar[b.Secim].K;
+                        if (Math.Abs(ka[0] - kb[0]) > 20000 || Math.Abs(ka[1] - kb[1]) > 20000) continue;
+                        if (EtiketCozucu.Biner(ka, kb, pay)) kalan++;
+                    }
+                }
+                tr.Commit();
+                Komutlar.Yaz(string.Format("\nEleman isimleri: {0} isim, {1} çakışan taşındı, {2} kendi çizgisi üstündeki yana alındı{3}{4}.\n",
+                    boylar.Count, tasinan, duzelen, kalan > 0 ? ", yer bulunamayan " + kalan + " çakışma" : "",
+                    hata > 0 ? ", " + hata + " hata (" + ilkHata + ")" : ""));
+            }
+            if (tasinan + duzelen == 0) return null;
+            return string.Format("İsim: {0} çakışan isim kaydırıldı", tasinan + duzelen);
+        }
+
+        /// <summary>Görünüş çizgilerinin grup eşleri: .tow'un ön / yan yüz elemanları görünüşlerin yerine (GorunusYeri) konup çizimdeki
+        /// çizgilerle uçlarından eşleştirilir; her çizgi için aynı görünüşte aynı gruptaki çizgiler.</summary>
+        private static Dictionary<int, List<int>> GrupEsleri(Transaction tr, BlockTableRecord ms, KuleVerisi kule, List<double[]> cizgiler,
+                                                            Dictionary<long, List<int>> ortalar, Func<double, double, long> anahtar, double hucre)
+        {
+            var r = new Dictionary<int, List<int>>();
+            List<GorunusKonumu> konumlar;
+            try { konumlar = GorunusYeri.Bul(tr, ms, kule); }
+            catch { return r; }
+            foreach (GorunusKonumu k in konumlar)
+            {
+                var gruplar = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+                foreach (YuzCizgisi c in k.Yan ? kule.YanYuz : kule.OnYuz)
+                {
+                    if (string.IsNullOrWhiteSpace(c.Grup)) continue;
+                    double[] p = k.IkiD ? YuzEslestirici.IkiD(c.P[0] + k.Ofs, c.P[1], c.P[2], c.P[3] + k.Ofs, c.P[4], c.P[5])
+                                        : new[] { c.P[0] + k.Ofs, c.P[1], c.P[2], c.P[3] + k.Ofs, c.P[4], c.P[5] };
+                    double u1 = p[0], v1 = k.IkiD ? p[1] : p[2], u2 = p[3], v2 = k.IkiD ? p[4] : p[5];
+                    int i = Bul(cizgiler, ortalar, anahtar, hucre, u1, v1, u2, v2);
+                    if (i < 0) continue;
+                    List<int> l;
+                    if (!gruplar.TryGetValue(c.Grup.Trim(), out l)) gruplar[c.Grup.Trim()] = l = new List<int>();
+                    if (!l.Contains(i)) l.Add(i);
+                }
+                foreach (List<int> l in gruplar.Values)
+                    if (l.Count > 1) foreach (int i in l) r[i] = l;
+            }
+            return r;
+        }
+
+        /// <summary>Uçları (iki yönde de) 1 mm içinde eşleşen çizgi; yoksa -1.</summary>
+        private static int Bul(List<double[]> cizgiler, Dictionary<long, List<int>> ortalar, Func<double, double, long> anahtar, double hucre,
+                               double u1, double v1, double u2, double v2)
+        {
+            double mu = (u1 + u2) / 2, mv = (v1 + v2) / 2;
+            for (int a = -1; a <= 1; a++)
+                for (int b = -1; b <= 1; b++)
+                {
+                    List<int> l;
+                    if (!ortalar.TryGetValue(anahtar(mu + a * hucre, mv + b * hucre), out l)) continue;
+                    foreach (int i in l)
+                    {
+                        double[] c = cizgiler[i];
+                        bool ayni = Math.Abs(c[0] - u1) < 1 && Math.Abs(c[1] - v1) < 1 && Math.Abs(c[2] - u2) < 1 && Math.Abs(c[3] - v2) < 1;
+                        bool ters = Math.Abs(c[0] - u2) < 1 && Math.Abs(c[1] - v2) < 1 && Math.Abs(c[2] - u1) < 1 && Math.Abs(c[3] - v1) < 1;
+                        if (ayni || ters) return i;
+                    }
+                }
+            return -1;
+        }
+
+        /// <summary>Etiketin kendi elemanı: görünüşte yazıyla aynı doğrultuda, ortası hizalama noktasının (yarım yazı boyu içinde)
+        /// yanında olan çizgi; kesitte ortası hizalama noktasında olan çizgi. Bulunamazsa -1.</summary>
+        private static int Dayanak(List<double[]> cizgiler, Dictionary<long, List<int>> ortalar, Func<double, double, long> anahtar, double hucre,
+                                   double qu, double qv, double du, double dv, double h, bool gorunus)
+        {
+            int en = -1;
+            double enD = double.MaxValue, sinir = gorunus ? 0.5 * h + 1 : Math.Max(1, 0.05 * h);
+            for (int a = -1; a <= 1; a++)
+                for (int b = -1; b <= 1; b++)
+                {
+                    List<int> l;
+                    if (!ortalar.TryGetValue(anahtar(qu + a * hucre, qv + b * hucre), out l)) continue;
+                    foreach (int i in l)
+                    {
+                        double[] c = cizgiler[i];
+                        double mu = (c[0] + c[2]) / 2, mv = (c[1] + c[3]) / 2, d = Math.Sqrt((qu - mu) * (qu - mu) + (qv - mv) * (qv - mv));
+                        if (d > sinir || d >= enD) continue;
+                        double lu = c[2] - c[0], lv = c[3] - c[1], L = Math.Sqrt(lu * lu + lv * lv);
+                        if (L < 1e-6) continue;
+                        if (gorunus)
+                        {
+                            lu /= L; lv /= L;
+                            if (Math.Abs(du * lv - dv * lu) > 0.03) continue;                         // yazıyla aynı doğrultuda değil
+                            if (Math.Abs((qu - mu) * lu + (qv - mv) * lv) > 0.1 * h) continue;        // ortasının yanında değil
+                        }
+                        en = i; enD = d;
+                    }
+                }
+            return en;
+        }
+    }
+
+    /// <summary>Paftada kesitlerin büyük ölçekte çizimi (çizimcinin büyütülmüş detayı; DIMLFAC yöntemi). Kesitin başlık hariç
+    /// nesneleri A (çizim kutusunun sol alt köşesi) etrafında k kat büyür: çizgiler büyür; yazılar (eleman isimleri) ve bloklar
+    /// yalnız yerine taşınır, boyları aynı kalır; ölçüler büyür ama yazı / ok boyları korunur, DIMLFAC 1/k (değer gerçek mm).
+    /// Başlık PaftaPlani.BuyukKutu'daki kuralla kayar. Başlığa k, A ve başlık kuralı yazılır: pafta yeniden kurulurken önce geri
+    /// alınır; ölçü ve çizgi stili adımları büyütülmüş kesiti tanır.</summary>
+    internal static class KesitBuyutucu
+    {
+        internal const string Uygulama = "OTO_KESIT_OLCEK";
+
+        internal class Isaret { public double K; public Point3d A; public bool Alta; }
+
+        internal static Isaret Oku(Entity e)
+        {
+            try
+            {
+                using (ResultBuffer rb = e.GetXDataForApplication(Uygulama))
+                {
+                    if (rb == null) return null;
+                    var i = new Isaret { K = 0 };
+                    bool aVar = false;
+                    foreach (TypedValue tv in rb)
+                    {
+                        if (tv.TypeCode == (int)DxfCode.ExtendedDataReal) i.K = Convert.ToDouble(tv.Value, CultureInfo.InvariantCulture);
+                        else if (tv.TypeCode == (int)DxfCode.ExtendedDataWorldXCoordinate) { i.A = (Point3d)tv.Value; aVar = true; }
+                        else if (tv.TypeCode == (int)DxfCode.ExtendedDataInteger16) i.Alta = Convert.ToInt16(tv.Value) != 0;
+                    }
+                    return aVar && i.K > 1e-6 ? i : null;
+                }
+            }
+            catch { return null; }
+        }
+
+        /// <summary>A dünya noktası (1011) olarak yazılır: başlıkla birlikte taşınır / döner (çizim sonradan kaydırılsa da doğru kalır).</summary>
+        internal static void Yaz(Database db, Transaction tr, Entity e, Isaret i)
+        {
+            SekilCizici.UygulamaKaydi(db, tr, Uygulama);
+            e.XData = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, Uygulama),
+                                       new TypedValue((int)DxfCode.ExtendedDataReal, i.K),
+                                       new TypedValue((int)DxfCode.ExtendedDataWorldXCoordinate, i.A),
+                                       new TypedValue((int)DxfCode.ExtendedDataInteger16, (short)(i.Alta ? 1 : 0)));
+        }
+
+        /// <summary>Model alanındaki büyütülmüş kesitler: kesit adı -> başlıktaki işaret. Hiç büyütme yapılmamış çizimde taranmaz.</summary>
+        internal static Dictionary<string, Isaret> Isaretler(Database db, Transaction tr, BlockTableRecord ms)
+        {
+            var r = new Dictionary<string, Isaret>();
+            var rat = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
+            if (!rat.Has(Uygulama)) return r;
+            foreach (ObjectId id in ms)
+            {
+                if (id.IsErased || !Sinif.Yazi(id)) continue;
+                var t = tr.GetObject(id, OpenMode.ForRead) as DBText;
+                Isaret i = t != null ? Oku(t) : null;
+                string ad = i != null ? KesitDizici.Etiket(t) : null;
+                if (ad != null) r[ad] = i;
+            }
+            return r;
+        }
+
+        /// <summary>Önceki paftanın büyüttüğü kesitleri eski boylarına döndürür (pafta yeniden kurulurken, OTOPAFTA). Ölçek notları
+        /// pafta katmanında, pafta onları zaten siler.</summary>
+        /// <returns>geri alınan kesit sayısı</returns>
+        internal static int GeriAl(Database db, Transaction tr, BlockTableRecord ms, List<string> hatalar)
+        {
+            var rat = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);
+            if (!rat.Has(Uygulama)) return 0;
+            var basliklar = new Dictionary<string, ObjectId>();
+            var isaretler = new Dictionary<string, Isaret>();
+            var nesneler = new Dictionary<string, List<ObjectId>>();
+            foreach (ObjectId id in ms)
+            {
+                if (id.IsErased) continue;
+                var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                if (e == null || Pafta.PaftaNesnesi(e)) continue;
+                string ad = KesitDizici.Etiket(e);
+                if (ad == null) continue;
+                List<ObjectId> l;
+                if (!nesneler.TryGetValue(ad, out l)) nesneler[ad] = l = new List<ObjectId>();
+                l.Add(id);
+                Isaret i = e is DBText ? Oku(e) : null;
+                if (i != null) { basliklar[ad] = id; isaretler[ad] = i; }
+            }
+            foreach (var kv in basliklar)
+            {
+                Isaret i = isaretler[kv.Key];
+                var baslik = (DBText)tr.GetObject(kv.Value, OpenMode.ForRead);
+                bool xz = Math.Abs(baslik.Normal.Y) > 0.9;
+                Uygula(tr, nesneler[kv.Key], kv.Value, i.A, 1 / i.K, xz, i.Alta, hatalar);
+                baslik.UpgradeOpen();
+                baslik.XData = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, Uygulama));   // işaret silinir
+            }
+            return basliklar.Count;
+        }
+
+        /// <summary>Kesitin nesnelerini A etrafında k kat büyütür (k &lt; 1: geri alma). baslik: başlık yazısı; alta: başlık çizimin
+        /// altında, yalnız yatayda kayar (PaftaPlani.BuyukKutu). Bir nesnedeki hata öbürlerini durdurmaz.</summary>
+        internal static void Uygula(Transaction tr, IEnumerable<ObjectId> ids, ObjectId baslik, Point3d a, double k, bool xz, bool alta, List<string> hatalar)
+        {
+            Matrix3d S = Matrix3d.Scaling(k, a);
+            foreach (ObjectId id in ids)
+            {
+                try
+                {
+                    var e = (Entity)tr.GetObject(id, OpenMode.ForWrite);
+                    if (id == baslik)
+                    {
+                        Point3d m0, m1;
+                        if (!KesitDizici.Sinirlar(e, out m0, out m1)) continue;
+                        Vector3d d = Duzlemde(new Point3d((m0.X + m1.X) / 2, (m0.Y + m1.Y) / 2, (m0.Z + m1.Z) / 2) - a, xz) * (k - 1);
+                        if (alta) d = new Vector3d(d.X, 0, 0);
+                        e.TransformBy(Matrix3d.Displacement(d));
+                        continue;
+                    }
+                    var olcu = e as Dimension;
+                    if (olcu != null) { OlcuBuyut(olcu, a, k); continue; }
+                    Point3d? capa = Capa(e);
+                    if (capa.HasValue) e.TransformBy(Matrix3d.Displacement(Duzlemde(capa.Value - a, xz) * (k - 1)));
+                    else e.TransformBy(S);
+                }
+                catch (System.Exception ex)
+                {
+                    hatalar.Add((id.ObjectClass != null ? id.ObjectClass.DxfName + ": " : "") + ex.Message);
+                }
+            }
+        }
+
+        /// <summary>Ölçüyü A etrafında k kat büyütür: AutoCAD yazı / ok boylarını ölçü stilinden alır (yine de korunur), ölçülen
+        /// boy k katına çıkar; DIMLFAC 1/k ile yazan değer gerçek mm kalır.</summary>
+        internal static void OlcuBuyut(Dimension d, Point3d a, double k)
+        {
+            double txt = d.Dimtxt, asz = d.Dimasz, exo = d.Dimexo, exe = d.Dimexe, gap = d.Dimgap, fx = d.Dimfxlen, lf = d.Dimlfac;
+            d.TransformBy(Matrix3d.Scaling(k, a));
+            if (Math.Abs(d.Dimtxt - txt) > 1e-9) d.Dimtxt = txt;
+            if (Math.Abs(d.Dimasz - asz) > 1e-9) d.Dimasz = asz;
+            if (Math.Abs(d.Dimexo - exo) > 1e-9) d.Dimexo = exo;
+            if (Math.Abs(d.Dimexe - exe) > 1e-9) d.Dimexe = exe;
+            if (Math.Abs(d.Dimgap - gap) > 1e-9) d.Dimgap = gap;
+            if (Math.Abs(d.Dimfxlen - fx) > 1e-9) d.Dimfxlen = fx;
+            d.Dimlfac = lf / k;
+            try { d.RecomputeDimensionBlock(true); } catch { }
+        }
+
+        /// <summary>Başlığın altına, ortasına ölçek notu ("SCALE 1:x"); başlıkla aynı düzlem, yön, yazı stili ve renk. Pafta
+        /// katmanında: pafta yeniden kurulurken silinir, kesit gruplamasına girmez.</summary>
+        internal static void NotEkle(Database db, Transaction tr, BlockTableRecord ms, DBText baslik, bool xz, string metin)
+        {
+            double[] t = KesitDizici.Kutu(baslik, xz);
+            if (t == null) return;
+            double h = PaftaPlani.NotOrani * baslik.Height;
+            double u = (t[0] + t[2]) / 2, v = t[1] - PaftaPlani.NotAraligi * baslik.Height, w = xz ? baslik.Position.Y : baslik.Position.Z;
+            Point3d p = xz ? new Point3d(u, w, v) : new Point3d(u, v, w);
+            var n = new DBText();
+            n.SetDatabaseDefaults(db);
+            n.Normal = baslik.Normal;
+            n.TextStyleId = baslik.TextStyleId;
+            n.Rotation = baslik.Rotation;
+            n.WidthFactor = baslik.WidthFactor;
+            n.Oblique = baslik.Oblique;
+            n.Color = baslik.Color;
+            n.Layer = Pafta.Katman;
+            n.TextString = metin;
+            n.Height = h;
+            n.HorizontalMode = TextHorizontalMode.TextCenter;
+            n.VerticalMode = TextVerticalMode.TextTop;
+            n.Position = p;
+            n.AlignmentPoint = p;
+            ms.AppendEntity(n);
+            tr.AddNewlyCreatedDBObject(n, true);
+            try { n.AdjustAlignment(db); } catch { }
+        }
+
+        // düzlemdeki bileşen: derinlik (XZ'de Y, XY'de Z) atılır
+        private static Vector3d Duzlemde(Vector3d v, bool xz) { return xz ? new Vector3d(v.X, 0, v.Z) : new Vector3d(v.X, v.Y, 0); }
+
+        /// <summary>Yazı / blok gibi boyu korunan nesnelerin dayanak noktası (null: büyütülecek geometri).</summary>
+        private static Point3d? Capa(Entity e)
+        {
+            var t = e as DBText;
+            if (t != null) return t.HorizontalMode == TextHorizontalMode.TextLeft && t.VerticalMode == TextVerticalMode.TextBase ? t.Position : t.AlignmentPoint;
+            var m = e as MText;
+            if (m != null) return m.Location;
+            var b = e as BlockReference;
+            if (b != null) return b.Position;
+            return null;
+        }
+    }
+
     internal static class Pafta
     {
         internal const string Katman = "OTO_PAFTA", ListeKatmani = "OTO_LISTE";
@@ -1834,6 +3004,10 @@ namespace OtomatikKesit
         /// <summary>Aynı şablonun DXF R12 hali (ezdxf r12export: MTEXT yazıya, tarama SOLID'e, eğri çoklu çizgiye açılmış): R2018
         /// DXF'i okunamazsa (DXFIN hatası) bu denenir.</summary>
         private const string GomuluR12Ad = "SARA_A1_pafta_r12.dxf";
+
+        /// <summary>Son kurulan paftanın yeri (PDF için): şablonun (0,0) noktası (U0, V0), ölçek, kâğıt G x Y, düzlem.</summary>
+        internal class Bilgi { public double Olcek, U0, V0, G, Y, W; public bool XZ; }
+        internal static Bilgi Son;
 
         internal static bool PaftaNesnesi(Entity e)
         {
@@ -1991,11 +3165,12 @@ namespace OtomatikKesit
         internal static string Olustur(Form f, string sablon, out bool oldu)
         {
             oldu = false;
+            Son = null;
             Document doc = AcApp.DocumentManager.MdiActiveDocument;
             if (doc == null) return "Pafta: açık çizim yok.";
             Database db = doc.Database;
             string yol = f != null ? FormBaglayici.YolAl(f) : "";
-            List<string[]> liste = MalzemeListesi.Oku(yol);
+            List<string[]> liste = f == null || FormBaglayici.ListeIsteniyor(f) ? MalzemeListesi.Oku(yol) : new List<string[]>();
             var notlar = new List<string>();
             string asama = "şablon";
             try
@@ -2016,6 +3191,9 @@ namespace OtomatikKesit
                             var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
                             if (e != null && PaftaNesnesi(e)) { e.UpgradeOpen(); e.Erase(); }
                         }
+                        // önceki paftanın büyüttüğü kesitler eski boyuna (OTOPAFTA ile yeniden kurulurken)
+                        var buyutmeHatasi = new List<string>();
+                        KesitBuyutucu.GeriAl(db, tr, ms, buyutmeHatasi);
                         KesitDizici.Gruplar g = KesitDizici.Grupla(tr, ms, PaftaNesnesi);
                         if (g.On == null) { tr.Commit(); return "Pafta: çizimde TRANSVERSE FACE yok (önce ÇALIŞTIR, Ön Yüz işaretli)."; }
 
@@ -2041,8 +3219,24 @@ namespace OtomatikKesit
 
                         asama = "yerleşim";
                         var kutular = g.Kesitler.Select(b => g.Kutular[b.Ad]).ToList();
-                        PaftaPlani.Sonuc p = PaftaPlani.Hesapla(onK, yanK, kutular, liste.Count > 0, G, Y);
+                        // büyütme için her kesitin başlık hariç çizim kutusu ve başlık kutusu (PaftaPlani.BuyukKutu)
+                        var cizimKutu = new List<double[]>(); var baslikKutu = new List<double[]>(); var baslikYuk = new List<double>();
+                        foreach (KesitDizici.Baslik b in g.Kesitler)
+                        {
+                            double[] c = null;
+                            foreach (ObjectId id in g.Nesneler[b.Ad])
+                                if (id != b.Id) c = KesitDizici.Birlestir(c, KesitDizici.Kutu((Entity)tr.GetObject(id, OpenMode.ForRead), g.XZ));
+                            var bt = tr.GetObject(b.Id, OpenMode.ForRead) as DBText;
+                            cizimKutu.Add(c);
+                            baslikKutu.Add(bt != null ? KesitDizici.Kutu(bt, g.XZ) : null);
+                            baslikYuk.Add(bt != null ? bt.Height : 400);
+                        }
+                        bool buyut = f == null || FormBaglayici.BuyukKesitIsteniyor(f);
+                        PaftaPlani.Sonuc p = PaftaPlani.Hesapla(onK, yanK, kutular, liste.Count > 0, G, Y, buyut, (i, kb) => cizimKutu[i] == null
+                            ? new[] { kutular[i][0], kutular[i][1], kutular[i][0] + kb * (kutular[i][2] - kutular[i][0]), kutular[i][1] + kb * (kutular[i][3] - kutular[i][1]) }
+                            : PaftaPlani.BuyukKutu(cizimKutu[i], baslikKutu[i], kb, baslikYuk[i]));
                         if (!p.Sigdi) { tr.Commit(); return "Pafta: yerleşim bulunamadı."; }
+                        bool buyuk = p.Buyutme > 1.0001;
 
                         // kâğıt -> model dönüşümü: ölçek, düzlem (XZ: kâğıt y -> model Z), öteleme
                         double W = g.On.W;
@@ -2060,12 +3254,39 @@ namespace OtomatikKesit
                         {
                             double[] k = p.KesitKayma[i];
                             Vector3d v = g.XZ ? new Vector3d(k[0], 0, k[1]) : new Vector3d(k[0], k[1], 0);
-                            tasinan += KesitDizici.Tasi(tr, g.Nesneler[g.Kesitler[i].Ad], g.Kesitler[i].Ad, v, tasimaHatasi);
+                            KesitDizici.Baslik b = g.Kesitler[i];
+                            double[] c = cizimKutu[i];
+                            bool buyutulur = buyuk && c != null;
+                            Point3d a = Point3d.Origin;
+                            bool alta = false;
+                            if (buyutulur)
+                            {
+                                // büyük ölçekli kesit: önce çizim kutusunun sol alt köşesi etrafında büyür, sonra yerine kayar
+                                a = g.XZ ? new Point3d(c[0], b.W, c[1]) : new Point3d(c[0], c[1], b.W);
+                                alta = baslikKutu[i] != null && PaftaPlani.BaslikAlta(c, baslikKutu[i]);
+                                KesitBuyutucu.Uygula(tr, g.Nesneler[b.Ad], b.Id, a, p.Buyutme, g.XZ, alta, buyutmeHatasi);
+                            }
+                            tasinan += KesitDizici.Tasi(tr, g.Nesneler[b.Ad], b.Ad, v, tasimaHatasi);
+                            var bt = buyutulur ? tr.GetObject(b.Id, OpenMode.ForWrite) as DBText : null;
+                            if (bt != null)
+                            {
+                                try
+                                {
+                                    KesitBuyutucu.Yaz(db, tr, bt, new KesitBuyutucu.Isaret { K = p.Buyutme, A = a + v, Alta = alta });
+                                    KesitBuyutucu.NotEkle(db, tr, ms, bt, g.XZ, PaftaPlani.NotYazisi(p.KesitOlcek));
+                                }
+                                catch (System.Exception ex) { buyutmeHatasi.Add("ölçek notu " + b.Ad + ": " + ex.Message); }
+                            }
                         }
                         if (tasimaHatasi.Count > 0)
                         {
                             notlar.Add(tasimaHatasi.Count + " nesne taşınamadı (" + tasimaHatasi[0] + ")");
                             Komutlar.Yaz("\nPafta: taşınamayan nesneler: " + string.Join("; ", tasimaHatasi.Distinct().Take(10)) + "\n");
+                        }
+                        if (buyutmeHatasi.Count > 0)
+                        {
+                            notlar.Add(buyutmeHatasi.Count + " nesne büyütülemedi (" + buyutmeHatasi[0] + ")");
+                            Komutlar.Yaz("\nPafta: büyütülemeyen nesneler: " + string.Join("; ", buyutmeHatasi.Distinct().Take(10)) + "\n");
                         }
 
                         // şablon
@@ -2076,6 +3297,11 @@ namespace OtomatikKesit
                         ms.AppendEntity(br); tr.AddNewlyCreatedDBObject(br, true);
                         try { OlcekYaz(tr, blok, p.Olcek); }
                         catch (System.Exception ex) { notlar.Add("ölçek yazısı güncellenemedi (" + ex.Message + ")"); }
+                        AntetBilgisi bilgi = AntetBilgisi.Oku(yol, DateTime.Today);
+                        try { AntetDoldur(tr, blok, bilgi, G); }
+                        catch (System.Exception ex) { notlar.Add("antet doldurulamadı (" + ex.Message + ")"); }
+                        try { NitelikEkle(tr, blok, br, bilgi, p.Olcek); }
+                        catch (System.Exception ex) { notlar.Add("şablon nitelikleri eklenemedi (" + ex.Message + ")"); }
 
                         // malzeme listesi
                         if (liste.Count > 0)
@@ -2089,9 +3315,11 @@ namespace OtomatikKesit
                         }
                         asama = "kaydetme";
                         tr.Commit();
-                        string ozet = string.Format("Pafta: ölçek 1:{0:0}, {1} kesit, malzeme listesi {2} satır", p.Olcek, g.Kesitler.Count, liste.Count);
+                        string ozet = string.Format("Pafta: ölçek 1:{0:0}{3}, {1} kesit, malzeme listesi {2} satır", p.Olcek, g.Kesitler.Count, liste.Count,
+                                                    buyuk ? string.Format(" (kesitler 1:{0:0})", p.KesitOlcek) : "");
                         if (notlar.Count > 0) ozet += " (" + string.Join("; ", notlar) + ")";
                         Komutlar.Yaz("\n" + ozet + " (" + tasinan + " nesne taşındı).\n");
+                        Son = new Bilgi { Olcek = p.Olcek, U0 = p.OrjinU, V0 = p.OrjinV, G = G, Y = Y, W = W, XZ = g.XZ };
                         oldu = true;
                         return ozet;
                     }
@@ -2120,6 +3348,82 @@ namespace OtomatikKesit
                     t.UpgradeOpen();
                     t.TextString = "1:" + s.ToString("0", CultureInfo.InvariantCulture);
                 }
+            }
+        }
+
+        /// <summary>Şablon bloğundaki (iç içe bloklar dahil) yazılar: kimlik, blok koordinatında konum, düz metin.</summary>
+        private static void Yazilar(Transaction tr, ObjectId blok, Matrix3d xf, List<Tuple<ObjectId, Point3d, string>> sonuc, int derinlik)
+        {
+            if (derinlik > 5) return;
+            var btr = (BlockTableRecord)tr.GetObject(blok, OpenMode.ForRead);
+            foreach (ObjectId id in btr)
+            {
+                var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                var t = e as DBText;
+                if (t != null && !(t is AttributeDefinition) && t.TextString != null)
+                {
+                    Point3d p = t.HorizontalMode == TextHorizontalMode.TextLeft && t.VerticalMode == TextVerticalMode.TextBase ? t.Position : t.AlignmentPoint;
+                    sonuc.Add(Tuple.Create(id, p.TransformBy(xf), t.TextString));
+                    continue;
+                }
+                var m = e as MText;
+                if (m != null) { sonuc.Add(Tuple.Create(id, m.Location.TransformBy(xf), m.Text ?? "")); continue; }
+                var br = e as BlockReference;
+                if (br != null) Yazilar(tr, br.BlockTableRecord, xf * br.BlockTransform, sonuc, derinlik + 1);
+            }
+        }
+
+        private static void YaziDegistir(Transaction tr, ObjectId id, string deger)
+        {
+            var e = (Entity)tr.GetObject(id, OpenMode.ForWrite);
+            var t = e as DBText;
+            if (t != null) { t.TextString = deger; return; }
+            var m = e as MText;
+            if (m != null) m.Contents = AntetBilgisi.MTextDegistir(m.Contents, deger);
+        }
+
+        /// <summary>Antet: tarih (şablondaki gün.ay.yıl biçimli yazı) bugünün tarihi; "TITLE" etiketinin sağındaki iki satır proje ve
+        /// kule adı (.tow başlık satırları; proje boşsa şablondaki kalır, tek satır varsa o satır kule adı). G: şablon genişliği.</summary>
+        private static void AntetDoldur(Transaction tr, ObjectId blok, AntetBilgisi a, double G)
+        {
+            var yazilar = new List<Tuple<ObjectId, Point3d, string>>();
+            Yazilar(tr, blok, Matrix3d.Identity, yazilar, 0);
+            foreach (var y in yazilar)
+                if (AntetBilgisi.TarihMi(y.Item3)) YaziDegistir(tr, y.Item1, AntetBilgisi.TarihBicimi(y.Item3, a.Tarih));
+            var baslik = yazilar.FirstOrDefault(y => y.Item3.Trim().StartsWith("TITLE", StringComparison.OrdinalIgnoreCase));
+            if (baslik == null) return;
+            double tol = 0.02 * G;
+            var satirlar = yazilar.Where(y => y != baslik && y.Item2.X > baslik.Item2.X && Math.Abs(y.Item2.Y - baslik.Item2.Y) < tol &&
+                                              y.Item3.Trim().Length > 0).OrderByDescending(y => y.Item2.Y).ToList();
+            if (satirlar.Count >= 2)
+            {
+                if (a.Proje.Length > 0) YaziDegistir(tr, satirlar[0].Item1, a.Proje);
+                if (a.Kule.Length > 0) YaziDegistir(tr, satirlar[1].Item1, a.Kule);
+            }
+            else if (satirlar.Count == 1 && a.Kule.Length > 0) YaziDegistir(tr, satirlar[0].Item1, a.Kule);
+        }
+
+        /// <summary>Şablonda nitelik (ATTDEF) varsa pafta bloğuna nitelikleri eklenir (eklenmezse görünmezler); etiketine göre
+        /// tarih, ölçek, proje, kule adı doldurulur, diğerleri varsayılan değeriyle.</summary>
+        private static void NitelikEkle(Transaction tr, ObjectId blok, BlockReference br, AntetBilgisi a, double olcek)
+        {
+            var btr = (BlockTableRecord)tr.GetObject(blok, OpenMode.ForRead);
+            if (!btr.HasAttributeDefinitions) return;
+            foreach (ObjectId id in btr)
+            {
+                var ad = tr.GetObject(id, OpenMode.ForRead) as AttributeDefinition;
+                if (ad == null || ad.Constant) continue;
+                var ar = new AttributeReference();
+                ar.SetAttributeFromBlock(ad, br.BlockTransform);
+                string etiket = (ad.Tag ?? "").ToUpperInvariant();
+                string deger = ad.TextString;
+                if (etiket.Contains("DATE") || etiket.Contains("TARIH")) deger = a.Tarih;
+                else if (etiket.Contains("SCALE") || etiket.Contains("OLCEK")) deger = "1:" + olcek.ToString("0", CultureInfo.InvariantCulture);
+                else if ((etiket.Contains("PROJECT") || etiket.Contains("PROJE")) && a.Proje.Length > 0) deger = a.Proje;
+                else if ((etiket.Contains("TOWER") || etiket.Contains("KULE") || etiket.Contains("TITLE")) && a.Kule.Length > 0) deger = a.Kule;
+                ar.TextString = deger;
+                br.AttributeCollection.AppendAttribute(ar);
+                tr.AddNewlyCreatedDBObject(ar, true);
             }
         }
 
@@ -2539,16 +3843,20 @@ namespace OtomatikKesit
                 }
                 double tekPencere = kule != null ? kule.KesitAraligi / 2.0 : 15000;
                 double pencereV = kule != null ? 1.5 * Math.Max(kule.Genislik, kule.Yukseklik) : 40000;
+                Dictionary<string, KesitBuyutucu.Isaret> buyutme = KesitBuyutucu.Isaretler(db, tr, ms);
 
                 foreach (KesitCizimi e in KesitCizimleri.Topla(tr, ms, Katman, tekPencere, pencereV))
                 {
                     if (e.Segs.Count == 0) continue;
-                    List<OlcuTanimi> olculer = OlcuPlani.Hesapla(e.Segs);
+                    // paftada büyütülmüş kesit: ölçüler gerçek boyunda planlanır, sonra kesitle aynı kuralla büyütülür (DIMLFAC 1/k)
+                    KesitBuyutucu.Isaret bi;
+                    buyutme.TryGetValue(e.Ad, out bi);
+                    List<OlcuTanimi> olculer = OlcuPlani.Hesapla(bi == null ? e.Segs : KesitStili.Kucult(e.Segs, bi, e.XZ));
                     Matrix3d m = e.XZ
                         ? Matrix3d.Displacement(new Vector3d(0, e.W, 0)) * Matrix3d.Rotation(Math.PI / 2, Vector3d.XAxis, Point3d.Origin)
                         : Matrix3d.Displacement(new Vector3d(0, 0, e.W));
                     // ölçüler kesit adıyla işaretlenir: dizme / pafta onları kesitle birlikte taşır (yakınlığa bakmadan)
-                    foreach (OlcuTanimi o in olculer) { if (OlcuKoy(db, tr, ms, o, m, e.Ad)) adet++; else hatali++; }
+                    foreach (OlcuTanimi o in olculer) { if (OlcuKoy(db, tr, ms, o, m, e.Ad, bi)) adet++; else hatali++; }
                     kesit++;
                 }
 
@@ -2580,11 +3888,12 @@ namespace OtomatikKesit
         private static string _sonOlcuHatasi;
 
         /// <returns>false: AutoCAD ölçüyü kabul etmedi (öbür ölçüler etkilenmez)</returns>
-        private static bool OlcuKoy(Database db, Transaction tr, BlockTableRecord ms, OlcuTanimi o, Matrix3d m, string kesit = null)
+        private static bool OlcuKoy(Database db, Transaction tr, BlockTableRecord ms, OlcuTanimi o, Matrix3d m, string kesit = null,
+                                    KesitBuyutucu.Isaret buyutme = null)
         {
             try
             {
-                OlcuOlustur(db, tr, ms, o, m, kesit);
+                OlcuOlustur(db, tr, ms, o, m, kesit, buyutme);
                 return true;
             }
             catch (System.Exception ex)
@@ -2594,7 +3903,8 @@ namespace OtomatikKesit
             }
         }
 
-        private static void OlcuOlustur(Database db, Transaction tr, BlockTableRecord ms, OlcuTanimi o, Matrix3d m, string kesit = null)
+        private static void OlcuOlustur(Database db, Transaction tr, BlockTableRecord ms, OlcuTanimi o, Matrix3d m, string kesit = null,
+                                        KesitBuyutucu.Isaret buyutme = null)
         {
             var dim = new RotatedDimension(o.Rotation,
                 new Point3d(o.U1, o.V1, 0), new Point3d(o.U2, o.V2, 0), new Point3d(o.UD, o.VD, 0),
@@ -2641,6 +3951,7 @@ namespace OtomatikKesit
                 KesitDizici.UygulamaKaydi(db, tr);
                 SekilCizici.XDataYaz(dim, KesitDizici.Uygulama, kesit);
             }
+            if (buyutme != null) KesitBuyutucu.OlcuBuyut(dim, buyutme.A, buyutme.K);
         }
 
         private static ObjectId _metinStili = ObjectId.Null;
@@ -2778,9 +4089,13 @@ namespace OtomatikKesit
                     catch (System.Exception ex) { hata++; if (ilkHata == null) ilkHata = ex.Message; }
                 }
 
+                Dictionary<string, KesitBuyutucu.Isaret> buyutme = KesitBuyutucu.Isaretler(db, tr, ms);
                 foreach (KesitCizimi e in KesitCizimleri.Topla(tr, ms, null, kule.KesitAraligi / 2.0, 1.5 * Math.Max(kule.Genislik, kule.Yukseklik)))
                 {
                     if (e.Segs.Count == 0) continue;
+                    KesitBuyutucu.Isaret bi;
+                    // paftada büyütülmüş kesit gerçek boyuna küçültülüp eşleştirilir
+                    List<double[]> segs = buyutme.TryGetValue(e.Ad, out bi) ? Kucult(e.Segs, bi, e.XZ) : e.Segs;
                     KesitTanimi tanim;
                     if (!tanimlar.TryGetValue(e.Ad, out tanim))
                     {
@@ -2789,13 +4104,13 @@ namespace OtomatikKesit
                     }
                     List<string> anahtarlar;
                     List<double[]> kaynak = KesitSecici.Sec(kule.Uyeler, tanim, out anahtarlar);
-                    int[] eslesme = Eslestirici.Eslestir(kaynak, e.Segs, 2.0);
+                    int[] eslesme = Eslestirici.Eslestir(kaynak, segs, 2.0);
                     // tam travers kesiti (TraversCizimi iki kol + gövde çizdi): o çizimle eşleşiyorsa onun grupları
                     List<string> gruplar = null;
                     TraversPlani tp = TraversKesiti.Hesapla(kule.Uyeler, tanim);
                     if (tp != null)
                     {
-                        int[] es2 = Eslestirici.Eslestir(tp.Cizgiler, e.Segs, 2.0);
+                        int[] es2 = Eslestirici.Eslestir(tp.Cizgiler, segs, 2.0);
                         if (es2.Count(x => x >= 0) > eslesme.Count(x => x >= 0)) { eslesme = es2; gruplar = tp.Gruplar; }
                     }
                     kesit++;
@@ -2833,6 +4148,13 @@ namespace OtomatikKesit
                 yuzRed, yuzAna, kesit, red, ana));
             Komutlar.Yaz("\n" + ozet + ".\n");
             return ozet;
+        }
+
+        /// <summary>Paftada büyütülmüş kesitin çizgileri (düzlem koordinatı { u1, v1, u2, v2 }) büyütme noktası etrafında gerçek boyuna.</summary>
+        internal static List<double[]> Kucult(List<double[]> segs, KesitBuyutucu.Isaret b, bool xz)
+        {
+            double au = b.A.X, av = xz ? b.A.Z : b.A.Y, k = b.K;
+            return segs.Select(q => new[] { au + (q[0] - au) / k, av + (q[1] - av) / k, au + (q[2] - au) / k, av + (q[3] - av) / k }).ToList();
         }
 
         /// <summary>Kesik desenin ekranda her zaman 150/75 mm görünmesi için çizgi tipi ölçeği. Model alanında görünen desen
