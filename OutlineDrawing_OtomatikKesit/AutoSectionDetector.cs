@@ -569,7 +569,7 @@ namespace OutlineDrawing
         /// <summary>
         /// u elemanının paneli için düzlem kesiti. Düzlem: u ile düğümlerinden birinde birleşen ve u'ya paralel olmayan
         /// bir elemanın belirlediği düzlemlerden, u'nun düğümlerine en çok elemanı aynı düzlemde bağlanan (panelin yüz
-        /// düzlemi). Dörtgen: u boyunca uçlardan, yana eşit pay; SectionDetection düzleme yakın ve bir ucu/ortası dörtgende
+        /// düzlemi). Dörtgen: düzlemin eksenlerinde u'nun paneli (kuşaklarıyla) artı pay; SectionDetection düzleme yakın ve bir ucu/ortası dörtgende
         /// olan elemanları çizer: u, düğümlerine bağlanan komşuları ve çapraz eşi. Kapsanan aileler işaretlenir.
         /// </summary>
         private static AutoSectionCandidate YerelKesit(Bar u, List<Bar> bars, Dictionary<string, List<Bar>> nodeBars,
@@ -607,18 +607,36 @@ namespace OutlineDrawing
             V3 nn = enIyiN;
             double dd = V3.Dot(nn, u.A);
 
-            // Dörtgen: a = u doğrultusu, b = düzlemde a'ya dik
-            V3 a = u.Dir, b = V3.Cross(nn, a); b = b / b.Length;
-            double pay = Math.Max(opt.YerelKesitPayi, 0.1 * u.Length);
-            V3 p0 = u.A - a * pay - b * pay, p1 = u.B + a * pay - b * pay, p2 = u.B + a * pay + b * pay, p3 = u.A - a * pay + b * pay;
+            // Dörtgen düzlemin eksenlerinde (a: yatay doğrultu, b: düzlemde yukarı), u'nun panelini tam saracak şekilde: u'nun
+            // yükseklik aralığı ve u'nun düğümlerindeki, o aralıkta kalan düzlem içi komşuları (panelin kuşakları). Eleman
+            // doğrultusunda dönük dar dörtgen kuşakların yarısını ve komşu panelin tek çaprazını alıp parça gibi görünüyordu.
+            V3 a = V3.Cross(nn, new V3(0, 0, 1)); a = a / a.Length;
+            V3 b = V3.Cross(nn, a); b = b / b.Length;
+            if (b.Z < 0) b = -b;
+            double pay = opt.YerelKesitPayi;
+            Func<V3, double> sx = q => V3.Dot(q - u.A, a), ty = q => V3.Dot(q - u.A, b);
+            double s0 = Math.Min(sx(u.A), sx(u.B)), s1 = Math.Max(sx(u.A), sx(u.B)), t0 = Math.Min(ty(u.A), ty(u.B)), t1 = Math.Max(ty(u.A), ty(u.B));
+            foreach (string nk in new[] { u.KeyA, u.KeyB })
+                foreach (var w in nodeBars[nk])
+                {
+                    if (w == u || Math.Abs(V3.Dot(nn, w.A) - dd) > opt.PlaneTolerance || Math.Abs(V3.Dot(nn, w.B) - dd) > opt.PlaneTolerance) continue;
+                    double wa = ty(w.A), wb = ty(w.B);
+                    if (Math.Min(wa, wb) < t0 - opt.PlaneTolerance || Math.Max(wa, wb) > t1 + opt.PlaneTolerance) continue;
+                    s0 = Math.Min(s0, Math.Min(sx(w.A), sx(w.B))); s1 = Math.Max(s1, Math.Max(sx(w.A), sx(w.B)));
+                }
+            s0 -= pay; s1 += pay; t0 -= pay; t1 += pay;
             var kose = new List<SectionPoint3D>();
-            foreach (V3 p in new[] { p0, p1, p2, p3 }) kose.Add(new SectionPoint3D(Math.Round(p.X, 3), Math.Round(p.Y, 3), Math.Round(p.Z, 3)));
+            foreach (double[] st in new[] { new[] { s0, t0 }, new[] { s1, t0 }, new[] { s1, t1 }, new[] { s0, t1 } })
+            {
+                V3 p = u.A + a * st[0] + b * st[1];
+                kose.Add(new SectionPoint3D(Math.Round(p.X, 3), Math.Round(p.Y, 3), Math.Round(p.Z, 3)));
+            }
 
             // SectionDetection'ın seçeceği elemanlar: orta nokta düzleme yakın ve orta/uç dörtgen içinde
             Func<V3, bool> icinde = q =>
             {
-                double s = V3.Dot(q - u.A, a), t = V3.Dot(q - u.A, b);
-                return s >= -pay - 1 && s <= u.Length + pay + 1 && Math.Abs(t) <= pay + 1;
+                double s = sx(q), t = ty(q);
+                return s >= s0 - 1 && s <= s1 + 1 && t >= t0 - 1 && t <= t1 + 1;
             };
             var secilen = bars.Where(w => Math.Abs(V3.Dot(nn, w.Mid) - dd) <= opt.KesitDuzlemMesafesi &&
                                           (icinde(w.Mid) || icinde(w.A) || icinde(w.B))).ToList();

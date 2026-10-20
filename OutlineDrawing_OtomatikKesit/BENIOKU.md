@@ -10,6 +10,13 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET.
 
+**3.8: Yerel kesit tam panel.** *Tüm elemanlar* işaretliyken görünüşlerde ve diğer kesitlerde olmayan tek bir eleman için
+açılan yerel kesit (Tangent: kafesin sol yüzünde alt traversin üstündeki CB-D9 çaprazı, SECTION F) elemanın doğrultusunda
+dönük dar bir dörtgendi: OutlineDrawing kuşakların yarısını, üst panelin tek çaprazını ve traversten bir çubuğu çiziyor,
+kesit parça gibi görünüyordu. Dörtgen artık düzlemin eksenlerinde (yatay doğrultu / düzlemde yukarı) ve elemanın panelini
+tam sarıyor: panelin kuşakları ve çaprazları bütün çizilir (`yerel_kesit_Tangent_F.png`). Sade modda (varsayılan) yerel
+kesit zaten alınmaz; bu eleman görünüşte iç eleman çizgisi olarak durur.
+
 **3.7: Paftayı doldur (ek kesitler).** Yeni kutu *Paftayı doldur* (varsayılan işaretli): Oto Kesit, paftada boş kalacak
 yer varsa kapsama için gerekmeyen ama çizimcinin koyduğu türden ek kesitleri de tabloya yazar — bacak başı köşe planı (TAO
 K1 gibi), kafes / gövde plan çaprazları. Paftanın yerleşimi ÇALIŞTIR'dan önce tahmin edilir (`PaftaTahmini`: görünüşler,

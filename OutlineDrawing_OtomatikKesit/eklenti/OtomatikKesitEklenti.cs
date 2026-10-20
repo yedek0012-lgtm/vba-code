@@ -47,7 +47,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "3.7";
+        public const string Surum = "3.8";
         private static Timer _timer;
 
         public void Initialize()
