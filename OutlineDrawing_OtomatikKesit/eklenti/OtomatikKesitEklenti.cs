@@ -225,6 +225,17 @@ namespace OtomatikKesit
             var chkP = new CheckBox { Name = PaftaDoldurKutusuAdi, Text = "Paftayı doldur", Checked = true, AutoSize = true };
             var chkB = new CheckBox { Name = BuyukKesitKutusuAdi, Text = "Büyük kesit", Checked = true, AutoSize = true };
             var chkPdf = new CheckBox { Name = PdfKutusuAdi, Text = "PDF", Checked = false, AutoSize = true };
+            // Malzeme listesi: OutlineDrawing'in "Kesit Alma" bölümündeki küçük "Malzeme Listesi" kutusu (chkTable) gözden kaçıyordu;
+            // aynısı burada da, ikisi birbirini izler (ayar chkTable'da saklanır)
+            var odListe = Alan(f, "chkTable") as CheckBox;
+            // varsayılan açık (OutlineDrawing'in kutusu işaretsiz geliyordu); kullanıcının seçimi Ayarlar'da eklenti kutusu olarak saklanır
+            var chkL = new CheckBox { Name = ListeKutusuAdi, Text = "Malzeme listesi", Checked = true, AutoSize = true };
+            if (odListe != null)
+            {
+                odListe.Checked = true;
+                chkL.CheckedChanged += (s, e) => { if (odListe.Checked != chkL.Checked) odListe.Checked = chkL.Checked; };
+                odListe.CheckedChanged += (s, e) => { if (chkL.Checked != odListe.Checked) chkL.Checked = odListe.Checked; };
+            }
             if (ornek != null)
             {
                 b.Size = ornek.Size;
@@ -246,7 +257,7 @@ namespace OtomatikKesit
                 }
                 bh.Font = new System.Drawing.Font(ornek.Font, FontStyle.Bold);
                 b.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-                foreach (CheckBox c in new[] { chk, chkR, chkI, chkD, chkT, chkP, chkB, chkPdf }) { c.Font = ornek.Font; c.ForeColor = kap.ForeColor; c.Anchor = AnchorStyles.Top | AnchorStyles.Left; }
+                foreach (CheckBox c in new[] { chk, chkR, chkI, chkD, chkT, chkP, chkB, chkL, chkPdf }) { c.Font = ornek.Font; c.ForeColor = kap.ForeColor; c.Anchor = AnchorStyles.Top | AnchorStyles.Left; }
                 // Yer: ÇALIŞTIR'ın sağı, tablonun ve sağ buton sütununun (Nokta ... Liste) altı. Soldan sağa dizilir, kutunun
                 // sağ kenarına gelince alt satıra geçer (önceden kutucuklar sağ kenarın dışına düşüp görünmüyordu).
                 Control calistir = kap.Controls.Find("btnRun", false).FirstOrDefault();
@@ -265,7 +276,7 @@ namespace OtomatikKesit
                     px += sz.Width + 6; satirH = Math.Max(satirH, sz.Height);
                 };
                 koy(bh, false); koy(bt, false); koy(chkPdf, false);
-                koy(chk, true); koy(chkR, false); koy(chkI, false); koy(chkD, false); koy(chkT, false); koy(chkP, false); koy(chkB, false);
+                koy(chk, true); koy(chkR, false); koy(chkI, false); koy(chkD, false); koy(chkT, false); koy(chkP, false); koy(chkB, false); koy(chkL, false);
             }
             else
             {
@@ -285,6 +296,7 @@ namespace OtomatikKesit
                 chkT.Location = new Point(8, 124);
                 chkP.Location = new Point(8, 146);
                 chkB.Location = new Point(8, 168);
+                chkL.Location = new Point(8, 190);
             }
 
             // tek düğme: ÇİZ; Oto Kesit, Pafta ve OutlineDrawing'in ÇALIŞTIR'ı gizli (ÇİZ onları sırayla çalıştırır)
@@ -301,6 +313,7 @@ namespace OtomatikKesit
             kap.Controls.Add(chkT);
             kap.Controls.Add(chkP);
             kap.Controls.Add(chkB);
+            kap.Controls.Add(chkL);
             kap.Controls.Add(bt);
             kap.Controls.Add(chkPdf);
             b.BringToFront();
@@ -313,16 +326,17 @@ namespace OtomatikKesit
             chkT.BringToFront();
             chkP.BringToFront();
             chkB.BringToFront();
+            chkL.BringToFront();
             bt.BringToFront();
             chkPdf.BringToFront();
             var tip = new ToolTip();
             tip.SetToolTip(b, "Çizimci gibi sade kesitleri bulup tabloya yazar: yatay planlar, travers düzlemleri, çerçeveler, bacak iç düzlemleri");
             tip.SetToolTip(chkT, "İşaretliyse her gizli eleman mutlaka bir kesitte gösterilir (küçük, eğik parça kesitler de alınır). " +
                                  "İşaretsizse sade: yalnız mantıklı yerlerden kesit, kalan elemanlar görünüşte iç eleman çizgisi olarak durur");
-            var listeKutusu = Alan(f, "chkTable") as CheckBox;
-            if (listeKutusu != null)
-                tip.SetToolTip(listeKutusu, "Paftaya .tow'dan malzeme listesi (Group Label, Desc., Angle Size, Strength) konsun. İşaretsizse liste yok, " +
-                                            "o alan da kesitlere açılır");
+            string listeIpucu = "Paftaya .tow'dan malzeme listesi (Group Label, Desc., Angle Size, Strength) konsun. İşaretsizse liste yok, " +
+                                "o alan da kesitlere açılır (OutlineDrawing'in Kesit Alma bölümündeki Malzeme Listesi kutusuyla aynı)";
+            tip.SetToolTip(chkL, listeIpucu);
+            if (odListe != null) tip.SetToolTip(odListe, listeIpucu);
             tip.SetToolTip(chkP, "Oto Kesit, paftada boş kalacak yer varsa ek kesitler de yazar (bacak başı köşe planı, kafes / gövde plan " +
                                  "çaprazları gibi); pafta ölçeği büyümez. Ek kesitler tabloda \"Ek kesit\" ipucuyla görünür, istenmeyen satır silinebilir");
             tip.SetToolTip(chkB, "Paftada görünüşlerden sonra yer kalırsa kesitler daha büyük ölçekte çizilir (ör. kule 1:100, kesitler 1:75): " +
@@ -1042,9 +1056,12 @@ namespace OtomatikKesit
         /// bu kutuyu hiçbir yerde kullanmıyordu; artık paftadaki .tow malzeme listesini açıp kapatır. Kutu yoksa evet.</summary>
         internal static bool ListeIsteniyor(Form f)
         {
-            var c = f != null ? Alan(f, "chkTable") as CheckBox : null;
+            if (f == null) return true;
+            var c = Alan(f, "chkTable") as CheckBox ?? f.Controls.Find(ListeKutusuAdi, true).FirstOrDefault() as CheckBox;
             return c == null || c.Checked;
         }
+
+        internal const string ListeKutusuAdi = "chkPafta_Liste";
 
         /// <summary>"Paftayı doldur" işaretli mi (kutu yoksa evet).</summary>
         internal static bool PaftaDoldur(Form f)
@@ -1348,7 +1365,7 @@ namespace OtomatikKesit
                     if (r != null && r.Checked) satir.Add("secim:" + fi.Name + "=1");
                 }
                 foreach (string ad in new[] { "chkAutoDim", "chkRedundant", "chkIcEleman", "chkKesitDiz", FormBaglayici.TumElemanKutusuAdi, FormBaglayici.PaftaDoldurKutusuAdi,
-                                              FormBaglayici.BuyukKesitKutusuAdi, FormBaglayici.PdfKutusuAdi })
+                                              FormBaglayici.BuyukKesitKutusuAdi, FormBaglayici.PdfKutusuAdi, FormBaglayici.ListeKutusuAdi })
                 {
                     var c = f.Controls.Find(ad, true).FirstOrDefault() as CheckBox;
                     if (c != null) satir.Add("eklenti:" + ad + "=" + (c.Checked ? "1" : "0"));
@@ -1381,6 +1398,7 @@ namespace OtomatikKesit
                         }
                     }
                     else if (k == "pafta") PaftaSablonu = v;
+                    else if (k == "kutu:chkTable") continue;   // eski ayar dosyalarında anlamsız (OutlineDrawing kullanmıyordu): eklenti kutusundan
                     else if (k.StartsWith("kutu:"))
                     {
                         var c = FormBaglayici.Alan(f, k.Substring(5)) as CheckBox;

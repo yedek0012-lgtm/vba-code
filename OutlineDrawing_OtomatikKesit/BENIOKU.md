@@ -11,8 +11,9 @@ Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yükl
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET, OTOISIM.
 
 **4.1: Malzeme listesi aç/kapa, antet, büyük kesit, isim çakışması, toplu çizim + PDF.**
-- *Malzeme listesi:* OutlineDrawing formundaki **Malzeme Listesi** kutusu (OutlineDrawing hiç kullanmıyordu) artık paftadaki
+- *Malzeme listesi:* ÇİZ'in yanındaki kutu satırında **Malzeme listesi** kutusu (varsayılan açık, seçim hatırlanır) paftadaki
   .tow malzeme listesini açıp kapatır. İşaretsizse liste konmaz, o alan kesitlere (ve "Paftayı doldur" ek kesitlerine) açılır.
+  OutlineDrawing'in Kesit Alma bölümündeki (hiç kullanılmayan) "Malzeme Listesi" kutusu da aynı işi görür; ikisi birbirini izler.
 - *Antet:* pafta kurulurken tarih (bugün), proje ve kule adı (.tow başlık satırları: "use edf suffixes" sonrası açıklama satırları)
   antete yazılır; şablonda nitelik (ATTDEF: DATE/TARIH, SCALE/OLCEK, PROJECT/PROJE, TOWER/KULE/TITLE) varsa onlar da doldurulur.
 - *Büyük kesit* (yeni kutu, varsayılan açık): görünüşlerin ölçeği belirlendikten sonra paftada yer kalıyorsa kesitler daha büyük
