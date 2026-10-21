@@ -48,7 +48,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "4.6";
+        public const string Surum = "4.7";
         private static Timer _timer;
 
         public void Initialize()
@@ -121,6 +121,23 @@ namespace OtomatikKesit
         {
             try { Yaz("\n" + (EtiketDuzeni.Uygula(FormBaglayici.AcikFormuBul()) ?? "İsim: çakışan eleman ismi yok") + ".\n"); Goruntu.Yenile(); }
             catch (System.Exception ex) { Yaz("\nEleman isimleri düzenlenemedi: " + FormBaglayici.IcHata(ex).Message + "\n"); }
+        }
+
+        /// <summary>.tow seç -> ön görünüş + otomatik kesitler + pafta (OutlineDrawing formu gerekirse açılır).</summary>
+        [CommandMethod("OTOCIZ", CommandFlags.Session)]
+        public void OtoCiz()
+        {
+            string yol;
+            using (var dlg = new OpenFileDialog { Filter = "PLS-TOWER (*.tow)|*.tow", Title = "Oto Kesit: .tow seçin (ön görünüş + kesitler + pafta)" })
+            {
+                if (dlg.ShowDialog() != DialogResult.OK) return;
+                yol = dlg.FileName;
+            }
+            Form f = null;
+            try { f = FormBaglayici.FormuAc(); }
+            catch (System.Exception ex) { Yaz("\nOutlineDrawing formu açılamadı: " + FormBaglayici.IcHata(ex).Message + "\n"); return; }
+            if (f == null) { Yaz("\nOutlineDrawing formu açılamadı (DRAWOUTLINE ile açıp yeniden deneyin).\n"); return; }
+            FormBaglayici.Guvenli(f, "OTOCIZ", () => FormBaglayici.TowCiz(f, yol));
         }
 
         [CommandMethod("OTOPAFTA", CommandFlags.Session)]
@@ -197,6 +214,37 @@ namespace OtomatikKesit
             foreach (Form f in System.Windows.Forms.Application.OpenForms)
                 if (!f.IsDisposed && f.GetType().FullName == FormTipi) return f;
             return null;
+        }
+
+        /// <summary>OutlineDrawing formu; kapalıysa OutlineDrawing'in kendi komutu (DRAWOUTLINE: main.DrawOutline) ile açılır ve eklenti
+        /// düğmeleri eklenir. Açılamazsa null.</summary>
+        internal static Form FormuAc()
+        {
+            Form f = AcikFormuBul();
+            if (f == null)
+            {
+                Type ana = AppDomain.CurrentDomain.GetAssemblies().Select(a => { try { return a.GetType("OutlineDrawing.main"); } catch { return null; } })
+                                    .FirstOrDefault(t => t != null);
+                MethodInfo mi = ana != null ? ana.GetMethod("DrawOutline", Hepsi) : null;
+                if (mi == null) return null;
+                mi.Invoke(mi.IsStatic ? null : Activator.CreateInstance(ana, true), null);
+                f = AcikFormuBul();
+                if (f == null) return null;
+            }
+            FormlariTara();
+            return f;
+        }
+
+        /// <summary>OTOCIZ: seçilen .tow için ön görünüş (TRANSVERSE FACE) + otomatik kesitler + pafta, tek adımda (ÇİZ gibi;
+        /// yan görünüş çizilmez, çizim kaydedilmez; PDF kutusu işaretliyse PDF de yazılır).</summary>
+        internal static void TowCiz(Form f, string yol)
+        {
+            var on = Alan(f, "chkFrontFace") as CheckBox;
+            var yan = Alan(f, "chkSideFace") as CheckBox;
+            if (on != null) on.Checked = true;
+            if (yan != null) yan.Checked = false;
+            string r = TekCiz(f, yol, PdfIsteniyor(f), false);
+            Komutlar.Yaz("\nOTOCIZ " + Path.GetFileName(yol) + ": " + r + "\n");
         }
 
         internal static void FormlariTara()
@@ -845,7 +893,7 @@ namespace OtomatikKesit
         }
 
         /// <summary>Bir .tow'u ÇİZ gibi çizer (tablo her zaman otomatik kesitlerle yeniden doldurulur), DWG ve isteğe bağlı PDF yazar.</summary>
-        private static string TekCiz(Form f, string yol, bool pdf)
+        private static string TekCiz(Form f, string yol, bool pdf, bool kaydet = true)
         {
             var txt = Alan(f, "txtTowerPath") as TextBox;
             if (txt == null) return "OutlineDrawing formunda .tow kutusu yok";
@@ -878,7 +926,8 @@ namespace OtomatikKesit
             }
             var parca = new List<string> { oldu ? paftaOzet : "pafta kurulamadı (" + paftaOzet + ")" };
             string dwg = CiktiYolu(yol, ".dwg");
-            try { PdfCikti.DwgYaz(dwg); parca.Add(Path.GetFileName(dwg)); }
+            if (kaydet)
+                try { PdfCikti.DwgYaz(dwg); parca.Add(Path.GetFileName(dwg)); }
             catch (System.Exception ex) { parca.Add("DWG yazılamadı: " + IcHata(ex).Message); Komutlar.Yaz("\nDWG yazılamadı:\n" + IcHata(ex) + "\n"); }
             if (pdf && oldu)
             {

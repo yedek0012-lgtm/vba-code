@@ -8,7 +8,11 @@
 
 `eklenti/bin/tek/OutlineDrawing.dll` = OutlineDrawing v1.3 + Otomatik Kesit, tek dosya (ILRepack ile birleştirildi).
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
-Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET, OTOISIM.
+Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOCIZ, OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET, OTOISIM.
+
+**4.7: OTOCIZ komutu.** AutoCAD komut satırına OTOCIZ yazılınca dosya penceresi açılır, .tow seçilir; OutlineDrawing formu kapalıysa
+OutlineDrawing'in kendi komutuyla (DRAWOUTLINE) açılır; yalnız ön görünüş (TRANSVERSE FACE) seçilir ve ÇİZ'in yaptığı her şey
+(otomatik kesitler, çizim, isim düzeni, alt kesitler, pafta; PDF kutusu işaretliyse PDF) tek adımda yapılır. Çizim kaydedilmez.
 
 **4.6: Konsol + köprü altı tek kesit.** Konsol / köprü altı eğik düzlemlerden oluşuyorsa (YAA: köprü altı 14,3°, alt konsollar
 5,7°) ayrı ayrı kesitler (I, J) yerine yatay alt kesit (32500) bütün alt yüzeyi uzunluk boyunca tek planda gösterir (çizimci:
