@@ -48,7 +48,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "4.3";
+        public const string Surum = "4.4";
         private static Timer _timer;
 
         public void Initialize()
@@ -1874,18 +1874,30 @@ namespace OtomatikKesit
             if (liste) bolgeler.Add(new[] { lst[0], ic[1] + B, ant[0] - B, lst[1] - B });          // listenin altı, antetin solu
             else bolgeler.Add(new[] { ant[0] + B, ant[3] + B, ic[2] - B, ic[3] - B });            // antetin üstü
             double hV = Math.Max(on[3] - on[1], yan != null ? Math.Max(yan[3], on[3]) - Math.Min(yan[1], on[1]) : 0);
-            double s = Math.Max(1, Math.Ceiling(hV / (L[3] - L[1]) / 5) * 5);
-            for (int deneme = 0; deneme < 400; deneme++, s += 5)
+            double s0 = Math.Max(1, Math.Ceiling(hV / (L[3] - L[1]) / 5) * 5);
+            // önce siluet düzeniyle sığan en büyük ölçek; satır düzeni (A, B, C ... soldan sağa, satır satır) en çok %15 daha küçük
+            // ölçekte sığıyorsa o (çizimci düzeni), yoksa siluet
+            Sonuc siluet = null;
+            for (double s = s0; s < s0 + 2000; s += 5)
+                if ((siluet = Dene(on, yan, kesitler, s, L, bolgeler, B, false, liste ? null : ant, ic)) != null) break;
+            if (siluet == null) return new Sonuc { Sigdi = false };
+            Sonuc r = siluet;
+            for (double s = siluet.Olcek; s <= siluet.Olcek * SatirPayi + 1e-9; s += 5)
             {
-                var r = Dene(on, yan, kesitler, s, L, bolgeler, B);
-                if (r == null) continue;
-                r.ListeAlani = liste ? lst : null;
-                return r;
+                Sonuc satir = Dene(on, yan, kesitler, s, L, bolgeler, B, true, liste ? null : ant, ic);
+                if (satir != null) { r = satir; break; }
             }
-            return new Sonuc { Sigdi = false };
+            r.ListeAlani = liste ? lst : null;
+            return r;
         }
 
-        static Sonuc Dene(double[] on, double[] yan, List<double[]> kesitler, double s, double[] L, List<double[]> ekBolgeler, double B)
+        /// <summary>Satır düzeni (alfabetik, satır satır) siluet düzeninin ölçeğinden en çok bu kat küçük ölçekte de olsa seçilir.</summary>
+        public static double SatirPayi = 1.15;
+
+        /// <param name="satir">true: satır düzeni; false: siluet düzeni</param>
+        /// <param name="antet">listesiz paftada antet kutusu: görünüşlerin sağındaki bölge antetin üstünde çerçevenin sağına kadar uzar</param>
+        static Sonuc Dene(double[] on, double[] yan, List<double[]> kesitler, double s, double[] L, List<double[]> ekBolgeler, double B,
+                          bool satir = false, double[] antet = null, double[] ic = null)
         {
             double wF = (on[2] - on[0]) / s, hF = (on[3] - on[1]) / s;
             double pxF = L[0], pyF = L[3] - hF;                    // ön görünüş: sol üst
@@ -1903,15 +1915,59 @@ namespace OtomatikKesit
             // kesit bölgeleri: görünüşlerin sağı (görünüş yüksekliğinde), görünüşlerin altı (tam genişlik), ek bölgeler
             double gorunusAlt = pyF;
             if (yan != null) gorunusAlt = Math.Min(gorunusAlt, pyF + (yan[1] - on[1]) / s);
-            var bolgeler = new List<double[]>
+            List<double[]> bolgeler;
+            if (satir && antet != null && ic != null)
             {
-                new[] { sonX + B, gorunusAlt, L[2], L[3] },
-                new[] { L[0], L[1], L[2], gorunusAlt - B }
-            };
-            bolgeler.AddRange(ekBolgeler);
+                // listesiz: görünüşlerin sağı antetin üstünde çerçevenin sağına kadar tek geniş bant, altında antetin solu, sonra
+                // görünüşlerin altı (antet üstü ek bölgesi bu banda katıldı)
+                double ustAlt = Math.Max(gorunusAlt, antet[3] + B);
+                bolgeler = new List<double[]>
+                {
+                    new[] { sonX + B, ustAlt, ic[2] - B, L[3] },
+                    new[] { sonX + B, gorunusAlt, L[2], ustAlt - B },
+                    new[] { L[0], L[1], L[2], gorunusAlt - B }
+                };
+            }
+            else
+            {
+                bolgeler = new List<double[]>
+                {
+                    new[] { sonX + B, gorunusAlt, L[2], L[3] },
+                    new[] { L[0], L[1], L[2], gorunusAlt - B }
+                };
+                bolgeler.AddRange(ekBolgeler);
+            }
             bolgeler = bolgeler.Where(b => b[2] - b[0] > 1 && b[3] - b[1] > 1).ToList();
             var r = new Sonuc { Olcek = s, OrjinU = on[0] - pxF * s, OrjinV = on[1] - pyF * s, Sigdi = true };
             if (yan != null) r.YanDu = Math.Round(r.OrjinU + pxS * s - yan[0]);
+            if (satir)
+            {
+                // satır düzeni: kesitler sırayla soldan sağa, satır dolunca alt satıra (satırın üstü hizalı, satır yüksekliği en uzun
+                // kesit); bölge dolunca sonraki bölge. Sıra hiç bozulmaz.
+                int bi = 0;
+                double x = bolgeler.Count > 0 ? bolgeler[0][0] : 0, ust = bolgeler.Count > 0 ? bolgeler[0][3] : 0, satirH = 0;
+                foreach (double[] k in kesitler)
+                {
+                    double w = (k[2] - k[0]) / s, h = (k[3] - k[1]) / s;
+                    bool kondu = false;
+                    while (bi < bolgeler.Count)
+                    {
+                        double[] R = bolgeler[bi];
+                        if (x + w <= R[2] + 1e-9 && ust - h >= R[1] - 1e-9)
+                        {
+                            r.KesitKayma.Add(new[] { r.OrjinU + x * s - k[0], r.OrjinV + (ust - h) * s - k[1] });
+                            x += w + B; satirH = Math.Max(satirH, h);
+                            kondu = true;
+                            break;
+                        }
+                        if (x > R[0] + 1e-9) { ust -= satirH + B; x = R[0]; satirH = 0; continue; }   // yeni satır
+                        bi++;                                                                          // sonraki bölge
+                        if (bi < bolgeler.Count) { x = bolgeler[bi][0]; ust = bolgeler[bi][3]; satirH = 0; }
+                    }
+                    if (!kondu) return null;
+                }
+                return r;
+            }
             // Her bölgede üst siluet (skyline) düzeni: kesit, sırayla, sığdığı ilk bölgede en üstteki (eşitse en soldaki) yere; ama
             // bir öncekinden yukarı ya da aynı hizada soluna konmaz (okuma sırası A, B, C ... korunur). Eskiden raf (satır) düzeniydi:
             // satırdaki uzun bir kesit, yanındaki kısa kesitlerin altını boş bırakıyordu.

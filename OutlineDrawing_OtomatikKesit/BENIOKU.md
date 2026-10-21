@@ -10,6 +10,11 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET, OTOISIM.
 
+**4.4: Kesitler alfabetik, satır satır.** Paftada kesitler (malzeme listesi olsun olmasın) çizimci gibi A, B, C ... soldan sağa,
+satır dolunca alt satıra dizilir (satır üstleri hizalı). Listesiz paftada görünüşlerin sağındaki alan antetin üstünde çerçevenin
+sağına kadar tek bant olur (eskiden antetin üstü ayrı bölgeydi, boş kalıyordu). Satır düzeni siluet düzeninden en çok %15 daha
+küçük ölçek gerektiriyorsa seçilir (Tangent 1:100 -> 1:110, YAA 1:125 -> 1:130, TAO 1:155 -> 1:170); daha fazlaysa eski düzen.
+
 **4.3: Konsol alt kesitleri alttan bakışla (çizimcideki B, D gibi).** Konsolun alt kesiti (yatay alt kot ya da eğik alt başlık
 düzlemi) artık çizimcinin yaptığı gibi alttan bakılarak çizilir ve işaretlenir. Tanıma (AltKesit): kesitteki elemanların
 düğümlerinden kesit dışına çıkan elemanlar yalnız yukarı gidiyorsa (konsolun dikme / çaprazları) düğüm "alt"; bu düğümler
