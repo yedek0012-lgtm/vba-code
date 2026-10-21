@@ -48,7 +48,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "4.4";
+        public const string Surum = "4.5";
         private static Timer _timer;
 
         public void Initialize()
@@ -456,8 +456,8 @@ namespace OtomatikKesit
             var load = Alan(f, "btnLoad") as Button;
             var run = Alan(f, "btnRun") as Button;
             var iki = Alan(f, "btnConvertto2D") as Button;
-            // 2D Aktar her şeyi XY düzlemine çevirir: UCS de dünya koordinatına döner
-            if (iki != null) iki.Click += (s, e) => Guvenli(f, "2D Aktar sonrası", () => Koordinat.Dunya());
+            // 2D Aktar her şeyi XY düzlemine çevirir: UCS dünya, görünüş planı (TOP)
+            if (iki != null) iki.Click += (s, e) => Guvenli(f, "2D Aktar sonrası", () => Koordinat.Kesit());
             bool loadSarili = SilmeKorumasiEkle(f, load, "YÜKLE");
             bool runSarili = SilmeKorumasiEkle(f, run, "ÇALIŞTIR");
             _calistirSarili = runSarili;
@@ -3579,11 +3579,48 @@ namespace OtomatikKesit
     /// düzlemdeki ölçü / yazıların tutamaçlarıyla yalnız taşımaya izin veriyordu.</summary>
     internal static class Koordinat
     {
-        /// <summary>UCS: X = dünya X, Y = dünya Z (normal -Y), başlangıç (0,0,0).</summary>
+        /// <summary>UCS çizimin düzleminde: OutlineDrawing'in çizdiği halde X = dünya X, Y = dünya Z (normal -Y); 2D Aktar sonrası
+        /// (başlıklar XY'de) dünya. Görünüş o UCS'nin planı (PLAN; görünüş küpü TOP gösterir, çizim önden okunur).</summary>
         internal static bool Kesit()
         {
-            return Ayarla(() => Matrix3d.AlignCoordinateSystem(Point3d.Origin, Vector3d.XAxis, Vector3d.YAxis, Vector3d.ZAxis,
-                                                                Point3d.Origin, Vector3d.XAxis, Vector3d.ZAxis, -Vector3d.YAxis));
+            bool xz = !IkiBoyutlu();
+            bool oldu = Ayarla(() => xz ? Matrix3d.AlignCoordinateSystem(Point3d.Origin, Vector3d.XAxis, Vector3d.YAxis, Vector3d.ZAxis,
+                                                                         Point3d.Origin, Vector3d.XAxis, Vector3d.ZAxis, -Vector3d.YAxis)
+                                        : Matrix3d.Identity);
+            try
+            {
+                Document doc = AcApp.DocumentManager.MdiActiveDocument;
+                if (oldu && doc != null) doc.SendStringToExecute("._PLAN _C ", true, false, false);
+            }
+            catch { }
+            return oldu;
+        }
+
+        /// <summary>Çizim 2D Aktar ile XY'ye alınmış mı: model alanındaki büyük başlık yazılarının (görünüş / kesit) normali Z.</summary>
+        private static bool IkiBoyutlu()
+        {
+            try
+            {
+                Document doc = AcApp.DocumentManager.MdiActiveDocument;
+                if (doc == null) return false;
+                int xy = 0, xz = 0;
+                using (doc.LockDocument())
+                using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+                {
+                    var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(doc.Database), OpenMode.ForRead);
+                    foreach (ObjectId id in ms)
+                    {
+                        if (!Sinif.Yazi(id)) continue;
+                        var t = tr.GetObject(id, OpenMode.ForRead) as DBText;
+                        if (t == null || t.Height < 250 || Pafta.PaftaNesnesi(t)) continue;
+                        if (Math.Abs(t.Normal.Z) > 0.9) xy++; else if (Math.Abs(t.Normal.Y) > 0.9) xz++;
+                        if (xy + xz >= 20) break;
+                    }
+                    tr.Commit();
+                }
+                return xy > xz;
+            }
+            catch { return false; }
         }
 
         internal static bool Dunya() { return Ayarla(() => Matrix3d.Identity); }

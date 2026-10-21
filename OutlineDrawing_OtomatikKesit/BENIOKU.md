@@ -10,6 +10,10 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET, OTOISIM.
 
+**4.5: Çizimden sonra görünüş TOP.** ÇİZ / pafta / 2D Aktar sonunda UCS çizimin düzlemine (OutlineDrawing'in çizdiği halde XZ,
+2D Aktar sonrası dünya) alınır ve görünüş o UCS'nin planına çevrilir (PLAN): görünüş küpü "BACK" yerine TOP gösterir, çizim önden
+okunur, ekrana sığar.
+
 **4.4: Kesitler alfabetik, satır satır.** Paftada kesitler (malzeme listesi olsun olmasın) çizimci gibi A, B, C ... soldan sağa,
 satır dolunca alt satıra dizilir (satır üstleri hizalı). Listesiz paftada görünüşlerin sağındaki alan antetin üstünde çerçevenin
 sağına kadar tek bant olur (eskiden antetin üstü ayrı bölgeydi, boş kalıyordu). Satır düzeni siluet düzeninden en çok %15 daha
