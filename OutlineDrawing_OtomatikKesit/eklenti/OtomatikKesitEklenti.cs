@@ -48,7 +48,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "4.2";
+        public const string Surum = "4.3";
         private static Timer _timer;
 
         public void Initialize()
@@ -565,6 +565,14 @@ namespace OtomatikKesit
                         {
                             try { return KesitYonu.Dondur(f); }
                             catch (System.Exception ex) { sorun.Add("Kesitler döndürülemedi: " + IcHata(ex).Message); return null; }
+                        });
+                        if (r != null) mesaj.Add(r);
+                    }
+                    {
+                        string r = adim("alttan bakış", () =>
+                        {
+                            try { return AltKesitAynasi.Uygula(f); }
+                            catch (System.Exception ex) { sorun.Add("Konsol alt kesitleri alttan bakışa çevrilemedi: " + IcHata(ex).Message); return null; }
                         });
                         if (r != null) mesaj.Add(r);
                     }
@@ -2330,7 +2338,7 @@ namespace OtomatikKesit
             var tan = new Dictionary<string, KesitTanimi>();
             for (int i = 0; i < tanimlar.Count; i++) tan[Harf(i)] = tanimlar[i];
             var iki = new HashSet<string>(tan.Where(kv => TraversKesiti.Hesapla(k.Uyeler, kv.Value) != null).Select(kv => kv.Key));
-            double[] onK = GorunusKutusu(k.Uyeler, k.OnYuz, false, KesitIsaretPlani.Hesapla(k.OnYuz, tan, iki));
+            double[] onK = GorunusKutusu(k.Uyeler, k.OnYuz, false, KesitIsaretPlani.Hesapla(k.OnYuz, tan, iki, k.Uyeler));
             double[] yanK = yan ? GorunusKutusu(k.Uyeler, k.YanYuz, true, null) : null;
             if (onK == null) return new PaftaPlani.Sonuc { Sigdi = false };
             if (yanK != null)
@@ -5460,10 +5468,67 @@ namespace OtomatikKesit
     ///    kesitin bulunduğu yanda silüetin dışından kuleyi gösteren ok.
     /// Birbirine binen işaret dışa kaydırılır.
     /// </summary>
+    /// <summary>Konsolun alt kesiti: çizimci konsolun altını (yatay alt kot ya da eğik alt başlık düzlemi) alttan bakarak çizer,
+    /// işareti kök altında, okları yukarı. Ölçüt: kesitteki elemanların düğümlerinden kesit dışına çıkan elemanlar yalnız yukarı
+    /// gidiyorsa düğüm "alt" (konsolun dikme / çaprazları), yalnız aşağı gidiyorsa "üst"; ikisine de gidiyorsa gövde (sayılmaz).
+    /// Alt düğüm en az 2 ve üst düğümlerin 3 katından çoksa kesit konsolun altıdır.</summary>
+    public static class AltKesit
+    {
+        public static bool Mi(IDictionary<string, FinalMember> uyeler, KesitTanimi t)
+        {
+            if (uyeler == null || t == null) return false;
+            List<string> keys;
+            KesitSecici.Sec(uyeler, t, out keys);
+            if (keys.Count < 3) return false;
+            // yukarı yönlü düzlem: yükseklik kesitinde z = h; düzlemde normal (nz >= 0)
+            double nx = 0, ny = 0, nz = 1, d, tol;
+            if (t.Yukseklik.HasValue) { d = t.Yukseklik.Value; tol = KesitSecici.YukseklikTol; }
+            else
+            {
+                double[] p0 = t.Noktalar[0], p1 = t.Noktalar[1], pn = t.Noktalar[t.Noktalar.Count - 1];
+                double ax = p1[0] - p0[0], ay = p1[1] - p0[1], az = p1[2] - p0[2], bx = pn[0] - p0[0], by = pn[1] - p0[1], bz = pn[2] - p0[2];
+                nx = ay * bz - az * by; ny = az * bx - ax * bz; nz = ax * by - ay * bx;
+                double l = Math.Sqrt(nx * nx + ny * ny + nz * nz);
+                if (l < 1e-9) return false;
+                nx /= l; ny /= l; nz /= l;
+                if (nz < 0) { nx = -nx; ny = -ny; nz = -nz; }
+                if (nz < Math.Cos(45 * Math.PI / 180)) return false;   // 45°'den dik (bacak / kalça düzlemi, yüz, çerçeve): konsol altı değil
+                d = nx * p0[0] + ny * p0[1] + nz * p0[2];
+                tol = KesitSecici.DuzlemTol;
+            }
+            Func<double, double, double, double> uzak = (x, y, z) => nx * x + ny * y + nz * z - d;
+            Func<double, double, double, string> anahtar = (x, y, z) => Math.Round(x) + "," + Math.Round(y) + "," + Math.Round(z);
+            var kesitte = new HashSet<string>(keys);
+            var dugum = new Dictionary<string, int>();   // bit 1: yukarı, bit 2: aşağı
+            foreach (string k in keys)
+            {
+                var m = uyeler[k];
+                dugum[anahtar(m.start_x, m.start_y, m.start_z)] = 0;
+                dugum[anahtar(m.end_x, m.end_y, m.end_z)] = 0;
+            }
+            foreach (var kv in uyeler)
+            {
+                if (kesitte.Contains(kv.Key)) continue;
+                var m = kv.Value;
+                string a = anahtar(m.start_x, m.start_y, m.start_z), b = anahtar(m.end_x, m.end_y, m.end_z);
+                bool aV = dugum.ContainsKey(a), bV = dugum.ContainsKey(b);
+                if (aV == bV) continue;
+                double o = aV ? uzak(m.end_x, m.end_y, m.end_z) : uzak(m.start_x, m.start_y, m.start_z);
+                if (Math.Abs(o) <= tol) continue;
+                string n = aV ? a : b;
+                dugum[n] |= o > 0 ? 1 : 2;
+            }
+            int alt = dugum.Values.Count(v => v == 1), ust = dugum.Values.Count(v => v == 2);
+            return alt >= 2 && alt > 3 * ust;
+        }
+    }
+
     public static class KesitIsaretPlani
     {
+        /// <param name="uyeler">verilirse konsol alt kesitleri (AltKesit) çizimcideki gibi işaretlenir: kesitin alt kotunda, kulenin
+        /// iki yanında yatay, oklar yukarı (kesite alttan bakılır)</param>
         public static List<KesitIsareti> Hesapla(IList<YuzCizgisi> onYuz, IDictionary<string, KesitTanimi> tanimlar,
-            ICollection<string> ikiTarafli = null)
+            ICollection<string> ikiTarafli = null, IDictionary<string, FinalMember> uyeler = null)
         {
             var sonuc = new List<KesitIsareti>();
             if (onYuz == null || onYuz.Count == 0 || tanimlar == null || tanimlar.Count == 0) return sonuc;
@@ -5476,6 +5541,24 @@ namespace OtomatikKesit
             foreach (var kv in tanimlar.OrderByDescending(k => Kot(k.Value)))
             {
                 string ad = kv.Key; KesitTanimi t = kv.Value;
+                if (uyeler != null && AltKesit.Mi(uyeler, t))
+                {
+                    double h = t.Yukseklik ?? AltKot(uyeler, t), a, b;
+                    Kenar(onYuz, h, xMin, xMax, out a, out b);
+                    if (!t.Yukseklik.HasValue)
+                    {
+                        // eğik alt düzlem kökten uca yükselir: işaret konsolun (düzlemin kot aralığındaki silüetin) dışında
+                        double h2 = UstKot(uyeler, t);
+                        foreach (var c in onYuz)
+                        {
+                            if (Math.Max(c.P[2], c.P[5]) < h - 1 || Math.Min(c.P[2], c.P[5]) > h2 + 1) continue;
+                            a = Math.Min(a, Math.Min(c.P[0], c.P[3])); b = Math.Max(b, Math.Max(c.P[0], c.P[3]));
+                        }
+                    }
+                    Ekle(sonuc, dolu, ad, a - bosluk, h, -1, 0, 0, 1, kol, ok, th);
+                    Ekle(sonuc, dolu, ad, b + bosluk, h, 1, 0, 0, 1, kol, ok, th);
+                    continue;
+                }
                 if (t.Yukseklik.HasValue)
                 {
                     double h = t.Yukseklik.Value, a, b;
@@ -5563,6 +5646,21 @@ namespace OtomatikKesit
                 }
             }
             return sonuc;
+        }
+
+        /// <summary>Düzlem kesitindeki elemanların en alt kotu (konsol kökünün altı).</summary>
+        private static double AltKot(IDictionary<string, FinalMember> uyeler, KesitTanimi t)
+        {
+            List<string> keys;
+            KesitSecici.Sec(uyeler, t, out keys);
+            return keys.Count > 0 ? keys.Min(k => Math.Min(uyeler[k].start_z, uyeler[k].end_z)) : t.Noktalar.Min(p => p[2]);
+        }
+
+        private static double UstKot(IDictionary<string, FinalMember> uyeler, KesitTanimi t)
+        {
+            List<string> keys;
+            KesitSecici.Sec(uyeler, t, out keys);
+            return keys.Count > 0 ? keys.Max(k => Math.Max(uyeler[k].start_z, uyeler[k].end_z)) : t.Noktalar.Max(p => p[2]);
         }
 
         private static double Kot(KesitTanimi t)
@@ -5981,6 +6079,90 @@ namespace OtomatikKesit
     /// olacak şekilde kesit 90° döndürülür (görünüşteki ve TAO paftasındaki gibi travers yatay). Yazılar okunur kalır,
     /// başlık yine altta ortalanır; döndürülen kesitin nesneleri kesit adıyla işaretlenir (ölçü / dizme onları tanır).
     /// </summary>
+    /// <summary>Konsol alt kesitleri (AltKesit) çizimcideki gibi alttan bakılarak: OutlineDrawing kesiti hep üstten (düzlem eksenleri
+    /// +X'e ve yukarı) çizer; çizimden sonra kesit yatay ekseninde aynalanır (sağ-sol aynı, ön-arka ters). Çizgiler aynalanır,
+    /// yazılar ters dönmez: yalnız yerleri aynalanır, eleman doğrultusundaki yazının açısı yeni doğrultuya (okunur) uyar. Başlık
+    /// yerinde kalır. Başlık XData ile işaretlenir: ikinci kez aynalanmaz.</summary>
+    internal static class AltKesitAynasi
+    {
+        internal const string Uygulama = "OTO_KESIT_ALT";
+
+        internal static string Uygula(Form f)
+        {
+            Document doc = AcApp.DocumentManager.MdiActiveDocument;
+            if (doc == null || f == null) return null;
+            string yol = FormBaglayici.YolAl(f);
+            if (yol.Length == 0 || !File.Exists(yol)) return null;
+            KuleVerisi kule = KuleOkuyucu.Oku(f.GetType().Assembly, yol);
+            if (kule == null) return null;
+            var alt = new HashSet<string>(KesitStili.GridTanimlari(f).Where(kv => AltKesit.Mi(kule.Uyeler, kv.Value)).Select(kv => kv.Key),
+                                          StringComparer.OrdinalIgnoreCase);
+            if (alt.Count == 0) return null;
+            Database db = doc.Database;
+            var yapilan = new List<string>();
+            using (doc.LockDocument())
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                var ms = (BlockTableRecord)tr.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForRead);
+                KesitDizici.Gruplar g = KesitDizici.Grupla(tr, ms);
+                SekilCizici.UygulamaKaydi(db, tr, Uygulama);
+                foreach (KesitDizici.Baslik b in g.Kesitler)
+                {
+                    if (!alt.Contains(b.Ad)) continue;
+                    var baslik = tr.GetObject(b.Id, OpenMode.ForRead) as Entity;
+                    if (baslik == null || Yapildi(baslik)) continue;
+                    List<ObjectId> ids = g.Nesneler[b.Ad].Where(id => id != b.Id).ToList();
+                    double[] k = null;
+                    foreach (ObjectId id in ids) k = KesitDizici.Birlestir(k, KesitDizici.Kutu((Entity)tr.GetObject(id, OpenMode.ForRead), g.XZ));
+                    if (k == null) continue;
+                    double c = (k[1] + k[3]) / 2;
+                    Matrix3d M = g.XZ ? Matrix3d.Mirroring(new Plane(new Point3d(0, 0, c), Vector3d.ZAxis))
+                                      : Matrix3d.Mirroring(new Plane(new Point3d(0, c, 0), Vector3d.YAxis));
+                    foreach (ObjectId id in ids)
+                    {
+                        var e = (Entity)tr.GetObject(id, OpenMode.ForWrite);
+                        var t = e as DBText;
+                        if (t != null) { Yazi(t, M); continue; }
+                        if (e is Dimension || e is MText || e is BlockReference)
+                        {
+                            Point3d p = e is MText ? ((MText)e).Location : e is BlockReference ? ((BlockReference)e).Position : ((Dimension)e).TextPosition;
+                            e.TransformBy(Matrix3d.Displacement(p.TransformBy(M) - p));
+                            continue;
+                        }
+                        e.TransformBy(M);
+                    }
+                    baslik.UpgradeOpen();
+                    baslik.XData = new ResultBuffer(new TypedValue((int)DxfCode.ExtendedDataRegAppName, Uygulama),
+                                                    new TypedValue((int)DxfCode.ExtendedDataInteger16, (short)1));
+                    yapilan.Add(b.Ad);
+                }
+                tr.Commit();
+            }
+            return yapilan.Count == 0 ? null : "Alttan bakış: " + string.Join(", ", yapilan) + " (konsol altı)";
+        }
+
+        /// <summary>Yazı aynalanmaz: hizalama noktası aynalanır; açılı yazı (eleman doğrultusunda) yeni doğrultuya, okunur yönde.</summary>
+        private static void Yazi(DBText t, Matrix3d M)
+        {
+            Point3d p = t.HorizontalMode == TextHorizontalMode.TextLeft && t.VerticalMode == TextVerticalMode.TextBase ? t.Position : t.AlignmentPoint;
+            if (Math.Abs(Math.Sin(t.Rotation)) > 1e-6)
+            {
+                Vector3d d = Vector3d.XAxis.RotateBy(t.Rotation, Vector3d.ZAxis).TransformBy(Matrix3d.PlaneToWorld(t.Normal)).TransformBy(M);
+                Vector3d o = d.TransformBy(Matrix3d.WorldToPlane(t.Normal));
+                double a = Math.Atan2(o.Y, o.X);
+                if (a > Math.PI / 2 + 1e-9) a -= Math.PI; else if (a < -Math.PI / 2 - 1e-9) a += Math.PI;
+                t.Rotation = a;
+            }
+            t.TransformBy(Matrix3d.Displacement(p.TransformBy(M) - p));
+        }
+
+        private static bool Yapildi(Entity e)
+        {
+            try { using (ResultBuffer rb = e.GetXDataForApplication(Uygulama)) return rb != null; }
+            catch { return false; }
+        }
+    }
+
     public static class KesitYonu
     {
         internal const string Uygulama = "OTO_KESIT_YON";
@@ -6141,7 +6323,7 @@ namespace OtomatikKesit
                 Matrix3d duzlem = on.IkiD ? Matrix3d.Identity : Matrix3d.Rotation(Math.PI / 2, Vector3d.XAxis, Point3d.Origin);
                 var ikiTarafli = new HashSet<string>(tanimlar.Where(kv => TraversKesiti.Hesapla(kule.Uyeler, kv.Value) != null).Select(kv => kv.Key),
                                                      StringComparer.OrdinalIgnoreCase);
-                foreach (KesitIsareti s in KesitIsaretPlani.Hesapla(kule.OnYuz, tanimlar, ikiTarafli))
+                foreach (KesitIsareti s in KesitIsaretPlani.Hesapla(kule.OnYuz, tanimlar, ikiTarafli, kule.Uyeler))
                 {
                     foreach (double[] c in s.Cizgiler)
                     {

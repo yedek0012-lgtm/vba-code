@@ -330,7 +330,7 @@ public static class OlcuCakismaTesti
         var tan = new Dictionary<string, KesitTanimi>();
         for (int i = 0; i < tanimlar.Count; i++) tan[HarfAdi(i)] = tanimlar[i];
         var iki = new HashSet<string>(tan.Where(kv => TraversKesiti.Hesapla(k.Uyeler, kv.Value) != null).Select(kv => kv.Key));
-        var isaretler = KesitIsaretPlani.Hesapla(k.OnYuz, tan, iki);
+        var isaretler = KesitIsaretPlani.Hesapla(k.OnYuz, tan, iki, k.Uyeler);
         foreach (var m in isaretler) onK = new[] { Math.Min(onK[0], m.Kutu[0]), Math.Min(onK[1], m.Kutu[1]), Math.Max(onK[2], m.Kutu[2]), Math.Max(onK[3], m.Kutu[3]) };
         var pf = PaftaPlani.Hesapla(onK, yanK, kesitKutulari, liste.Count > 0, 841, 594.65);
         int paftaSorun = 0;

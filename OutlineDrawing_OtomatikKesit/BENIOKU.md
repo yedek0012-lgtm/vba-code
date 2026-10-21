@@ -10,6 +10,15 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET, OTOISIM.
 
+**4.3: Konsol alt kesitleri alttan bakışla (çizimcideki B, D gibi).** Konsolun alt kesiti (yatay alt kot ya da eğik alt başlık
+düzlemi) artık çizimcinin yaptığı gibi alttan bakılarak çizilir ve işaretlenir. Tanıma (AltKesit): kesitteki elemanların
+düğümlerinden kesit dışına çıkan elemanlar yalnız yukarı gidiyorsa (konsolun dikme / çaprazları) düğüm "alt"; bu düğümler
+çoğunluktaysa ve düzlem 45°'den yatıksa kesit konsol altıdır (Tangent B, E, G; TAO B, D, G, I; YAA B, I, J, K; bacak düzlemleri
+hariç). İşaret: kesitin alt kotunda (eğik düzlemde konsol kökünün altı), konsolun dışında, kulenin iki yanında yatay, oklar
+yukarı. Çizim: OutlineDrawing kesiti hep üstten çizdiği için ÇALIŞTIR sonrası yeni "alttan bakış" adımı bu kesitleri yatay
+eksende aynalar (çizgiler aynalanır; yazılar ters dönmez, yalnız yerleri aynalanır, açılı yazı yeni doğrultuya okunur yönde
+döner; başlık yerinde kalır; ikinci kez aynalanmaz).
+
 **4.2: Konsolun altından ve üstünden kesit; büyük kesit kaldırıldı.** Sade modda "neredeyse yatay eğik düzlem kesit olmaz"
 eşiği 15°'den 3°'ye indi: konsolun hafif eğik alt başlık düzlemi de kesit olur (YAA alt konsolu 5,7°, köprü altı 14,3°
 atılıyordu; konsol yalnız üst düzleminden kesiliyor, 26 eleman kesitsiz kalıyordu, şimdi 4). Diğer kulelerde (Tangent, TAO)
