@@ -48,7 +48,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "4.5";
+        public const string Surum = "4.6";
         private static Timer _timer;
 
         public void Initialize()
@@ -4376,6 +4376,25 @@ namespace OtomatikKesit
             HashSet<int> at = AutoSectionDetector.GereksizKesitler(uyeler, gorunen, secim);
             if (at.Count > 0)
                 Komutlar.Yaz(string.Format("\nOto Kesit: {0} gereksiz kesit atıldı (gösterdiği elemanlar başka kesitlerde de var).\n", at.Count));
+            // konsol / köprü alt yüzeyi tek kesitte (yatay alt kesitin planı, TraversKesiti.AltYuzey): elemanları o yüzeyde kalan eğik
+            // alt düzlem kesitleri ayrıca alınmaz (çizimci: "uzunluk boyunca alttan tek kesit")
+            var yuzeyler = new List<HashSet<string>>();
+            for (int i = 0; i < l.Count; i++)
+            {
+                if (at.Contains(i) || l[i].Kind != AutoSectionKind.Height) continue;
+                HashSet<string> y = TraversKesiti.AltYuzeyAnahtarlari(uyeler, Tanim(l[i]));
+                if (y != null) yuzeyler.Add(y);
+            }
+            int birlesen = 0;
+            for (int i = 0; i < l.Count && yuzeyler.Count > 0; i++)
+            {
+                if (at.Contains(i) || l[i].Kind != AutoSectionKind.Plane || !AltKesit.Mi(uyeler, Tanim(l[i]))) continue;
+                List<string> keys;
+                KesitSecici.Sec(uyeler, Tanim(l[i]), out keys);
+                if (keys.Count > 0 && yuzeyler.Any(y => keys.All(y.Contains))) { at.Add(i); birlesen++; }
+            }
+            if (birlesen > 0)
+                Komutlar.Yaz(string.Format("\nOto Kesit: {0} eğik alt düzlem kesiti konsol / köprü alt kesitinde birleşti.\n", birlesen));
             return l.Where((c, i) => !at.Contains(i)).ToList();
         }
 
@@ -4550,6 +4569,7 @@ namespace OtomatikKesit
 
         private static TraversPlani Hesapla0(IDictionary<string, FinalMember> uyeler, KesitTanimi t)
         {
+            if (uyeler != null && t != null && t.Yukseklik.HasValue) return AltYuzey(uyeler, t);
             if (uyeler == null || t == null || t.Yukseklik.HasValue || t.Noktalar.Count < 3) return null;
             double[] p0 = t.Noktalar[0], p1 = t.Noktalar[1], pn = t.Noktalar[t.Noktalar.Count - 1];
             double[] n = Birim(Capraz(Fark(p1, p0), Fark(pn, p0)));
@@ -4616,6 +4636,84 @@ namespace OtomatikKesit
                 if (Math.Abs(m.start_x) > xr + 1 || Math.Abs(m.end_x) > xr + 1) continue;
                 if (Math.Min(m.start_y, m.end_y) < y0 || Math.Max(m.start_y, m.end_y) > y1) continue;
                 ekle(kv.Key, m.start_x, m.start_y, m.end_x, m.end_y);
+            }
+            return plan.Cizgiler.Count >= 4 ? plan : null;
+        }
+
+        /// <summary>Konsol / köprü alt yüzeyinin elemanları (yatay alt kesitten başlayarak): "alt düğüm"ler (hiçbir elemanı 45°'den
+        /// dik aşağı inmeyen düğüm) arasındaki 45°'den yatık elemanlar, kesitin kendi düğümlerinden yayılarak. Alt yüzey kesitin
+        /// kendisinden belirgin büyükse (eğik konsol / köprü altları) anahtarlar döner, yoksa null.</summary>
+        public static HashSet<string> AltYuzeyAnahtarlari(IDictionary<string, FinalMember> uyeler, KesitTanimi t)
+        {
+            if (!t.Yukseklik.HasValue || !AltKesit.Mi(uyeler, t)) return null;
+            List<string> seviye;
+            KesitSecici.Sec(uyeler, t, out seviye);
+            if (seviye.Count < 3) return null;
+            Func<double, double, double, string> A = (x, y, z) => Math.Round(x) + "," + Math.Round(y) + "," + Math.Round(z);
+            var komsu = new Dictionary<string, List<string>>();
+            var kotu = new Dictionary<string, double>();
+            foreach (var kv in uyeler)
+            {
+                var m = kv.Value;
+                string a = A(m.start_x, m.start_y, m.start_z), b = A(m.end_x, m.end_y, m.end_z);
+                if (a == b) continue;
+                kotu[a] = m.start_z; kotu[b] = m.end_z;
+                foreach (string n in new[] { a, b }) { List<string> l; if (!komsu.TryGetValue(n, out l)) komsu[n] = l = new List<string>(); l.Add(kv.Key); }
+            }
+            Func<FinalMember, double> egim = m =>
+            {
+                double dx = m.end_x - m.start_x, dy = m.end_y - m.start_y, dz = m.end_z - m.start_z;
+                return Math.Atan2(Math.Abs(dz), Math.Sqrt(dx * dx + dy * dy)) * 180 / Math.PI;
+            };
+            Func<FinalMember, string, string> obur = (m, n) => { string a = A(m.start_x, m.start_y, m.start_z); return a == n ? A(m.end_x, m.end_y, m.end_z) : a; };
+            // alt düğüm: 45°'den dik aşağı inen elemanı yok
+            Func<string, bool> altDugum = n => komsu[n].All(k =>
+            {
+                var m = uyeler[k];
+                return kotu[obur(m, n)] >= kotu[n] - KesitSecici.YukseklikTol || egim(m) < 45;
+            });
+            var yuzey = new HashSet<string>(seviye);
+            var kuyruk = new Queue<string>();
+            var gorulen = new HashSet<string>();
+            foreach (string k in seviye)
+            {
+                var m = uyeler[k];
+                foreach (string n in new[] { A(m.start_x, m.start_y, m.start_z), A(m.end_x, m.end_y, m.end_z) }) if (gorulen.Add(n)) kuyruk.Enqueue(n);
+            }
+            while (kuyruk.Count > 0)
+            {
+                string n = kuyruk.Dequeue();
+                List<string> l;
+                if (!komsu.TryGetValue(n, out l)) continue;
+                foreach (string k in l)
+                {
+                    if (yuzey.Contains(k)) continue;
+                    var m = uyeler[k];
+                    if (egim(m) >= 45) continue;
+                    string o = obur(m, n);
+                    if (!altDugum(o)) continue;
+                    yuzey.Add(k);
+                    if (gorulen.Add(o)) kuyruk.Enqueue(o);
+                }
+            }
+            return yuzey.Count >= seviye.Count + 4 ? yuzey : null;
+        }
+
+        /// <summary>Yatay alt kesitin alt yüzey planı (AltYuzeyAnahtarlari): elemanlar XY'ye izdüşümüyle tek plan (konsollar + köprü
+        /// altı; çizimcinin "alttan tek kesit"i). Alttan bakış aynası AltKesitAynasi'nda.</summary>
+        private static TraversPlani AltYuzey(IDictionary<string, FinalMember> uyeler, KesitTanimi t)
+        {
+            HashSet<string> yuzey = AltYuzeyAnahtarlari(uyeler, t);
+            if (yuzey == null) return null;
+            var plan = new TraversPlani();
+            foreach (string k in yuzey.OrderBy(x => x, StringComparer.Ordinal))
+            {
+                var m = uyeler[k];
+                if (Math.Abs(m.start_x - m.end_x) < 1 && Math.Abs(m.start_y - m.end_y) < 1) continue;
+                plan.Anahtarlar.Add(k);
+                plan.Cizgiler.Add(new[] { m.start_x, m.start_y, m.end_x, m.end_y });
+                plan.Gruplar.Add(m.group_label ?? "");
+                plan.Kesimler.Add(m.section_label ?? "");
             }
             return plan.Cizgiler.Count >= 4 ? plan : null;
         }
@@ -4698,7 +4796,7 @@ namespace OtomatikKesit
             var atilacak = new Dictionary<string, HashSet<int>>(StringComparer.OrdinalIgnoreCase);
             foreach (var kv in tanimlar)
             {
-                if (!kv.Value.Yukseklik.HasValue) continue;
+                if (!kv.Value.Yukseklik.HasValue || TraversKesiti.Hesapla(kule.Uyeler, kv.Value) != null) continue;   // eklentinin planı
                 HashSet<int> at = KopukParca.Atilacaklar(kule.Uyeler, kv.Value, tanimlar.Where(x => x.Key != kv.Key).Select(x => x.Value));
                 if (at.Count > 0) atilacak[kv.Key] = at;
             }
@@ -5145,6 +5243,7 @@ namespace OtomatikKesit
                 if (i == 0 && zincir.Count > 1) { o.YaziU = sol - 0.75 * o.Yazi - w / 2; o.YaziV = vd + 0.5 * o.Yazi; kat = 0; }
                 else if (i == zincir.Count - 1 && zincir.Count > 1) { o.YaziU = sag + 0.75 * o.Yazi + w / 2; o.YaziV = vd + 0.5 * o.Yazi; }
                 else if (zincir.Count > 1) { kat = kat % 2 + 1; o.YaziU = (sol + sag) / 2; o.YaziV = vd + 0.5 * o.Yazi + kat * 1.5 * o.Yazi; }
+                else { o.YaziU = sag + 0.75 * o.Yazi + w / 2; o.YaziV = vd + 0.5 * o.Yazi; }   // tek parça (dar kesit): sağına
             }
         }
 

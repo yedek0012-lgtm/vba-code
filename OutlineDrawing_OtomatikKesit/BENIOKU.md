@@ -10,6 +10,13 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET, OTOISIM.
 
+**4.6: Konsol + köprü altı tek kesit.** Konsol / köprü altı eğik düzlemlerden oluşuyorsa (YAA: köprü altı 14,3°, alt konsollar
+5,7°) ayrı ayrı kesitler (I, J) yerine yatay alt kesit (32500) bütün alt yüzeyi uzunluk boyunca tek planda gösterir (çizimci:
+"alttan tek kesit"). Alt yüzey: yatay alt kesitten başlayarak, hiçbir elemanı 45°'den dik aşağı inmeyen düğümler arasındaki
+yatık elemanlar (TraversKesiti.AltYuzeyAnahtarlari); eklenti çizer (tam travers gibi), alttan bakışa aynalanır. Elemanları bu
+yüzeyde kalan eğik alt düzlem kesitleri listeden düşer. Tangent / TAO'da (konsol altları yatay) değişiklik yok. Ölçü: tek
+parçalı zincir ölçüsünde sığmayan yazı ölçünün sağına alınır (eskiden konumsuz kalıyordu).
+
 **4.5: Çizimden sonra görünüş TOP.** ÇİZ / pafta / 2D Aktar sonunda UCS çizimin düzlemine (OutlineDrawing'in çizdiği halde XZ,
 2D Aktar sonrası dünya) alınır ve görünüş o UCS'nin planına çevrilir (PLAN): görünüş küpü "BACK" yerine TOP gösterir, çizim önden
 okunur, ekrana sığar.
