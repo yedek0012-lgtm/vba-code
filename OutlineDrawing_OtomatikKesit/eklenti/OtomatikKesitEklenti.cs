@@ -48,7 +48,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "4.7";
+        public const string Surum = "4.7.1";
         private static Timer _timer;
 
         public void Initialize()
@@ -405,7 +405,16 @@ namespace OtomatikKesit
                     using (var dlg = new OpenFileDialog { Filter = "Pafta şablonu (*.dwg;*.dxf)|*.dwg;*.dxf", Title = "Pafta şablonu (çerçeve + antet; sol alt köşe 0,0)" })
                         if (dlg.ShowDialog(f) == DialogResult.OK) Ayarlar.PaftaSablonu = dlg.FileName; else return;
                 }
-                if (!TabloOtoHalinde(f))
+                if (TabloBaskaKulenin(f))
+                {
+                    // tablo başka bir .tow'un (önceki kulenin) kesitleri: sorulmadan bu kule için yeniden bulunur
+                    var grid0 = Alan(f, "dataGridView1") as DataGridView;
+                    if (grid0 != null) { _tabloYaziliyor = true; try { grid0.Rows.Clear(); } finally { _tabloYaziliyor = false; } }
+                    Komutlar.Yaz("\nOto Kesit: tablo başka bir kulenin kesitleriydi; bu .tow için yeniden bulundu.\n");
+                    TabloyuDoldur(f);
+                    if (!_sonDoldurmaTamam) return;
+                }
+                else if (!TabloOtoHalinde(f))
                 {
                     // tablo boşsa ya da son otomatik kesitlerden farklıysa: elle düzenlenmiş tablo sorulmadan silinmez
                     var grid = Alan(f, "dataGridView1") as DataGridView;
@@ -1136,6 +1145,33 @@ namespace OtomatikKesit
         }
 
         /// <summary>Tablo, şu anki .tow ve görünüş seçimi için Oto Kesit'in yazdığı haliyle mi duruyor?</summary>
+        private static string _tabloYolu;   // tablonun son doldurulduğu .tow
+
+        /// <summary>Tablodaki kesitler bu .tow'a ait değil: tablo başka bir .tow için doldurulmuş ya da satırların yarısından çoğunun
+        /// düzleminde bu kulenin hiç elemanı yok (önceki kulenin tablosu). Kontrol edilemezse false.</summary>
+        internal static bool TabloBaskaKulenin(Form f)
+        {
+            try
+            {
+                string yol = YolAl(f);
+                if (yol.Length == 0 || !File.Exists(yol)) return false;
+                if (_tabloYolu != null && !string.Equals(_tabloYolu, yol, StringComparison.OrdinalIgnoreCase)) return true;
+                Dictionary<string, KesitTanimi> tanimlar = KesitStili.GridTanimlari(f);
+                if (tanimlar.Count == 0) return false;
+                KuleVerisi kule = KuleOkuyucu.Oku(f.GetType().Assembly, yol);
+                if (kule == null) return false;
+                int bos = 0;
+                foreach (KesitTanimi t in tanimlar.Values)
+                {
+                    List<string> keys;
+                    KesitSecici.Sec(kule.Uyeler, t, out keys);
+                    if (keys.Count == 0) bos++;
+                }
+                return bos * 2 > tanimlar.Count;
+            }
+            catch { return false; }
+        }
+
         internal static bool TabloOtoHalinde(Form f)
         {
             if (_otoTabloAnahtari == null) return false;
@@ -1279,6 +1315,7 @@ namespace OtomatikKesit
                 HarfleriYenile(f);
                 } finally { _tabloYaziliyor = false; }
                 _otoTabloAnahtari = OtoAnahtar(path, onSecili, yanSecili, tum, doldur, ListeIsteniyor(f));   // tablo bu .tow + seçim için Oto Kesit'in ürettiği hal
+                _tabloYolu = path;
 
                 string ozet = string.Format("{0} kesit eklendi", bulunan.Count);
                 int ekSayisi = bulunan.Count(c => c.Description != null && c.Description.StartsWith(OtoKesitBulucu.EkKesitOnEki, StringComparison.Ordinal));

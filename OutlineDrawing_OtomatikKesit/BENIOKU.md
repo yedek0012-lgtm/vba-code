@@ -10,6 +10,11 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOCIZ, OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET, OTOISIM.
 
+**4.7.1: Başka kulenin tablosu çizilmez.** .tow değiştirildikten sonra ÇİZ, tabloda önceki kulenin kesitleri kalmışsa (tablo başka bir
+.tow için doldurulmuş ya da satırların yarısından çoğunun düzleminde bu kulenin hiç elemanı yok) sormadan bu .tow için kesitleri
+yeniden bulur. Eskiden "tablo farklı: Evet = olduğu gibi çiz" sorusunda Evet denince önceki kulenin (ör. YAA) kesitleri yeni kuleye
+(Tangent) çiziliyor, çoğu boş çıkıyordu.
+
 **4.7: OTOCIZ komutu.** AutoCAD komut satırına OTOCIZ yazılınca dosya penceresi açılır, .tow seçilir; OutlineDrawing formu kapalıysa
 OutlineDrawing'in kendi komutuyla (DRAWOUTLINE) açılır; yalnız ön görünüş (TRANSVERSE FACE) seçilir ve ÇİZ'in yaptığı her şey
 (otomatik kesitler, çizim, isim düzeni, alt kesitler, pafta; PDF kutusu işaretliyse PDF) tek adımda yapılır. Çizim kaydedilmez.
