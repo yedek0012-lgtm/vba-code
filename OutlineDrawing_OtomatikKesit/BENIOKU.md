@@ -10,6 +10,8 @@
 Eski `OutlineDrawing.dll`'in **yerine** konur; ayrıca `OtomatikKesit.dll` yüklenmez (ikisi birlikte yüklenirse çakışır).
 Komutlar: DRAWOUTLINE, CONVERTO2D (OutlineDrawing'in kendi komutları) + OTOCIZ, OTOKESIT, OTOOLCU, OTOSTIL, OTOIC, OTODIZ, OTOPAFTA, OTOISARET, OTOISIM.
 
+**4.7.2: Kırık bacak düzlemi kapalı çizilir.** Tangent M kesiti (bacak iç çapraz düzlemi): bacak 7500'de kırılıp 9000'deki kasığa hafif başka bir düzlemde devam ediyor; OutlineDrawing kırık üstündeki elemanları (K2, R25/R26) yarım alıp üstü kapatan H8-R elemanlarını almadığı için üçgen açık kalıyordu. Böyle bir kesitte sarkık elemanların uçlarını bağlayan elemanlar da katılıp düzlem hepsine oturtulur (en küçük kareler) ve çokgen yatay kenarlı kurulur; yalnız yeni seçim tam ve fazlasızsa uygulanır. Eğik kesit çokgenleri artık önce yatay kenarlı denenir (eğik kenara hizalı dikdörtgen yalnız %10'dan fazla küçükse seçilir).
+
 **4.7.1: Başka kulenin tablosu çizilmez.** .tow değiştirildikten sonra ÇİZ, tabloda önceki kulenin kesitleri kalmışsa (tablo başka bir
 .tow için doldurulmuş ya da satırların yarısından çoğunun düzleminde bu kulenin hiç elemanı yok) sormadan bu .tow için kesitleri
 yeniden bulur. Eskiden "tablo farklı: Evet = olduğu gibi çiz" sorusunda Evet denince önceki kulenin (ör. YAA) kesitleri yeni kuleye

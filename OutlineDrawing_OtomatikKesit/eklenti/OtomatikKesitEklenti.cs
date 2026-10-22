@@ -48,7 +48,7 @@ namespace OtomatikKesit
 {
     public class Eklenti : IExtensionApplication
     {
-        public const string Surum = "4.7.1";
+        public const string Surum = "4.7.2";
         private static Timer _timer;
 
         public void Initialize()
@@ -4459,6 +4459,11 @@ namespace OtomatikKesit
             {
                 secim.Add(KesitSecici.SecGenis(uyeler, Tanim(c)));
             }
+            int kirik = 0;
+            for (int i = 0; i < l.Count; i++)
+                if (KirikDuzlem.Duzelt(uyeler, l[i])) { secim[i] = KesitSecici.SecGenis(uyeler, Tanim(l[i])); kirik++; }
+            if (kirik > 0)
+                Komutlar.Yaz(string.Format("\nOto Kesit: {0} kırık düzlem kesiti (bacak gibi) üst ucuna kadar kapatıldı.\n", kirik));
             HashSet<int> at = AutoSectionDetector.GereksizKesitler(uyeler, gorunen, secim);
             if (at.Count > 0)
                 Komutlar.Yaz(string.Format("\nOto Kesit: {0} gereksiz kesit atıldı (gösterdiği elemanlar başka kesitlerde de var).\n", at.Count));
@@ -4626,6 +4631,142 @@ namespace OtomatikKesit
             if (c.Kind == AutoSectionKind.Height && c.Height.HasValue) t.Yukseklik = Math.Round(c.Height.Value, 3);
             else foreach (var p in c.Points) t.Noktalar.Add(new[] { Math.Round(p.X, 3), Math.Round(p.Y, 3), Math.Round(p.Z, 3) });
             return t;
+        }
+    }
+
+    /// <summary>Kırık düzlem (Tangent bacağı M kesiti): bacak 7500'de kırılıp 9000'deki kasık düğümüne hafif başka bir düzlemde
+    /// devam eder. OutlineDrawing ucu çokgen içinde, ortası düzleme 100 mm'den yakın elemanı seçtiği için kırık üstündeki elemanlar
+    /// sarkık (bir ucu düzlem dışında) gelir, onları üstte kapatan elemanlar ise seçilmez: üçgen açık kalır. Sarkık elemanların uçlarını
+    /// birbirine bağlayan elemanlar da katılıp düzlem hepsine en küçük kareler ile oturtulur ve çokgen yatay kenarlı yeniden kurulur;
+    /// yeni seçim hepsini (fazlasız, sarkıksız) veriyorsa kesit değiştirilir.</summary>
+    public static class KirikDuzlem
+    {
+        const double UcTol = 40, OrtaTol = 85, KenarPayi = 50;
+
+        public static bool Duzelt(IDictionary<string, FinalMember> uyeler, AutoSectionCandidate c)
+        {
+            if (c == null || c.Kind != AutoSectionKind.Plane || c.Points == null || c.Points.Count < 3) return false;
+            try
+            {
+                KesitTanimi t = OtoKesitBulucu.Tanim(c);
+                List<string> sec;
+                KesitSecici.Sec(uyeler, t, out sec);
+                if (sec.Count < 3) return false;
+                double[] n, p0 = t.Noktalar[0];
+                n = Birim(Capraz(Fark(t.Noktalar[1], p0), Fark(t.Noktalar[t.Noktalar.Count - 1], p0)));
+                if (n == null) return false;
+                Func<double[], double> uz = q => Ic(Fark(q, p0), n);
+                var uclar = new Dictionary<string, double[]>();
+                foreach (string k in sec)
+                    foreach (double[] q in Uclar(uyeler[k]))
+                        if (Math.Abs(uz(q)) > UcTol) uclar[Anahtar(q)] = q;
+                if (uclar.Count < 2) return false;
+                // sarkık uçları kendi aralarında bağlayan (kapatan) elemanlar
+                var kapatan = uyeler.Where(kv => !sec.Contains(kv.Key) && Uclar(kv.Value).All(q => uclar.ContainsKey(Anahtar(q)))).Select(kv => kv.Key).ToList();
+                if (kapatan.Count == 0) return false;
+                var hepsi = new HashSet<string>(sec.Concat(kapatan));
+                var nok = hepsi.SelectMany(k => Uclar(uyeler[k])).ToList();
+                double[] yn, merkez;
+                if (!Oturt(nok, out yn, out merkez)) return false;
+                if (yn[2] < 0) yn = Kat(yn, -1);
+                Func<double[], double> yuz = q => Ic(Fark(q, merkez), yn);
+                foreach (string k in hepsi)
+                {
+                    double[] a = Uclar(uyeler[k])[0], b = Uclar(uyeler[k])[1];
+                    if (Math.Abs(yuz(new[] { (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2 })) > OrtaTol) return false;
+                }
+                // çokgen: düzlemin yatay ekseni (u) ve eğim ekseni (v) doğrultusunda dikdörtgen
+                double[] u = Birim(Capraz(new double[] { 0, 0, 1 }, yn));
+                if (u == null) return false;
+                double[] v = Birim(Capraz(yn, u));
+                double a0 = double.MaxValue, a1 = double.MinValue, b0 = double.MaxValue, b1 = double.MinValue;
+                foreach (double[] q in nok)
+                {
+                    double x = Ic(Fark(q, merkez), u), y = Ic(Fark(q, merkez), v);
+                    a0 = Math.Min(a0, x); a1 = Math.Max(a1, x); b0 = Math.Min(b0, y); b1 = Math.Max(b1, y);
+                }
+                a0 -= KenarPayi; a1 += KenarPayi; b0 -= KenarPayi; b1 += KenarPayi;
+                var koseler = new List<SectionPoint3D>();
+                foreach (double[] ab in new[] { new[] { a0, b0 }, new[] { a1, b0 }, new[] { a1, b1 }, new[] { a0, b1 } })
+                {
+                    double[] q = Topla(merkez, Topla(Kat(u, ab[0]), Kat(v, ab[1])));
+                    koseler.Add(new SectionPoint3D(Math.Round(q[0], 3), Math.Round(q[1], 3), Math.Round(q[2], 3)));
+                }
+                var yeni = new AutoSectionCandidate { Kind = AutoSectionKind.Plane, Points = koseler };
+                List<string> sec2;
+                KesitSecici.Sec(uyeler, OtoKesitBulucu.Tanim(yeni), out sec2);
+                if (sec2.Count != hepsi.Count || !sec2.All(hepsi.Contains)) return false;
+                double tilt = Math.Acos(Math.Min(1.0, Math.Abs(yn[2]))) * 180.0 / Math.PI;
+                c.Points = koseler;
+                c.MemberKeys = sec2;
+                c.TiltDeg = Math.Round(tilt, 1);
+                c.Description = string.Format(CultureInfo.InvariantCulture,
+                    "Eğik düzlem kesiti (kırık düzlem, üst ucuna kadar): eğim {0:0.0}°, {1} eleman, merkez ({2:0}; {3:0}; {4:0})",
+                    tilt, sec2.Count, merkez[0], merkez[1], merkez[2]);
+                return true;
+            }
+            catch { return false; }
+        }
+
+        static double[][] Uclar(FinalMember m)
+        {
+            return new[] { new[] { m.start_x, m.start_y, m.start_z }, new[] { m.end_x, m.end_y, m.end_z } };
+        }
+
+        static string Anahtar(double[] q)
+        {
+            return Math.Round(q[0] / 5).ToString(CultureInfo.InvariantCulture) + "|" + Math.Round(q[1] / 5).ToString(CultureInfo.InvariantCulture) +
+                   "|" + Math.Round(q[2] / 5).ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>En küçük kareler düzlemi: kovaryansın en küçük özdeğerli özvektörü (3x3 Jacobi).</summary>
+        static bool Oturt(List<double[]> nok, out double[] n, out double[] merkez)
+        {
+            n = null;
+            merkez = new[] { nok.Average(q => q[0]), nok.Average(q => q[1]), nok.Average(q => q[2]) };
+            var A = new double[3, 3];
+            foreach (double[] q in nok)
+                for (int i = 0; i < 3; i++)
+                    for (int j = 0; j < 3; j++) A[i, j] += (q[i] - merkez[i]) * (q[j] - merkez[j]);
+            var V = new double[3, 3] { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } };
+            for (int it = 0; it < 50; it++)
+            {
+                int p = 0, r = 1;
+                if (Math.Abs(A[0, 2]) > Math.Abs(A[p, r])) { p = 0; r = 2; }
+                if (Math.Abs(A[1, 2]) > Math.Abs(A[p, r])) { p = 1; r = 2; }
+                if (Math.Abs(A[p, r]) < 1e-9 * (Math.Abs(A[0, 0]) + Math.Abs(A[1, 1]) + Math.Abs(A[2, 2]) + 1e-12)) break;
+                double th = 0.5 * Math.Atan2(2 * A[p, r], A[r, r] - A[p, p]), cs = Math.Cos(th), sn = Math.Sin(th);
+                for (int k = 0; k < 3; k++)
+                {
+                    double akp = A[k, p], akr = A[k, r];
+                    A[k, p] = cs * akp - sn * akr; A[k, r] = sn * akp + cs * akr;
+                }
+                for (int k = 0; k < 3; k++)
+                {
+                    double apk = A[p, k], ark = A[r, k];
+                    A[p, k] = cs * apk - sn * ark; A[r, k] = sn * apk + cs * ark;
+                }
+                for (int k = 0; k < 3; k++)
+                {
+                    double vkp = V[k, p], vkr = V[k, r];
+                    V[k, p] = cs * vkp - sn * vkr; V[k, r] = sn * vkp + cs * vkr;
+                }
+            }
+            int e = 0;
+            for (int i = 1; i < 3; i++) if (A[i, i] < A[e, e]) e = i;
+            n = Birim(new[] { V[0, e], V[1, e], V[2, e] });
+            return n != null;
+        }
+
+        static double[] Fark(double[] a, double[] b) { return new[] { a[0] - b[0], a[1] - b[1], a[2] - b[2] }; }
+        static double[] Topla(double[] a, double[] b) { return new[] { a[0] + b[0], a[1] + b[1], a[2] + b[2] }; }
+        static double[] Kat(double[] a, double k) { return new[] { a[0] * k, a[1] * k, a[2] * k }; }
+        static double Ic(double[] a, double[] b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+        static double[] Capraz(double[] a, double[] b) { return new[] { a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0] }; }
+        static double[] Birim(double[] a)
+        {
+            double l = Math.Sqrt(Ic(a, a));
+            return l < 1e-9 ? null : Kat(a, 1 / l);
         }
     }
 

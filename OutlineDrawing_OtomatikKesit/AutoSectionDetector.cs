@@ -1048,13 +1048,20 @@ namespace OutlineDrawing
             var hull = ConvexHull(p2);
             if (hull.Count < 3) return null;
 
+            // önce düzlemin yatay ekseni: üst/alt kenar yatay olur (çizimci gibi). Eğik kenara hizalı dikdörtgen yalnız belirgin
+            // küçükse seçilir; üçgen panelde eşit alanlıdır ve kenara hizalanınca kesit üstteki komşu düzleme taşar (Tangent M).
             double bestArea = double.MaxValue, bx = 0, by = 0, minA = 0, maxA = 0, minB = 0, maxB = 0;
-            for (int i = 0; i < hull.Count; i++)
+            bool yatayEnIyi = false;
+            for (int i = -1; i < hull.Count; i++)
             {
-                V2 e = hull[(i + 1) % hull.Count] - hull[i];
-                double el = e.Length;
-                if (el < 1e-9) continue;
-                double ex = e.X / el, ey = e.Y / el;
+                double ex = 1, ey = 0;
+                if (i >= 0)
+                {
+                    V2 e = hull[(i + 1) % hull.Count] - hull[i];
+                    double el = e.Length;
+                    if (el < 1e-9) continue;
+                    ex = e.X / el; ey = e.Y / el;
+                }
                 double a0 = double.MaxValue, a1 = double.MinValue, b0 = double.MaxValue, b1 = double.MinValue;
                 foreach (var q in hull)
                 {
@@ -1062,7 +1069,7 @@ namespace OutlineDrawing
                     a0 = Math.Min(a0, a); a1 = Math.Max(a1, a); b0 = Math.Min(b0, bb); b1 = Math.Max(b1, bb);
                 }
                 double area = (a1 - a0) * (b1 - b0);
-                if (area < bestArea) { bestArea = area; bx = ex; by = ey; minA = a0; maxA = a1; minB = b0; maxB = b1; }
+                if (area < (yatayEnIyi ? bestArea * 0.9 : bestArea)) { yatayEnIyi = i < 0; bestArea = area; bx = ex; by = ey; minA = a0; maxA = a1; minB = b0; maxB = b1; }
             }
             minA -= margin; maxA += margin; minB -= margin; maxB += margin;
 
