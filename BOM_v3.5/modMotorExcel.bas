@@ -579,6 +579,7 @@ Public Function HeaderRoleOf(ByVal cellTxt As String) As Long
     c = Replace(c, ".", "")
     c = Replace(c, "-", "")
     c = Replace(c, "_", "")
+    c = Replace(c, "*", "")                       ' "Pos.***", "nung*" (dipnot iþaretleri)
 
     Select Case c
         Case "POS", "POZ", "POSNR", "POSNO", "POSITION", "POSITIONSNR", "ITEM", "ITEMNO", "MARK", "MARKNO", _
@@ -620,6 +621,9 @@ Public Function HeaderRoleOf(ByVal cellTxt As String) As Long
     If InStr(c, "DICKE") > 0 Or InStr(c, "THICK") > 0 Or InStr(c, "KALINLIK") > 0 Then HeaderRoleOf = 9: Exit Function
     If InStr(c, "BREITE") > 0 Or InStr(c, "WIDTH") > 0 Or InStr(c, "GENISLIK") > 0 Then HeaderRoleOf = 10: Exit Function
 
+    ' "Einzel- / Position [kg]" ve "Gesamt- / Position [kg]" (tireyle iki satýra bölünmüþ baþlýk)
+    If c = "EINZELPOSITION" Then HeaderRoleOf = 15: Exit Function
+    If c = "GESAMTPOSITION" Then HeaderRoleOf = 8: Exit Function
     If InStr(c, "GESAMTGEWICHT") > 0 Or InStr(c, "TOTALWEIGHT") > 0 Or InStr(c, "T/WEIGHT") > 0 Or InStr(c, "TOPLAMAGIRLIK") > 0 _
        Or c Like "TOT*WEIGHT*" Or c = "GESAMT" Or c = "TOTAL" Or c = "TOTAL(KG)" Or c = "GESAMT(KG)" Or c = "GESAMTKG" Then
         HeaderRoleOf = 8: Exit Function
@@ -652,13 +656,24 @@ Public Function HeaderRoleOf(ByVal cellTxt As String) As Long
 End Function
 
 ' Bir satýr malzeme listesi baþlýðý mý? (hücre bazlý; en az 3 farklý rol + Poz/Adet/Ýsim'den ikisi)
+' Baþlýk hücresi; satýr sonunda tireyle bölünmüþse alt satýrla birleþtirilir: "Bezeich-" + "nung*" -> "Bezeichnung*"
+Public Function HeaderCellText(ByRef data As Variant, ByVal r As Long, ByVal c As Long, ByVal maxC As Long) As String
+    Dim t As String, maxR As Long
+    t = Trim$(BomCellText(data, r, c, maxC))
+    HeaderCellText = t
+    If Len(t) < 3 Or Right$(t, 1) <> "-" Then Exit Function
+    On Error Resume Next
+    maxR = UBound(data, 1)
+    If r + 1 <= maxR Then HeaderCellText = Left$(t, Len(t) - 1) & Trim$(BomCellText(data, r + 1, c, maxC))
+End Function
+
 Public Function IsBOMHeaderRow(ByRef data As Variant, ByVal r As Long, ByVal maxC As Long) As Boolean
     Dim c As Long, role As Long, nRoles As Long
     Dim seen(1 To 16) As Boolean
     Dim hasPos As Boolean, hasQty As Boolean, hasName As Boolean
     On Error GoTo Fail
     For c = 1 To maxC
-        role = HeaderRoleOf(BomCellText(data, r, c, maxC))
+        role = HeaderRoleOf(HeaderCellText(data, r, c, maxC))
         If role > 0 Then
             If Not seen(role) Then
                 seen(role) = True
@@ -686,7 +701,7 @@ Public Sub MapBOMHeader(ByRef data As Variant, ByVal hr As Long, ByVal maxR As L
     Next c
 
     For c = 1 To maxC
-        role = HeaderRoleOf(BomCellText(data, hr, c, maxC))
+        role = HeaderRoleOf(HeaderCellText(data, hr, c, maxC))
         If role > 0 And role <= UBound(cols) Then
             If cols(role) = 0 Then cols(role) = c
         End If
@@ -696,6 +711,8 @@ Public Sub MapBOMHeader(ByRef data As Variant, ByVal hr As Long, ByVal maxR As L
     If hr + 1 <= maxR Then
         For c = 1 To maxC
             t = BomCellText(data, hr + 1, c, maxC)
+            ' tireyle bölünmüþ baþlýðýn devamý ("nung*", "Position") ayrý baþlýk sayýlmaz
+            If Right$(Trim$(BomCellText(data, hr, c, maxC)), 1) = "-" Then t = ""
             If t <> "" And Not RxTest(t, "^[\d\.,\s]+$") Then
                 role = HeaderRoleOf(t)
                 Select Case role
