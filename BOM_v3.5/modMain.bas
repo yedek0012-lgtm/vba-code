@@ -144,6 +144,7 @@ Sub Evrensel_BOM_Cevirici_Core()
     Application.DisplayAlerts = False
     Application.EnableEvents = False
     Call UnprotectForMacro
+    Call ShowAllOutputRows          ' süzgeç açýksa yeni satýrlar gizli kalmasýn, toplamlar eksik çýkmasýn
 
     Call CheckAndInitSettingsSheet
     Call LoadParameters
@@ -1002,6 +1003,7 @@ Sub Can_Temizleyici()
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     Call UnprotectForMacro
+    Call ShowAllOutputRows
     Call CaptureShortNames          ' elle yazýlan baþlýk adlarý temizlikte kaybolmasýn
     Call CleanTemplateRanges(wsAngle, wsPlate, wsBolt, wsSum)
     Call ClearReportSheets

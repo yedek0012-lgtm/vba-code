@@ -53,6 +53,20 @@ Public Function IsOutputSheet(ByVal nm As String) As Boolean
                      nm Like "SUM_P#*" Or nm Like "ANGLE_P#*" Or nm Like "PLATE_P#*" Or nm Like "BOLTS_P#*")
 End Function
 
+' Çýktý sayfalarýnda açýk filtre süzgecini kaldýrýr (filtre düðmeleri kalýr), tüm satýrlar görünür olur.
+' Süzgeç açýkken makro gizli satýrlara yazýyordu: ör. I sütunu süzülmüþken 2. / 3. dosyanýn parçalarý
+' görünmüyor, toplam formülü görünür satýrlarý saydýðý için aðýrlýklarý SUM'da 0 çýkýyordu.
+Public Sub ShowAllOutputRows()
+    Dim ws As Worksheet
+    On Error Resume Next
+    For Each ws In ThisWorkbook.Worksheets
+        If IsOutputSheet(ws.Name) Then
+            If ws.FilterMode Then ws.ShowAllData
+        End If
+    Next ws
+    Err.Clear
+End Sub
+
 Public Sub UnprotectForMacro()
     Dim ws As Worksheet
     On Error Resume Next
