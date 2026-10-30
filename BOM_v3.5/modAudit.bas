@@ -6,6 +6,16 @@ Option Private Module
 ' (eskiden her kayýt 11 hücre + renk + köprü = ~15 ayrý Excel iþlemiydi). Renk koþullu biçimlendirmeyle,
 ' SATIR köprüsü HYPERLINK formülüyle verilir.
 Private Const AUDIT_BLOCK As Long = 2000
+
+' OGRENME sütunlarý: her türün kendi deðer sütunlarý (eskiden 3 tür ortak "DEÐER 1 / 2" kullanýyordu)
+Public Const OG_COL_TUR As Long = 3
+Public Const OG_COL_A1 As Long = 6        ' ANGLE kg/m
+Public Const OG_COL_A2 As Long = 7        ' ANGLE yüzey alan
+Public Const OG_COL_P1 As Long = 8        ' PLATE kalýnlýk (A) mm
+Public Const OG_COL_P2 As Long = 9        ' PLATE geniþlik (B) mm
+Public Const OG_COL_B1 As Long = 10       ' BOLT birim aðýrlýk kg
+Public Const OG_COL_B2 As Long = 11       ' BOLT 1000 adet kg
+Public Const OG_COL_DUR As Long = 12      ' DURUM
 Private auditBuf() As Variant
 Private auditBufN As Long
 Private auditBufStart As Long
@@ -267,6 +277,23 @@ Public Sub NoteUnknown(ByVal key As String, ByVal rowNo As Long, ByVal posNo As 
     End If
 End Sub
 
+' Seçilen TÜR'e ait olmayan deðer sütunlarý gri (koþullu biçim; fonksiyon adý yok, Türkçe Excel'de de çalýþýr)
+Private Sub SetOgrenmeTypeShading(ByVal ws As Worksheet, ByVal nRows As Long)
+    Dim grp As Variant, i As Long, k As Long, rng As Range, fc As Object, others As Variant
+    On Error Resume Next
+    grp = Array("F", "H", "J")
+    others = Array(Array("PLATE", "BOLTS&WASHER"), Array("ANGLE", "BOLTS&WASHER"), Array("ANGLE", "PLATE"))
+    For i = 0 To 2
+        Set rng = ws.Range(grp(i) & "2").Resize(nRows, 2)
+        rng.FormatConditions.Delete
+        For k = 0 To 1
+            Set fc = rng.FormatConditions.Add(Type:=xlExpression, Formula1:="=$C2=""" & others(i)(k) & """")
+            fc.Interior.Color = RGB(217, 217, 217)
+            fc.Font.Color = RGB(166, 166, 166)
+        Next k
+    Next i
+End Sub
+
 Public Sub WriteUnknownsSheet(ByVal dictUnk As Object)
     Dim ws As Worksheet, k As Variant, r As Long, out() As Variant, btn As Object
     Dim src As Variant, srcTxt As String, i As Long
@@ -284,12 +311,13 @@ Public Sub WriteUnknownsSheet(ByVal dictUnk As Object)
     On Error GoTo 0
     ws.Cells.Clear
 
-    ws.Range("A1:H1").Value = Array("TANINMAYAN PARÇA", "NEREDE (Dosya / Sayfa / Satýr)" & vbLf & "týkla: ilk yeri açar", "TÜR", _
+    ws.Range("A1:L1").Value = Array("TANINMAYAN PARÇA", "NEREDE (Dosya / Sayfa / Satýr)" & vbLf & "týkla: ilk yeri açar", "TÜR", _
                                     "MALZEME KODU", "MALZEME CÝNSÝ", _
-                                    "DEÐER 1" & vbLf & "ANGLE: kg/m" & vbLf & "PLATE: KALINLIK mm" & vbLf & "BOLT: BÝRÝM AÐIRLIK kg", _
-                                    "DEÐER 2" & vbLf & "ANGLE: YÜZEY ALAN" & vbLf & "PLATE: GENÝÞLÝK mm" & vbLf & "BOLT: 1000 ADET kg", _
+                                    "ANGLE" & vbLf & "kg/m", "ANGLE" & vbLf & "YÜZEY ALAN" & vbLf & "(m2/m)", _
+                                    "PLATE" & vbLf & "KALINLIK (A)" & vbLf & "mm", "PLATE" & vbLf & "GENÝÞLÝK (B)" & vbLf & "mm", _
+                                    "BOLTS&WASHER" & vbLf & "BÝRÝM AÐIRLIK" & vbLf & "kg", "BOLTS&WASHER" & vbLf & "1000 ADET" & vbLf & "kg", _
                                     "DURUM")
-    With ws.Range("A1:H1")
+    With ws.Range("A1:L1")
         .Font.Bold = True
         .Font.Color = RGB(255, 255, 255)
         .Interior.Color = RGB(0, 51, 102)
@@ -297,6 +325,10 @@ Public Sub WriteUnknownsSheet(ByVal dictUnk As Object)
         .VerticalAlignment = xlCenter
         .HorizontalAlignment = xlCenter
     End With
+    ' tür gruplarý ayrý renk: hangi sütunun hangi türe ait olduðu bir bakýþta görülsün
+    ws.Range("F1:G1").Interior.Color = RGB(31, 78, 121)
+    ws.Range("H1:I1").Interior.Color = RGB(56, 87, 35)
+    ws.Range("J1:K1").Interior.Color = RGB(127, 96, 0)
     ws.Rows(1).RowHeight = 62
 
     ReDim out(1 To dictUnk.Count, 1 To 5)
@@ -312,13 +344,16 @@ Public Sub WriteUnknownsSheet(ByVal dictUnk As Object)
     ws.Range("D2").Resize(r, 1).NumberFormat = "@"       ' kodun baþtaki sýfýrý kaybolmasýn
     ws.Range("A2").Resize(r, 5).Value = out
     ws.Range("F2").Resize(r, 2).NumberFormat = "0.000#"
-    ws.Range("C2").Resize(r, 5).Interior.Color = RGB(255, 242, 204)
-    ws.Range("A1").Resize(r + 1, 8).Borders.LineStyle = 1
+    ws.Range("H2").Resize(r, 2).NumberFormat = "0.##"
+    ws.Range("J2").Resize(r, 2).NumberFormat = "0.0000#"
+    ws.Range("C2").Resize(r, 9).Interior.Color = RGB(255, 242, 204)
+    ws.Range("A1").Resize(r + 1, 12).Borders.LineStyle = 1
+    Call SetOgrenmeTypeShading(ws, r)
 
     ' NEREDE: parçanýn geçtiði tüm yerler (en çok 8 satýr + "... N yerde daha"); týklayýnca ilk yer açýlýr
     On Error Resume Next
     ws.Range("B2").Resize(r, 1).WrapText = True
-    ws.Range("A2").Resize(r, 8).VerticalAlignment = xlTop
+    ws.Range("A2").Resize(r, 12).VerticalAlignment = xlTop
     If Not dictUnkSrc Is Nothing Then
         i = 1
         For Each k In dictUnk.keys
@@ -358,23 +393,22 @@ Public Sub WriteUnknownsSheet(ByVal dictUnk As Object)
     ws.Columns("C").ColumnWidth = 15
     ws.Columns("D").ColumnWidth = 16
     ws.Columns("E").ColumnWidth = 24
-    ws.Columns("F").ColumnWidth = 18
-    ws.Columns("G").ColumnWidth = 18
-    ws.Columns("H").ColumnWidth = 34
+    ws.Columns("F:K").ColumnWidth = 12
+    ws.Columns("L").ColumnWidth = 34
 
-    ws.Range("J1").Value = "NASIL KULLANILIR"
-    ws.Range("J1").Font.Bold = True
-    ws.Range("J2").Value = "1) TÜR seçin: ANGLE (profil/köþebent), PLATE (plaka, ýzgara...), BOLTS&WASHER (cývata, pul, baðlantý seti)."
-    ws.Range("J3").Value = "2) Sarý alanlarý doldurun:"
-    ws.Range("J4").Value = "   ANGLE        -> KOD, CÝNS, kg/m, YÜZEY ALAN      (L-U-I-O-Y-LIBRARY'ye yazýlýr)"
-    ws.Range("J5").Value = "   PLATE        -> KALINLIK mm, GENÝÞLÝK mm (kod/cins isteðe baðlý; boy listeden okunur)"
-    ws.Range("J6").Value = "   BOLTS&WASHER -> KOD, CÝNS, BÝRÝM AÐIRLIK veya 1000 ADET AÐIRLIÐI  (BOLT-LIBRARY'ye yazýlýr)"
-    ws.Range("J7").Value = "3) Tanýmlamak istemediklerinizi boþ býrakýn. Eksik verili satýrlar aktarýlmaz (DURUM'a bakýn)."
-    ws.Range("J8").Value = "4) 'KÜTÜPHANEYE AKTAR': parçalarýn türü OGRENILEN sayfasýna kaydedilir ve son iþlem"
-    ws.Range("J9").Value = "   ayný dosyalarla otomatik yeniden yapýlýr (dosyalarý tekrar seçmeniz gerekmez)."
+    ws.Range("N1").Value = "NASIL KULLANILIR"
+    ws.Range("N1").Font.Bold = True
+    ws.Range("N2").Value = "1) TÜR seçin: ANGLE (profil/köþebent/boru), PLATE (plaka, ýzgara...), BOLTS&WASHER (cývata, pul, baðlantý seti)."
+    ws.Range("N3").Value = "2) Sadece seçtiðiniz türün sütunlarýný doldurun (diðerleri griye döner):"
+    ws.Range("N4").Value = "   ANGLE        -> KOD, CÝNS, kg/m (F), YÜZEY ALAN (G)      (L-U-I-O-Y-LIBRARY'ye yazýlýr)"
+    ws.Range("N5").Value = "   PLATE        -> KALINLIK A (H), GENÝÞLÝK B (I) mm; boy listeden okunur (kod/cins isteðe baðlý)"
+    ws.Range("N6").Value = "   BOLTS&WASHER -> KOD, CÝNS, BÝRÝM AÐIRLIK (J) veya 1000 ADET AÐIRLIÐI (K)  (BOLT-LIBRARY'ye yazýlýr)"
+    ws.Range("N7").Value = "3) Tanýmlamak istemediklerinizi boþ býrakýn. Eksik verili satýrlar aktarýlmaz (DURUM'a bakýn)."
+    ws.Range("N8").Value = "4) 'KÜTÜPHANEYE AKTAR': parçalarýn türü OGRENILEN sayfasýna kaydedilir ve son iþlem"
+    ws.Range("N9").Value = "   ayný dosyalarla otomatik yeniden yapýlýr (dosyalarý tekrar seçmeniz gerekmez)."
 
     On Error Resume Next
-    Set btn = ws.Buttons.Add(ws.Range("J11").Left, ws.Range("J11").Top, 180, 30)
+    Set btn = ws.Buttons.Add(ws.Range("N11").Left, ws.Range("N11").Top, 180, 30)
     btn.Caption = "KÜTÜPHANEYE AKTAR"
     btn.OnAction = "Kutuphaneye_Aktar"
     On Error GoTo 0

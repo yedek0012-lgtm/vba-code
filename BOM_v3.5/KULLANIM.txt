@@ -50,16 +50,20 @@ sayfalarına aktarır. Ağırlıkları şablonun formülleri hesaplar; makro for
  Makro tanımadığı parçaları OGRENME sayfasında listeler. NEREDE (B) sütunu parçanın geçtiği her yeri
  gösterir (dosya / sayfa / satır / poz; birden çok yerdeyse "[5 yerde]"). Hücreye tıklayınca kaynak dosya
  ilk geçtiği satırda açılır. Her satır için:
-  a) TÜR seçin:
-       ANGLE         profil / köşebent   -> MALZEME KODU, MALZEME CİNSİ, kg/m, YÜZEY ALAN
-       PLATE         plaka / ızgara       -> KALINLIK (mm), GENİŞLİK (mm)  (boy listeden okunur)
-       BOLTS&WASHER  cıvata / bağlantı    -> MALZEME KODU, MALZEME CİNSİ, BİRİM veya 1000 ADET AĞIRLIĞI
+  a) TÜR seçin; her türün KENDİ sütunları var, diğer türlerin sütunları griye döner:
+       ANGLE         profil / köşebent / boru -> MALZEME KODU, MALZEME CİNSİ, kg/m (F), YÜZEY ALAN (G)
+       PLATE         plaka / ızgara           -> KALINLIK A (H), GENİŞLİK B (I) mm  (boy listeden okunur)
+       BOLTS&WASHER  cıvata / bağlantı        -> MALZEME KODU, MALZEME CİNSİ, BİRİM (J) veya 1000 ADET (K) AĞIRLIĞI
   b) Sarı alanları doldurun; tanımlamak istemediklerinizi boş bırakın.
+     Eksik satır varsa liste yenilenmez; imleç ilk kırmızı DURUM'a gider. Tamamlayıp tekrar AKTAR'a basın.
+     Yanlış öğretilen parça: OGRENILEN sayfasında satırını düzeltin (DEĞER 1 / 2 = PLATE'te kalınlık / genişlik)
+     ya da silin, sonra Alt+F8 > Son_Islemi_Yenile.
   c) KÜTÜPHANEYE AKTAR: parçalar kütüphaneye yazılır, türleri OGRENILEN sayfasına kaydedilir ve son işlem
      aynı dosyalarla otomatik yeniden yapılır (dosyaları tekrar seçmeniz gerekmez).
  - DURUM sütunu: yeşil = aktarıldı, sarı = aktarıldı ama kg/m ölçüden hesaplanandan çok farklı (kontrol edin),
    kırmızı = eksik veri, aktarılmadı.
  - Bir kez öğretilen parça sonraki bütün listelerde otomatik tanınır.
+ - İşlem sırasında ilerleme kutusu ve Excel'in alt durum çubuğu: dosya sırası, geçen ve tahmini kalan süre.
 
 4) SORUN GİDERME
  - Şablon bozulduysa (ağırlıklar 0 / katlanmış, formüller silinmiş): Alt+F8 > Yedekten_Geri_Yukle ile işlem öncesi

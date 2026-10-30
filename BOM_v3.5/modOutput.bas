@@ -2,6 +2,9 @@ Attribute VB_Name = "modOutput"
 Option Explicit
 Option Private Module
 
+' Ýlerleme göstergesi: baþlangýç aný (Timer, sn) - geçen / tahmini kalan süre için
+Private progT0 As Double
+
 ' =========================================================================
 ' ÇIKTI: tamponlar, þablona yazma, temizleme, mutabakat, biçimlendirme, çakýþma kontrolü
 ' =========================================================================
@@ -363,46 +366,70 @@ End Sub
 
 Public Sub ShowProgress(ByVal pct As Double, ByVal msg As String)
     Dim ws As Worksheet, shpBG As Object, shpBar As Object, shpTxt As Object
+    Dim el As Double, txt As String, prevSU As Boolean
     On Error Resume Next
+    ' süre: ilk çaðrýda (ya da % 0'da) baþlar; kalan süre, geçen süre ve tamamlanan orandan tahmin edilir
+    If progT0 = 0 Or pct <= 0 Then progT0 = Timer
+    el = Timer - progT0
+    If el < 0 Then el = el + 86400#                   ' gece yarýsý
+    txt = msg & "  (% " & Format(pct * 100, "0") & ")"
+    If el >= 1 Then txt = txt & vbLf & "Geçen " & SureText(el)
+    If pct >= 0.02 And pct < 1 And el >= 3 Then txt = txt & "  |  Tahmini kalan ~" & SureText(el * (1 - pct) / pct)
+    Application.StatusBar = Replace(txt, vbLf, "  |  ")
+
     Set ws = ThisWorkbook.Sheets("SUM")
-    
     Set shpBG = ws.Shapes("ProgBG")
     If shpBG Is Nothing Then
-        Set shpBG = ws.Shapes.AddShape(1, 150, 150, 400, 40)
+        Set shpBG = ws.Shapes.AddShape(1, 150, 150, 460, 52)
         shpBG.Name = "ProgBG"
         shpBG.Fill.ForeColor.RGB = RGB(220, 220, 220)
         shpBG.Line.ForeColor.RGB = RGB(0, 0, 0)
-End If
-    
+    End If
     Set shpBar = ws.Shapes("ProgBar")
     If shpBar Is Nothing Then
-        Set shpBar = ws.Shapes.AddShape(1, 150, 150, 1, 40)
+        Set shpBar = ws.Shapes.AddShape(1, 150, 150, 1, 52)
         shpBar.Name = "ProgBar"
         shpBar.Fill.ForeColor.RGB = RGB(0, 153, 76)
         shpBar.Line.Visible = 0
-End If
-    
+    End If
     Set shpTxt = ws.Shapes("ProgTxt")
     If shpTxt Is Nothing Then
-        Set shpTxt = ws.Shapes.AddShape(1, 150, 150, 400, 40)
+        Set shpTxt = ws.Shapes.AddShape(1, 150, 150, 460, 52)
         shpTxt.Name = "ProgTxt"
         shpTxt.Fill.Visible = 0
         shpTxt.Line.Visible = 0
         shpTxt.TextFrame.Characters.Font.Color = RGB(0, 0, 0)
         shpTxt.TextFrame.Characters.Font.Bold = True
-        shpTxt.TextFrame.Characters.Font.Size = 12
+        shpTxt.TextFrame.Characters.Font.Size = 11
         shpTxt.TextFrame.HorizontalAlignment = -4108
         shpTxt.TextFrame.VerticalAlignment = -4108
-End If
-    
-    shpBar.width = IIf(400 * pct < 1, 1, 400 * pct)
-    shpTxt.TextFrame.Characters.Text = msg & " (% " & Format(pct * 100, "0") & ")"
+    End If
+    shpBar.Width = IIf(460 * pct < 1, 1, 460 * pct)
+    shpTxt.TextFrame.Characters.Text = txt
+    ' ekran güncellemesi kapalýyken kutu yenilenmez: kýsa süre açýp kapat
+    prevSU = Application.ScreenUpdating
+    If Not prevSU Then Application.ScreenUpdating = True
     DoEvents
+    If Not prevSU Then Application.ScreenUpdating = False
     On Error GoTo 0
 End Sub
 
+' 75 -> "1 dk 15 sn", 40 -> "40 sn"
+Private Function SureText(ByVal sn As Double) As String
+    Dim m As Long
+    sn = Int(sn + 0.5)
+    m = Int(sn / 60)
+    If m > 0 Then
+        SureText = m & " dk " & Format(sn - m * 60, "00") & " sn"
+    Else
+        SureText = sn & " sn"
+    End If
+End Function
+
 Public Sub RemoveProgress()
     On Error Resume Next
+    progT0 = 0
+    Application.StatusBar = False
     ThisWorkbook.Sheets("SUM").Shapes("ProgBG").Delete
     ThisWorkbook.Sheets("SUM").Shapes("ProgBar").Delete
     ThisWorkbook.Sheets("SUM").Shapes("ProgTxt").Delete
