@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Mock Easy Apply</title></head>
+<body>
+<!-- LinkedIn Kolay Basvuru penceresinin sadelestirilmis taklidi (test icin) -->
+<div class="artdeco-modal jobs-easy-apply-modal" role="dialog">
+  <form id="f">
+    <section data-step="1">
+      <div class="fb-dash-form-element"><label for="fn"><span aria-hidden="true">First name</span><span class="visually-hidden">First name</span></label><input id="fn" required></div>
+      <div class="fb-dash-form-element"><label for="ln">Last name</label><input id="ln" required></div>
+      <div class="fb-dash-form-element"><label for="em">Email address</label>
+        <select id="em" required><option value="">Select an option</option><option value="a">ayse@example.com</option></select></div>
+      <div class="fb-dash-form-element"><label for="cc">Phone country code</label>
+        <select id="cc" required><option value="">Select an option</option><option value="us">United States (+1)</option><option value="tr">Turkey (+90)</option></select></div>
+      <div class="fb-dash-form-element"><label for="ph">Mobile phone number*</label><input id="ph" required></div>
+      <div class="fb-dash-form-element"><label for="city">Location (city)</label>
+        <input id="city" role="combobox" aria-autocomplete="list" aria-controls="city-list"><div id="city-list" role="listbox"></div></div>
+    </section>
+    <section data-step="2" hidden>
+      <div class="fb-dash-form-element"><label for="py">How many years of work experience do you have with Python?</label><input id="py" class="numeric" required></div>
+      <div class="fb-dash-form-element"><label for="sal">Expected salary (TRY)</label><input id="sal-numeric" required></div>
+      <fieldset><legend><span aria-hidden="true">Are you legally authorized to work in Turkey?</span></legend>
+        <input type="radio" name="auth" id="auth-y" value="Yes"><label for="auth-y">Yes</label>
+        <input type="radio" name="auth" id="auth-n" value="No"><label for="auth-n">No</label></fieldset>
+      <fieldset><legend>Will you now or in the future require sponsorship?</legend>
+        <input type="radio" name="sp" id="sp-y" value="Yes"><label for="sp-y">Evet</label>
+        <input type="radio" name="sp" id="sp-n" value="No"><label for="sp-n">Hayır</label></fieldset>
+      <div class="fb-dash-form-element"><label for="en">What is your level of proficiency in English?</label>
+        <select id="en" required><option>Select an option</option><option>None</option><option>Conversational</option><option>Professional</option><option>Native or bilingual</option></select></div>
+      <div class="fb-dash-form-element"><label for="odd">Favori programlama diliniz nedir?</label><input id="odd" required></div>
+      <div><label><input type="checkbox" id="agree"> I agree to the privacy terms</label></div>
+    </section>
+    <section data-step="3" hidden>
+      <p>Review your application</p>
+      <input type="checkbox" id="follow-company-checkbox" checked><label for="follow-company-checkbox">Follow ACME</label>
+    </section>
+  </form>
+  <footer>
+    <button type="button" id="next" aria-label="Continue to next step">Next</button>
+    <button type="button" id="review" aria-label="Review your application" hidden>Review</button>
+    <button type="button" id="submit" aria-label="Submit application" hidden>Submit application</button>
+  </footer>
+</div>
+<script>
+  window.events = [];
+  let step = 1;
+  const show = () => {
+    document.querySelectorAll("section").forEach(s => s.hidden = s.dataset.step != step);
+    document.getElementById("next").hidden = step !== 1;
+    document.getElementById("review").hidden = step !== 2;
+    document.getElementById("submit").hidden = step !== 3;
+  };
+  function validate() {
+    const sec = document.querySelector('section[data-step="' + step + '"]');
+    return [...sec.querySelectorAll("[required]")].every(e => e.value) &&
+      (step !== 2 || (document.querySelector("[name=auth]:checked") && document.querySelector("[name=sp]:checked")));
+  }
+  document.getElementById("next").onclick = () => { if (validate()) { step = 2; show(); window.events.push("next"); } };
+  document.getElementById("review").onclick = () => { if (validate()) { step = 3; show(); window.events.push("review"); } };
+  document.getElementById("submit").onclick = () => window.events.push("SUBMIT");
+  // sehir onerileri (typeahead)
+  document.getElementById("city").addEventListener("input", e => {
+    const list = document.getElementById("city-list");
+    list.innerHTML = '<div role="option">Istanbul, Türkiye</div>';
+    list.firstChild.onclick = () => { e.target.value = "Istanbul, Türkiye (secildi)"; list.innerHTML = ""; };
+  });
+  show();
+</script>
+</body></html>

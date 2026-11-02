@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kolay Başvuru Doldurucu – Ayarlar</title>
+<link rel="stylesheet" href="options.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1>⚡ Kolay Başvuru Doldurucu</h1>
+    <p class="muted">Bilgileriniz yalnızca bu tarayıcıda (<code>chrome.storage.local</code>) saklanır, hiçbir sunucuya gönderilmez.</p>
+  </header>
+
+  <section>
+    <h2>Kişisel bilgiler</h2>
+    <div class="grid">
+      <label>Ad <input data-p="firstName"></label>
+      <label>Soyad <input data-p="lastName"></label>
+      <label>E-posta <input data-p="email" type="email"></label>
+      <label>Telefon ülke kodu <input data-p="phoneCountry" placeholder="Turkey (+90)"></label>
+      <label>Telefon <input data-p="phone" placeholder="5xx xxx xx xx"></label>
+      <label>Şehir <input data-p="city" placeholder="İstanbul, Türkiye"></label>
+      <label>LinkedIn profil URL <input data-p="linkedin"></label>
+      <label>Web sitesi / portföy <input data-p="website"></label>
+      <label>GitHub <input data-p="github"></label>
+      <label>Mevcut unvan <input data-p="currentTitle"></label>
+      <label>Mevcut şirket <input data-p="currentCompany"></label>
+      <label>Maaş beklentisi <input data-p="salary" placeholder="örn. 60000"></label>
+      <label>İhbar süresi / başlama <input data-p="noticePeriod" placeholder="örn. 2 hafta"></label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Deneyim yılları</h2>
+    <p class="muted">“Python ile kaç yıl deneyiminiz var?” gibi sorular için. Her satıra <code>beceri = yıl</code> yazın. Listede olmayan beceriler için varsayılan değer kullanılır.</p>
+    <div class="grid">
+      <label class="wide">Beceriler <textarea id="experience" rows="6" placeholder="python = 3&#10;excel = 5&#10;vba = 4&#10;sql = 2"></textarea></label>
+      <label>Varsayılan yıl <input data-p="defaultYears" inputmode="numeric"></label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Evet / Hayır soruları</h2>
+    <div class="grid">
+      <label>Çalışma izniniz var mı? <select data-p="workAuthorization"><option>Yes</option><option>No</option></select></label>
+      <label>Vize sponsorluğu gerekiyor mu? <select data-p="sponsorship"><option>No</option><option>Yes</option></select></label>
+      <label>Taşınmaya açık mısınız? <select data-p="relocate"><option>Yes</option><option>No</option></select></label>
+      <label>Ofise / hibrit gelebilir misiniz? <select data-p="commute"><option>Yes</option><option>No</option></select></label>
+      <label>Uzaktan çalışmaya uygun musunuz? <select data-p="remote"><option>Yes</option><option>No</option></select></label>
+      <label>Lisans diplomanız var mı? <select data-p="degree"><option>Yes</option><option>No</option></select></label>
+      <label>Ehliyetiniz var mı? <select data-p="driversLicense"><option>Yes</option><option>No</option></select></label>
+      <label>İngilizce seviyesi <select data-p="englishLevel">
+        <option>Native or bilingual</option><option>Professional</option><option>Conversational</option><option>Basic</option><option>None</option>
+      </select></label>
+      <label>Askerlik durumu <input data-p="military" placeholder="örn. Tamamlandı / Muaf"></label>
+      <label>Cinsiyet (boş = belirtmek istemiyorum) <input data-p="gender"></label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Uzun metinler</h2>
+    <label class="wide">Ön yazı / “Neden bu pozisyon?” <textarea data-p="coverLetter" rows="5"></textarea></label>
+    <label class="wide">Özet / Hakkınızda <textarea data-p="summary" rows="4"></textarea></label>
+  </section>
+
+  <section>
+    <h2>Özel cevaplar</h2>
+    <p class="muted">Soru metninde <b>desen</b> geçiyorsa buradaki cevap kullanılır ve yerleşik kurallardan önce gelir. Düzenli ifade için <code>/desen/</code> yazın. Formda elle cevapladığınız sorular buraya otomatik eklenir (🧠).</p>
+    <table id="custom">
+      <thead><tr><th>Desen (soru metninden parça)</th><th>Cevap</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button type="button" id="addCustom" class="secondary">+ Cevap ekle</button>
+  </section>
+
+  <section>
+    <h2>Cevaplanamayan sorular <span id="unCount" class="badge"></span></h2>
+    <p class="muted">Eklentinin cevap bulamadığı sorular. Cevabı yazıp “Kaydet”e basarsanız bir dahaki sefere otomatik doldurulur.</p>
+    <div id="unanswered"></div>
+    <button type="button" id="clearUn" class="secondary">Listeyi temizle</button>
+  </section>
+
+  <section>
+    <h2>Ayarlar</h2>
+    <label class="check"><input type="checkbox" data-s="overwrite"> Dolu alanların üzerine yaz</label>
+    <label class="check"><input type="checkbox" data-s="highlightUnknown"> Cevaplanamayan alanları turuncu ile işaretle</label>
+    <label class="check"><input type="checkbox" data-s="learnAnswers"> Elle girdiğim cevapları öğren</label>
+    <label class="check"><input type="checkbox" data-s="unfollowCompany"> Son adımda “Şirketi takip et” kutusunu kaldır</label>
+    <label>Adımlar arası bekleme (ms) <input type="number" data-s="delayMs" min="200" step="100"></label>
+  </section>
+
+  <section class="actions">
+    <button type="button" id="save" class="primary">Kaydet</button>
+    <button type="button" id="export" class="secondary">Dışa aktar (JSON)</button>
+    <label class="secondary file">İçe aktar <input type="file" id="import" accept="application/json"></label>
+    <span id="msg"></span>
+  </section>
+</main>
+<script src="matcher.js"></script>
+<script src="options.js"></script>
+</body>
+</html>

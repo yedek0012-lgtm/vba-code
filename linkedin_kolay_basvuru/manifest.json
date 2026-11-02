@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Kolay Başvuru Doldurucu",
+  "version": "1.0.0",
+  "description": "LinkedIn Kolay Başvuru (Easy Apply) formlarını kayıtlı profil bilgilerinizle doldurur. Göndermeyi size bırakır.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.linkedin.com/*"],
+  "action": {
+    "default_title": "Kolay Başvuru Doldurucu",
+    "default_popup": "src/popup.html"
+  },
+  "options_page": "src/options.html",
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/*"],
+      "js": ["src/matcher.js", "src/content.js"],
+      "css": ["src/panel.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

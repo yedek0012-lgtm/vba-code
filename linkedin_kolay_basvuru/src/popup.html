@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<style>
+  body { width: 280px; margin: 0; padding: 14px; font: 13px/1.4 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1f2937; }
+  h1 { font-size: 15px; margin: 0 0 10px; color: #0a66c2; }
+  button { width: 100%; padding: 9px; margin-bottom: 8px; border: 0; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  .primary { background: #0a66c2; color: #fff; }
+  .secondary { background: #e8f1fb; color: #0a66c2; }
+  #status { min-height: 18px; margin: 4px 0 10px; color: #374151; }
+  #warn { color: #b45309; }
+  a { color: #0a66c2; }
+</style>
+</head>
+<body>
+  <h1>⚡ Kolay Başvuru Doldurucu</h1>
+  <div id="status">Kontrol ediliyor…</div>
+  <button class="primary" id="fill">Bu adımı doldur</button>
+  <button class="secondary" id="auto">Gönder adımına kadar ilerle</button>
+  <div id="warn"></div>
+  <p><a href="#" id="opts">Profil ve ayarlar</a></p>
+  <script src="matcher.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
